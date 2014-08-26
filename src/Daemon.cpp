@@ -16,7 +16,7 @@
 #include "Daemon.h"
 
 Daemon::Daemon()
-    : mExplicitServer(false)
+    : mNextJobId(1), mExplicitServer(false)
 {
     auto onNewConnection = [this](SocketServer *server) {
         while (true) {
@@ -52,6 +52,8 @@ bool Daemon::init(const Options &options)
         error() << "Can't seem to listen on" << mOptions.port;
         return false;
     }
+
+    mDiscoverySocket.addMembership(options.discoveryAddress);
     mOptions = options;
     mExplicitServer = !mOptions.serverHost.isEmpty();
     reconnectToServer();
@@ -73,7 +75,14 @@ void Daemon::onNewMessage(Message *message, Connection *connection)
 
 void Daemon::handleLocalJobMessage(LocalJobMessage *msg, Connection *conn)
 {
-
+    if (!mServerConnection.isConnected()) {
+        conn->send(LocalJobResponseMessage());
+        // we're not connected so we can't schedule anything
+        return;
+    }
+    mLocalConnections[conn] = mNextJobId++;
+    // ### should we tell the server that we're no longer interested if we get disconnected?
+    conn->disconnected().connect([this](Connection *c) { mLocalConnections.remove(c); });
 }
 
 void Daemon::reconnectToServer()

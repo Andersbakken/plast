@@ -20,6 +20,7 @@
 #include <rct/Connection.h>
 #include <rct/Message.h>
 #include <rct/Timer.h>
+#include <rct/Hash.h>
 #include "Plast.h"
 
 class Daemon
@@ -40,6 +41,9 @@ private:
     void reconnectToServer();
     void onDiscoverySocketReadyRead(Buffer &&data);
 
+    uint64_t mNextJobId;
+    Hash<uint64_t, Connection *> mScheduledJobs;
+    Hash<Connection*, uint64_t> mLocalConnections;
     bool mExplicitServer;
     Options mOptions;
     SocketServer mLocalServer, mRemoteServer;
