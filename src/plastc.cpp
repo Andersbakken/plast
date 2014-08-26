@@ -53,6 +53,17 @@ static inline unsigned long conf(const char *env, unsigned long defaultValue)
 
 int main(int argc, char** argv)
 {
+    bool dashC = false;
+    for (int i=1; i<argc; ++i) {
+        if (!strcmp(argv[i], "-c")) {
+            dashC = true;
+            break;
+        }
+    }
+
+    if (!dashC)
+        return buildLocal(argc, argv);
+
     // for (int i=0; i<argc + 1; ++i) {
     //     printf("%d/%d %s\n", i, argc, argv[i]);
     // }
@@ -76,8 +87,26 @@ int main(int argc, char** argv)
 
     int returnValue = -1;
     Connection connection;
-    connection.newMessage().connect([returnValue](Message *message, Connection *conn) {
-
+    connection.newMessage().connect([&returnValue](Message *message, Connection *conn) {
+            switch (message->messageId()) {
+            case LocalJobResponseMessage::MessageId: {
+                LocalJobResponseMessage *msg = static_cast<LocalJobResponseMessage*>(message);
+                for (const auto &output : msg->output()) {
+                    switch (output.type) {
+                    case LocalJobResponseMessage::Output::StdOut:
+                        fwrite(output.text.constData(), 1, output.text.size(), stdout);
+                        break;
+                    case LocalJobResponseMessage::Output::StdErr:
+                        fwrite(output.text.constData(), 1, output.text.size(), stderr);
+                        break;
+                    }
+                }
+                returnValue = msg->status();
+                break; }
+            default:
+                error() << "Unexpected message" << message->messageId();
+                break;
+            }
 
         });
 
@@ -86,9 +115,8 @@ int main(int argc, char** argv)
     if (!connection.connectUnix(socket, connectTimeout)) {
         return buildLocal(argc, argv);
     }
-    if (loop->exec(jobTimeout) == EventLoop::Success) {
-        return returnValue;
-    } else {
+    loop->exec(jobTimeout);
+    if (returnValue == -1)
         return buildLocal(argc, argv);
-    }
+    return returnValue;
 }

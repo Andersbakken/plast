@@ -19,16 +19,33 @@
 #include <rct/SocketServer.h>
 #include <rct/Connection.h>
 #include <rct/Message.h>
+#include <rct/Timer.h>
+#include "Plast.h"
 
 class Daemon
 {
 public:
     Daemon();
-    bool init(const Path &socketFile, int port);
+    struct Options {
+        Path socketFile;
+        int serverPort, port, discoveryPort;
+        String serverHost, discoveryAddress;
+    };
+    bool init(const Options &options);
+    const Options &options() const { return mOptions; }
 private:
+    void restartServerTimer();
     void onNewMessage(Message *message, Connection *connection);
+    void handleLocalJobMessage(LocalJobMessage *msg, Connection *conn);
+    void reconnectToServer();
+    void onDiscoverySocketReadyRead(Buffer &&data);
 
+    bool mExplicitServer;
+    Options mOptions;
     SocketServer mLocalServer, mRemoteServer;
+    Connection mServerConnection;
+    SocketClient mDiscoverySocket;
+    Timer mServerTimer;
 };
 
 #endif

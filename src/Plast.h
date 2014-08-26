@@ -57,27 +57,34 @@ private:
     List<String> mArgs;
 };
 
-
 class LocalJobResponseMessage : public Message
 {
 public:
     enum { MessageId = LocalJobMessage::MessageId + 1 };
 
-    LocalJobResponseMessage(int status = -1, const String &stdOut = String(), const String &stdErr = String())
-        : Message(MessageId), mStatus(status), mStdOut(stdOut), mStdErr(stdErr)
+    struct Output;
+    LocalJobResponseMessage(int status = -1, const List<Output> &output = List<Output>())
+        : Message(MessageId), mStatus(status), mOutput(output)
     {
     }
 
     int status() const { return mStatus; }
-    const String &stdOut() const { return mStdOut; }
-    const String &stdErr() const { return mStdErr; }
-
-    virtual void encode(Serializer &serializer) const { serializer << mStatus << mStdOut << mStdErr; }
-    virtual void decode(Deserializer &deserializer) { deserializer >> mStatus >> mStdOut >> mStdErr; }
+    struct Output {
+        enum Type {
+            StdOut,
+            StdErr
+        };
+        Type type;
+        String text;
+    };
+    const List<Output> &output() const { return mOutput; }
+    virtual void encode(Serializer &serializer) const;
+    virtual void decode(Deserializer &deserializer);
 private:
     int mStatus;
-    String mStdOut, mStdErr;
+    List<Output> mOutput;
 };
+
 
 namespace Plast {
 bool init();

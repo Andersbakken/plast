@@ -41,8 +41,13 @@ static void usage(FILE *f)
     fprintf(f,
             "plastd [...options...]\n"
             "  --help|-h                                  Display this page.\n"
+            "  --log-file|-l [file]                       Log to this file.\n"
+            "  --verbose|-v                               Be more verbose.\n"
+            "  --server|-s [hostname:(port)]              Server to connect to. (defaults to port 5160 if hostname doesn't contain a port)\n"
             "  --port|-p [port]                           Use this port (default 5161)\n"
-            "  --socket|-s [file]                         Run daemon with this domain socket. (default ~/.plastd.sock)\n");
+            "  --discovery-port|-P [port]                 Use this port for server discovery (default 5163)\n"
+            "  --discovery-address|-d [address]           Use this port for server discovery (default 237.50.50.50)\n"
+            "  --socket|-n [file]                         Run daemon with this domain socket. (default ~/.plastd.sock)\n");
 }
 
 int main(int argc, char** argv)
@@ -56,28 +61,60 @@ int main(int argc, char** argv)
         { "log-file", required_argument, 0, 'l' },
         { "verbose", no_argument, 0, 'v' },
         { "port", required_argument, 0, 'p' },
-        { "socket", required_argument, 0, 's' },
+        { "discovery-port", required_argument, 0, 'P' },
+        { "discovery-address", required_argument, 0, 'd' },
+        { "socket", required_argument, 0, 'n' },
+        { "server", required_argument, 0, 's' },
         { 0, 0, 0, 0 }
     };
     const String shortOptions = Rct::shortOptions(opts);
 
-    int port = 5161;
+    Daemon::Options options = {
+        Path::home() + "/.plastd.sock",
+        5160,
+        5161,
+        5162,
+        String(),
+        "237.50.50.50"
+    };
     const char *logFile = 0;
     int logLevel = 0;
-    socketFile = Path::home() + "/.plastd.sock";
 
     while (true) {
         const int c = getopt_long(argc, argv, shortOptions.constData(), opts, 0);
         if (c == -1)
             break;
         switch (c) {
-        case 's':
+        case 'n':
             socketFile = optarg;
             break;
+        case 's': {
+            const char *colon = strchr(optarg, ':');
+            if (colon) {
+                options.serverHost.assign(optarg, colon - optarg);
+                options.serverPort = atoi(colon + 1);
+                if (options.serverPort <= 0) {
+                    fprintf(stderr, "Invalid argument to -s %s\n", optarg);
+                    return 1;
+                }
+            } else {
+                options.serverHost = optarg;
+            }
+            break; }
+        case 'd':
+            options.discoveryAddress = optarg;
+            break;
         case 'p':
-            port = atoi(optarg);
-            if (port <= 0) {
+            options.port = atoi(optarg);
+            if (options.port <= 0) {
                 fprintf(stderr, "Invalid argument to -p %s\n", optarg);
+                return 1;
+            }
+            break;
+        case 'P':
+            options.discoveryPort = atoi(optarg);
+            if (options.discoveryPort <= 0) {
+                fprintf(stderr, "Invalid argument to -P %s\n", optarg);
                 return 1;
             }
             break;
@@ -113,7 +150,7 @@ int main(int argc, char** argv)
     loop->init(EventLoop::MainEventLoop|EventLoop::EnableSigIntHandler);
 
     Daemon daemon;
-    if (!daemon.init(socketFile, port))
+    if (!daemon.init(options))
         return 1;
 
     loop->exec();
