@@ -47,7 +47,7 @@ target_link_libraries(plast rct)
 
 include_directories(${CMAKE_CURRENT_LIST_DIR} rct/include/ rct ${CMAKE_CURRENT_BINARY_DIR}/rct/include/rct)
 
-add_executable(plastc plastc.cpp Client.cpp)
+add_executable(plastc plastc.cpp)
 add_dependencies(plastc rct plast)
 target_link_libraries(plastc plast rct ${SYSTEM_LIBS})
 
