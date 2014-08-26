@@ -37,11 +37,11 @@ int buildLocal(int argc, char **argv)
     return 2;
 }
 
-static inline unsigned long conf(const char *env, unsigned long defaultValue)
+static inline int conf(const char *env, int defaultValue)
 {
     if (const char *val = getenv(env)) {
         char *end;
-        const unsigned int ret = strtoul(val, &end, 10);
+        const int ret = strtoul(val, &end, 10);
         if (*end) {
             fprintf(stderr, "Invalid value \"%s\"=\"%s\"\n", env, val);
         } else {
@@ -73,7 +73,7 @@ int main(int argc, char** argv)
         socket = Path::home() + "/.plastd.sock";
 
     const unsigned long connectTimeout = conf("PLAST_DAEMON_CONNECT_TIMEOUT", 2000);
-    const unsigned long jobTimeout = conf("PLAST_JOB_TIMEOUT", 10000);
+    const unsigned long jobTimeout = conf("PLAST_JOB_TIMEOUT", -1);
 
     int returnValue = -1;
     Connection connection;

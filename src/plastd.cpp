@@ -46,7 +46,6 @@ static void usage(FILE *f)
             "  --server|-s [hostname:(port)]              Server to connect to. (defaults to port 5160 if hostname doesn't contain a port)\n"
             "  --port|-p [port]                           Use this port (default 5161)\n"
             "  --discovery-port|-P [port]                 Use this port for server discovery (default 5163)\n"
-            "  --discovery-address|-d [address]           Use this port for server discovery (default 237.50.50.50)\n"
             "  --socket|-n [file]                         Run daemon with this domain socket. (default ~/.plastd.sock)\n");
 }
 
@@ -62,7 +61,6 @@ int main(int argc, char** argv)
         { "verbose", no_argument, 0, 'v' },
         { "port", required_argument, 0, 'p' },
         { "discovery-port", required_argument, 0, 'P' },
-        { "discovery-address", required_argument, 0, 'd' },
         { "socket", required_argument, 0, 'n' },
         { "server", required_argument, 0, 's' },
         { 0, 0, 0, 0 }
@@ -74,8 +72,7 @@ int main(int argc, char** argv)
         5160,
         5161,
         5162,
-        String(),
-        "237.50.50.50"
+        String()
     };
     const char *logFile = 0;
     int logLevel = 0;
@@ -101,9 +98,6 @@ int main(int argc, char** argv)
                 options.serverHost = optarg;
             }
             break; }
-        case 'd':
-            options.discoveryAddress = optarg;
-            break;
         case 'p':
             options.port = atoi(optarg);
             if (options.port <= 0) {

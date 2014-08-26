@@ -30,7 +30,7 @@ public:
     struct Options {
         Path socketFile;
         int serverPort, port, discoveryPort;
-        String serverHost, discoveryAddress;
+        String serverHost;
     };
     bool init(const Options &options);
     const Options &options() const { return mOptions; }

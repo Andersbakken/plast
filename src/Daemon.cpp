@@ -18,7 +18,7 @@
 Daemon::Daemon()
     : mNextJobId(1), mExplicitServer(false)
 {
-    auto onNewConnection = [this](SocketServer *server) {
+    const auto onNewConnection = [this](SocketServer *server) {
         while (true) {
             auto socket = server->nextConnection();
             if (!socket)
@@ -53,7 +53,6 @@ bool Daemon::init(const Options &options)
         return false;
     }
 
-    mDiscoverySocket.addMembership(options.discoveryAddress);
     mOptions = options;
     mExplicitServer = !mOptions.serverHost.isEmpty();
     reconnectToServer();
@@ -87,18 +86,22 @@ void Daemon::handleLocalJobMessage(LocalJobMessage *msg, Connection *conn)
 
 void Daemon::reconnectToServer()
 {
-    if (mServerConnection.isConnected())
-        return;
-
-    if (mOptions.serverHost.isEmpty()) {
-        mDiscoverySocket.writeTo(mOptions.discoveryAddress, mOptions.discoveryPort, "?");
-        restartServerTimer();
-        return;
+    if (mServerConnection.client()) {
+        switch (mServerConnection.client()->state()) {
+        case SocketClient::Connected:
+            return;
+        case SocketClient::Connecting:
+            restartServerTimer();
+            return;
+        case SocketClient::Disconnected:
+            break;
+        }
     }
 
-    if (!mServerConnection.connectTcp(mOptions.serverHost, mOptions.serverPort)) {
+    if (mOptions.serverHost.isEmpty()) {
+        mDiscoverySocket.writeTo("255.255.255.255", mOptions.discoveryPort, "?");
+    } else if (!mServerConnection.connectTcp(mOptions.serverHost, mOptions.serverPort)) {
         restartServerTimer();
-        return;
     }
 }
 
@@ -122,7 +125,7 @@ void Daemon::onDiscoverySocketReadyRead(Buffer &&data)
                 Serializer serializer(packet);
                 serializer << 's' << mOptions.serverHost << mOptions.serverPort;
             }
-            mDiscoverySocket.writeTo(mOptions.discoveryAddress, mOptions.discoveryPort, packet);
+            mDiscoverySocket.writeTo("255.255.255.255", mOptions.discoveryPort, packet);
         }
         break;
     }
