@@ -53,23 +53,13 @@ static inline unsigned long conf(const char *env, unsigned long defaultValue)
 
 int main(int argc, char** argv)
 {
-    bool dashC = false;
-    for (int i=1; i<argc; ++i) {
-        if (!strcmp(argv[i], "-c")) {
-            dashC = true;
-            break;
-        }
-    }
-
-    if (!dashC)
-        return buildLocal(argc, argv);
+    Rct::findExecutablePath(*argv);
 
     // for (int i=0; i<argc + 1; ++i) {
     //     printf("%d/%d %s\n", i, argc, argv[i]);
     // }
     // return 0;
 
-    Rct::findExecutablePath(*argv);
     // printf("[%s]\n", argv[0]);
     // return 0;
     initLogging(argv[0], LogStderr, Error, 0, 0);
@@ -87,7 +77,7 @@ int main(int argc, char** argv)
 
     int returnValue = -1;
     Connection connection;
-    connection.newMessage().connect([&returnValue](Message *message, Connection *conn) {
+    connection.newMessage().connect([&returnValue, loop](Message *message, Connection *conn) {
             switch (message->messageId()) {
             case LocalJobResponseMessage::MessageId: {
                 LocalJobResponseMessage *msg = static_cast<LocalJobResponseMessage*>(message);
@@ -102,6 +92,7 @@ int main(int argc, char** argv)
                     }
                 }
                 returnValue = msg->status();
+                loop->quit();
                 break; }
             default:
                 error() << "Unexpected message" << message->messageId();
@@ -115,6 +106,8 @@ int main(int argc, char** argv)
     if (!connection.connectUnix(socket, connectTimeout)) {
         return buildLocal(argc, argv);
     }
+
+    connection.send(LocalJobMessage(argc, argv));
     loop->exec(jobTimeout);
     if (returnValue == -1)
         return buildLocal(argc, argv);
