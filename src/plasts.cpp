@@ -13,18 +13,15 @@
    You should have received a copy of the GNU General Public License
    along with Plast.  If not, see <http://www.gnu.org/licenses/>. */
 
+#include "Server.h"
+#include "Plast.h"
+#include <getopt.h>
 #include <rct/EventLoop.h>
 #include <rct/Log.h>
-#include <getopt.h>
+#include <rct/Rct.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <Server.h>
-#include <rct/Rct.h>
-#ifdef HAVE_BACKTRACE
-#include <execinfo.h>
-#include <cxxabi.h>
-#endif
 
 static void sigSegvHandler(int signal)
 {
@@ -46,13 +43,14 @@ static void usage(FILE *f)
 
 int main(int argc, char** argv)
 {
+    Plast::init();
     Rct::findExecutablePath(*argv);
 
     struct option opts[] = {
         { "help", no_argument, 0, 'h' },
         { "log-file", required_argument, 0, 'l' },
         { "verbose", no_argument, 0, 'v' },
-        { "port", no_argument, 0, 'p' },
+        { "port", required_argument, 0, 'p' },
         { 0, 0, 0, 0 }
     };
     const String shortOptions = Rct::shortOptions(opts);
