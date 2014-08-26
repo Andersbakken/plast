@@ -21,14 +21,15 @@ int buildLocal(int argc, char **argv)
 {
     const String fileName = Path(argv[0]).fileName();
     const List<String> paths = String(getenv("PATH")).split(':');
-    error() << fileName;
+    // error() << fileName;
     for (const auto &p : paths) {
-        Path exec = p + "/" + fileName;
-        error() << "Trying" << exec;
+        const Path orig = p + "/" + fileName;
+        Path exec = orig;
+        // error() << "Trying" << exec;
         if (exec.resolve() && exec != Rct::executablePath()) {
-            printf("[%s:%d]: if (exec.resolve() && exec != Rct::executablePath()) {\n", __FILE__, __LINE__); fflush(stdout);
-            execv(exec.constData(), &argv[1]);
-            fprintf(stderr, "execv error %d/%s\n", errno, strerror(errno));
+            argv[0] = strdup(orig.constData());
+            execv(orig.constData(), argv); // execute without resolving symlink
+            fprintf(stderr, "execv error for %s %d/%s\n", orig.constData(), errno, strerror(errno));
             return 1;
         }
     }
@@ -52,9 +53,14 @@ static inline unsigned long conf(const char *env, unsigned long defaultValue)
 
 int main(int argc, char** argv)
 {
+    // for (int i=0; i<argc + 1; ++i) {
+    //     printf("%d/%d %s\n", i, argc, argv[i]);
+    // }
+    // return 0;
+
     Rct::findExecutablePath(*argv);
-    printf("[%s]\n", argv[0]);
-    return 0;
+    // printf("[%s]\n", argv[0]);
+    // return 0;
     initLogging(argv[0], LogStderr, Error, 0, 0);
 
     Plast::init();
