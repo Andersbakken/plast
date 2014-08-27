@@ -45,12 +45,33 @@ int main(int argc, char** argv)
     Config::registerOption<String>("log-file", "Log to this file", 'l');
     Config::registerOption<bool>("verbose", "Be more verbose", 'v');
     const int idealThreadCount = ThreadPool::idealThreadCount();
-    Config::registerOption<int>("job-count", String::format<128>("Job count (defaults to %d", idealThreadCount), 'j', idealThreadCount);
+    Config::registerOption<int>("job-count", String::format<128>("Job count (defaults to %d", idealThreadCount), 'j', idealThreadCount,
+                                [](const int &count, String &err) {
+                                    if (count < 0) {
+                                        err = "Invalid job-count. Must be >= 0";
+                                        return false;
+                                    }
+                                    return true;
+                                });
     Config::registerOption<String>("server",
                                    String::format<128>("Server to connect to. (defaults to port %d if hostname doesn't contain a port)", Plast::DefaultServerPort), 's');
-    Config::registerOption<int>("port", String::format<129>("Use this port, (default %d)", Plast::DefaultDaemonPort),'p', Plast::DefaultDaemonPort);
+    Config::registerOption<int>("port", String::format<129>("Use this port, (default %d)", Plast::DefaultDaemonPort),'p', Plast::DefaultDaemonPort,
+                                [](const int &count, String &err) {
+                                    if (count <= 0) {
+                                        err = "Invalid port. Must be > 0";
+                                        return false;
+                                    }
+                                    return true;
+                                });
     Config::registerOption<int>("discovery-port", String::format<128>("Use this port for server discovery (default %d)", Plast::DefaultDaemonDiscoveryPort),
-                                'P', Plast::DefaultDaemonDiscoveryPort);
+                                'P', Plast::DefaultDaemonDiscoveryPort,
+                                [](const int &count, String &err) {
+                                    if (count <= 0) {
+                                        err = "Invalid discovery-port. Must be > 0";
+                                        return false;
+                                    }
+                                    return true;
+                                });
     const String socketPath = Plast::defaultSocketFile();
     Config::registerOption<String>("socket",
                                    String::format<128>("Run daemon with this domain socket. (default %s)", socketPath.constData()),
@@ -72,20 +93,6 @@ int main(int argc, char** argv)
         String(),
         Config::value<int>("job-count")
     };
-    if (options.port <= 0) {
-        fprintf(stderr, "Invalid port: %d\n", options.port);
-        return 1;
-    }
-
-    if (options.discoveryPort <= 0) {
-        fprintf(stderr, "Invalid discovery-port: %d\n", options.discoveryPort);
-        return 1;
-    }
-
-    if (options.jobCount < 0) {
-        fprintf(stderr, "Invalid jobCount: %d\n", options.jobCount);
-        return 1;
-    }
 
     const String serverValue = Config::value<String>("server");
     if (!serverValue.isEmpty()) {
@@ -105,9 +112,10 @@ int main(int argc, char** argv)
 
     signal(SIGSEGV, sigSegvHandler);
 
-    if (!initLogging(argv[0], LogStderr, Config::isEnabled("verbose") ? Debug : Error, Config::value<String>("log-file"), 0)) {
+    const int logLevel = Config::isEnabled("verbose");
+    if (!initLogging(argv[0], LogStderr, logLevel, Config::value<String>("log-file"), 0)) {
         fprintf(stderr, "Can't initialize logging with %d %s\n",
-                Config::isEnabled("verbose") ? Debug : Error, Config::value<String>("log-file").constData());
+                logLevel, Config::value<String>("log-file").constData());
         return 1;
     }
 
