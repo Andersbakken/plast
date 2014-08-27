@@ -36,6 +36,7 @@ public:
     };
     bool init(const Options &options);
     const Options &options() const { return mOptions; }
+    void handleConsoleCommand(const String &string);
 private:
     void restartServerTimer();
     void onNewMessage(Message *message, Connection *connection);

@@ -274,3 +274,7 @@ Process *Daemon::startProcess(const List<String> &arguments, const List<String> 
     debug() << "Started process" << compiler << arguments.mid(1) << process;
     return process;
 }
+void Daemon::handleConsoleCommand(const String &string)
+{
+
+}
