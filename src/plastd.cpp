@@ -44,6 +44,7 @@ int main(int argc, char** argv)
     Config::registerOption<bool>("help", "Display this page", 'h');
     Config::registerOption<String>("log-file", "Log to this file", 'l');
     Config::registerOption<bool>("verbose", "Be more verbose", 'v');
+    Config::registerOption<bool>("silent", "Be silent", 'S');
     const int idealThreadCount = ThreadPool::idealThreadCount();
     Config::registerOption<int>("job-count", String::format<128>("Job count (defaults to %d", idealThreadCount), 'j', idealThreadCount,
                                 [](const int &count, String &err) {
@@ -112,7 +113,7 @@ int main(int argc, char** argv)
 
     signal(SIGSEGV, sigSegvHandler);
 
-    const int logLevel = Config::isEnabled("verbose");
+    const int logLevel = Config::isEnabled("silent") ? -1 : Config::isEnabled("verbose");
     if (!initLogging(argv[0], LogStderr, logLevel, Config::value<String>("log-file"), 0)) {
         fprintf(stderr, "Can't initialize logging with %d %s\n",
                 logLevel, Config::value<String>("log-file").constData());

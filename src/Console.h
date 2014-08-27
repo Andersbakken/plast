@@ -12,6 +12,7 @@ public:
                      std::function<void(const String&, int, int, String&, List<String>&)>&& handleCompletions);
     static void cleanup();
 
+    static String tryComplete(const String &text, const List<String> &candidates);
 private:
     Console();
     Console(const Console& other) = delete;

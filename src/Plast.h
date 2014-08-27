@@ -56,6 +56,24 @@ private:
     int mCapacity;
 };
 
+struct CompilerArgs
+{
+    List<String> arguments;
+    List<Path> sourceFiles;
+
+    Path output, compiler;
+    enum Type {
+        Compile,
+        Preprocess,
+        Link,
+        MultiSource
+    } type;
+
+    static CompilerArgs create(const List<String> &args);
+
+    Path sourceFile(int idx = 0) const { return sourceFile.value(idx); }
+};
+
 class LocalJobMessage : public Message
 {
 public:

@@ -58,3 +58,8 @@ void Console::init(const String& prompt,
             rl_callback_read_char();
         });
 }
+String Console::tryComplete(const String &text, const List<String> &candidates)
+{
+#warning need to do this
+    return text;
+}
