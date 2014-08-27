@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <Server.h>
 #include <rct/Rct.h>
+#include <rct/Config.h>
 #include "Daemon.h"
 #include "Plast.h"
 
@@ -37,119 +38,88 @@ static void sigSegvHandler(int signal)
     _exit(1);
 }
 
-static void usage(FILE *f)
-{
-    fprintf(f,
-            "plastd [...options...]\n"
-            "  --help|-h                                  Display this page.\n"
-            "  --log-file|-l [file]                       Log to this file.\n"
-            "  --verbose|-v                               Be more verbose.\n"
-            "  --job-count|-j [count]                     Job count (defaults to number of cores)\n"
-            "  --server|-s [hostname:(port)]              Server to connect to. (defaults to port 5160 if hostname doesn't contain a port)\n"
-            "  --port|-p [port]                           Use this port (default 5161)\n"
-            "  --discovery-port|-P [port]                 Use this port for server discovery (default 5163)\n"
-            "  --socket|-n [file]                         Run daemon with this domain socket. (default ~/.plastd.sock)\n");
-}
-
 int main(int argc, char** argv)
 {
     Rct::findExecutablePath(*argv);
+    Config::registerOption<bool>("help", "Display this page", 'h');
+    Config::registerOption<String>("log-file", "Log to this file", 'l');
+    Config::registerOption<bool>("verbose", "Be more verbose", 'v');
+    const int idealThreadCount = ThreadPool::idealThreadCount();
+    Config::registerOption<int>("job-count", String::format<128>("Job count (defaults to %d", idealThreadCount), 'j', idealThreadCount);
+    Config::registerOption<String>("server",
+                                   String::format<128>("Server to connect to. (defaults to port %d if hostname doesn't contain a port)", Plast::DefaultServerPort), 's');
+    Config::registerOption<int>("port", String::format<129>("Use this port, (default %d)", Plast::DefaultDaemonPort),'p', Plast::DefaultDaemonPort);
+    Config::registerOption<int>("discovery-port", String::format<128>("Use this port for server discovery (default %d)", Plast::DefaultDaemonDiscoveryPort),
+                                'P', Plast::DefaultDaemonDiscoveryPort);
+    const String socketPath = Plast::defaultSocketFile();
+    Config::registerOption<String>("socket",
+                                   String::format<128>("Run daemon with this domain socket. (default %s)", socketPath.constData()),
+                                   'n', socketPath);
+
+    Config::parse(argc, argv, List<Path>() << (Path::home() + ".config/plastd.rc") << "/etc/plastd.rc");
+    if (Config::isEnabled("help")) {
+        Config::showHelp(stdout);
+        return 1;
+    }
 
     Plast::init();
 
-    struct option opts[] = {
-        { "help", no_argument, 0, 'h' },
-        { "log-file", required_argument, 0, 'l' },
-        { "verbose", no_argument, 0, 'v' },
-        { "port", required_argument, 0, 'p' },
-        { "discovery-port", required_argument, 0, 'P' },
-        { "socket", required_argument, 0, 'n' },
-        { "server", required_argument, 0, 's' },
-        { "job-count", required_argument, 0, 'j' },
-        { 0, 0, 0, 0 }
-    };
-    const String shortOptions = Rct::shortOptions(opts);
-
     Daemon::Options options = {
-        Path::home() + "/.plastd.sock",
-        5160,
-        5161,
-        5162,
+        Config::value<String>("socket"),
+        Plast::DefaultServerPort,
+        static_cast<uint16_t>(Config::value<int>("port")),
+        static_cast<uint16_t>(Config::value<int>("discovery-port")),
         String(),
-        ThreadPool::idealThreadCount()
+        Config::value<int>("job-count")
     };
-    const char *logFile = 0;
-    int logLevel = 0;
-
-    while (true) {
-        const int c = getopt_long(argc, argv, shortOptions.constData(), opts, 0);
-        if (c == -1)
-            break;
-        switch (c) {
-        case 'n':
-            socketFile = optarg;
-            break;
-        case 's': {
-            const char *colon = strchr(optarg, ':');
-            if (colon) {
-                options.serverHost.assign(optarg, colon - optarg);
-                options.serverPort = atoi(colon + 1);
-                if (options.serverPort <= 0) {
-                    fprintf(stderr, "Invalid argument to -s %s\n", optarg);
-                    return 1;
-                }
-            } else {
-                options.serverHost = optarg;
-            }
-            break; }
-        case 'p':
-            options.port = atoi(optarg);
-            if (options.port <= 0) {
-                fprintf(stderr, "Invalid argument to -p %s\n", optarg);
-                return 1;
-            }
-            break;
-        case 'j':
-            options.jobCount = atoi(optarg);
-            if (options.jobCount < 0) {
-                fprintf(stderr, "Invalid argument to -j %s\n", optarg);
-                return 1;
-            }
-            break;
-        case 'P':
-            options.discoveryPort = atoi(optarg);
-            if (options.discoveryPort <= 0) {
-                fprintf(stderr, "Invalid argument to -P %s\n", optarg);
-                return 1;
-            }
-            break;
-        case 'h':
-            usage(stdout);
-            return 0;
-        case 'L':
-            logFile = optarg;
-            break;
-        case 'v':
-            if (logLevel >= 0)
-                ++logLevel;
-            break;
-        case '?': {
-            usage(stderr);
-            return 1; }
-        }
-    }
-    if (optind < argc) {
-        fprintf(stderr, "plastd: unexpected option -- '%s'\n", argv[optind]);
+    if (options.port <= 0) {
+        fprintf(stderr, "Invalid port: %d\n", options.port);
         return 1;
+    }
+
+    if (options.discoveryPort <= 0) {
+        fprintf(stderr, "Invalid discovery-port: %d\n", options.discoveryPort);
+        return 1;
+    }
+
+    if (options.jobCount < 0) {
+        fprintf(stderr, "Invalid jobCount: %d\n", options.jobCount);
+        return 1;
+    }
+
+    const String serverValue = Config::value<String>("server");
+    if (!serverValue.isEmpty()) {
+        const int colon = serverValue.indexOf(':');
+
+        if (colon != -1) {
+            options.serverHost = serverValue.left(colon);
+            options.serverPort = serverValue.mid(colon + 1).toLongLong();
+            if (options.serverPort <= 0) {
+                fprintf(stderr, "Invalid argument to -s %s\n", optarg);
+                return 1;
+            }
+        } else {
+            options.serverHost = serverValue;
+        }
     }
 
     signal(SIGSEGV, sigSegvHandler);
 
-    if (!initLogging(argv[0], LogStderr, logLevel, logFile, 0)) {
-        fprintf(stderr, "Can't initialize logging with %d %s 0x%0x\n",
-                logLevel, logFile ? logFile : "", 0);
+    error() << Config::isEnabled("verbose") << Config::value<int>("port")
+            << Config::value<String>("socket")
+            << options.jobCount;
+    if (!initLogging(argv[0], LogStderr, Config::isEnabled("verbose") ? Debug : Error, Config::value<String>("log-file"), 0)) {
+        fprintf(stderr, "Can't initialize logging with %d %s\n",
+                Config::isEnabled("verbose") ? Debug : Error, Config::value<String>("log-file").constData());
         return 1;
     }
+
+    error() << options.socketFile
+            << options.serverPort
+            << options.port
+            << options.discoveryPort
+            << options.serverHost
+            << options.jobCount;
 
     EventLoop::SharedPtr loop(new EventLoop);
     loop->init(EventLoop::MainEventLoop|EventLoop::EnableSigIntHandler);
