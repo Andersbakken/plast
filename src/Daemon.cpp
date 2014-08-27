@@ -213,6 +213,7 @@ void Daemon::onProcessFinished(Process *process)
         delete localJob;
     }
     EventLoop::deleteLater(process);
+    EventLoop::eventLoop()->callLater(std::bind(&Daemon::startJobs, this));
 }
 
 void Daemon::startJobs()
@@ -277,6 +278,7 @@ Process *Daemon::startProcess(const List<String> &arguments, const List<String> 
     debug() << "Started process" << compiler << arguments.mid(1) << process;
     return process;
 }
+
 void Daemon::handleConsoleCommand(const String &string)
 {
 
