@@ -101,7 +101,10 @@ void Daemon::handleLocalJobMessage(LocalJobMessage *msg, Connection *conn)
 {
     debug() << "Got localjob" << msg->arguments() << msg->environ() << msg->cwd();
 
-    LocalJob *localJob = new LocalJob(msg->arguments(), msg->environ(), msg->cwd(), conn);
+    List<String> env = msg->environ();
+    assert(!env.contains("PLAST=1"));
+    env.append("PLAST=1");
+    LocalJob *localJob = new LocalJob(msg->arguments(), env, msg->cwd(), conn);
     Rct::LinkedList::insert(localJob, mFirstLocalJob, mLastLocalJob, mLastLocalJob);
     mLocalJobsByLocalConnection[conn] = localJob;
     conn->disconnected().connect([this](Connection *c) {

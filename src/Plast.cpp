@@ -16,11 +16,12 @@ Path resolveCompiler(const Path &path)
     const String fileName = path.fileName();
     const List<String> paths = String(getenv("PATH")).split(':');
     // error() << fileName;
+    const bool hasRTags = getenv("RTAGS_GCC_WRAPPER");
     for (const auto &p : paths) {
         const Path orig = p + "/" + fileName;
         Path exec = orig;
         // error() << "Trying" << exec;
-        if (exec.resolve() && strcmp(exec.fileName(), "plastc")) {
+        if (exec.resolve() && strcmp(exec.fileName(), "plastc") && (hasRTags || strcmp(exec.fileName(), "gcc-rtags-wrapper.sh"))) {
             return orig;
         }
     }
