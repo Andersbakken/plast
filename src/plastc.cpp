@@ -19,21 +19,14 @@
 
 int buildLocal(int argc, char **argv)
 {
-    const String fileName = Path(argv[0]).fileName();
-    const List<String> paths = String(getenv("PATH")).split(':');
-    // error() << fileName;
-    for (const auto &p : paths) {
-        const Path orig = p + "/" + fileName;
-        Path exec = orig;
-        // error() << "Trying" << exec;
-        if (exec.resolve() && exec != Rct::executablePath()) {
-            argv[0] = strdup(orig.constData());
-            execv(orig.constData(), argv); // execute without resolving symlink
-            fprintf(stderr, "execv error for %s %d/%s\n", orig.constData(), errno, strerror(errno));
-            return 1;
-        }
+    const Path path = Plast::resolveCompiler(argv[0]);
+    if (!path.isEmpty()) {
+        argv[0] = strdup(path.constData());
+        execv(path.constData(), argv); // execute without resolving symlink
+        fprintf(stderr, "execv error for %s %d/%s\n", path.constData(), errno, strerror(errno));
+        return 1;
     }
-    fprintf(stderr, "Failed to find compiler for %s/%s\n", fileName.constData(), argv[0]);
+    fprintf(stderr, "Failed to find compiler for '%s'\n", argv[0]);
     return 2;
 }
 
@@ -83,10 +76,10 @@ int main(int argc, char** argv)
                 LocalJobResponseMessage *msg = static_cast<LocalJobResponseMessage*>(message);
                 for (const auto &output : msg->output()) {
                     switch (output.type) {
-                    case LocalJobResponseMessage::Output::StdOut:
+                    case Output::StdOut:
                         fwrite(output.text.constData(), 1, output.text.size(), stdout);
                         break;
-                    case LocalJobResponseMessage::Output::StdErr:
+                    case Output::StdErr:
                         fwrite(output.text.constData(), 1, output.text.size(), stderr);
                         break;
                     }
@@ -107,7 +100,10 @@ int main(int argc, char** argv)
         return buildLocal(argc, argv);
     }
 
-    connection.send(LocalJobMessage(argc, argv));
+    List<String> env;
+    for (char **e = environ; *e; ++e)
+        env.append(*e);
+    connection.send(LocalJobMessage(argc, argv, env, Path::pwd()));
     loop->exec(jobTimeout);
     if (returnValue == -1)
         return buildLocal(argc, argv);

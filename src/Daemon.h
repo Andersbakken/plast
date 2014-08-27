@@ -43,13 +43,35 @@ private:
     void reconnectToServer();
     void onDiscoverySocketReadyRead(Buffer &&data);
 
+    void onConnectionDisconnected(Connection *conn);
     void onProcessReadyReadStdOut(Process *process);
     void onProcessReadyReadStdErr(Process *process);
     void onProcessFinished(Process *process);
     void startJobs();
+    Process *startProcess(const List<String> &arguments, const List<String> &environ,
+                          const Path &cwd, String *error);
 
     struct LocalJob {
-        List<String> arguments;
+        LocalJob(const List<String> &args, const List<String> &env, const Path &dir, Connection *conn)
+            : type(Link), arguments(args), environ(env), cwd(dir), process(0), localConnection(conn), remoteConnection(0), next(0), prev(0)
+        {
+            for (const String &arg : arguments) {
+                if (arg == "-c") {
+                    type = Compile;
+                } else if (arg == "-E") {
+                    type = Preprocess;
+                    break;
+                }
+            }
+        }
+        enum Type {
+            Compile,
+            Preprocess,
+            Link
+        } type;
+        List<String> arguments, environ;
+        Path cwd;
+        List<Output> output;
         Process *process;
         Connection *localConnection, *remoteConnection;
         LocalJob *next, *prev;
@@ -60,7 +82,8 @@ private:
     Hash<Process*, LocalJob*> mLocalJobsByProcess;
 
     struct RemoteJob {
-        List<String> arguments;
+        List<String> arguments, environ;
+        List<Output> output;
         String source;
         Connection *connection;
         Process *process;
@@ -74,7 +97,7 @@ private:
     Options mOptions;
     SocketServer mLocalServer, mRemoteServer;
     Connection mServerConnection;
-    SocketClient mDiscoverySocket;
+    std::shared_ptr<SocketClient> mDiscoverySocket;
     Timer mServerTimer;
 };
 

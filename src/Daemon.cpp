@@ -16,7 +16,7 @@
 #include "Daemon.h"
 
 Daemon::Daemon()
-    : mExplicitServer(false)
+    : mFirstLocalJob(0), mLastLocalJob(0), mExplicitServer(false)
 {
     const auto onNewConnection = [this](SocketServer *server) {
         while (true) {
@@ -24,7 +24,7 @@ Daemon::Daemon()
             if (!socket)
                 break;
             Connection *conn = new Connection(socket);
-            conn->disconnected().connect([](Connection *conn) { EventLoop::deleteLater(conn); });
+            conn->disconnected().connect(std::bind(&Daemon::onConnectionDisconnected, this, std::placeholders::_1));
             conn->newMessage().connect(std::bind(&Daemon::onNewMessage, this, std::placeholders::_1, std::placeholders::_2));
         }
     };
@@ -36,14 +36,35 @@ Daemon::Daemon()
 
     mServerTimer.timeout().connect([this](Timer *) { reconnectToServer(); });
 
-    mDiscoverySocket.readyReadFrom().connect([this](const SocketClient::SharedPtr &, const String &, uint16_t, Buffer &&data) {
+    mDiscoverySocket.reset(new SocketClient);
+    mDiscoverySocket->readyReadFrom().connect([this](const SocketClient::SharedPtr &, const String &, uint16_t, Buffer &&data) {
             onDiscoverySocketReadyRead(std::forward<Buffer>(data));
         });
 }
 
 bool Daemon::init(const Options &options)
 {
-    if (!mLocalServer.listen(options.socketFile)) {
+    bool success = false;
+    for (int i=0; i<10; ++i) {
+        if (mLocalServer.listen(options.socketFile)) {
+            success = true;
+            break;
+        }
+        if (!i) {
+            enum { Timeout = 1000 };
+            Connection connection;
+            if (connection.connectUnix(options.socketFile, Timeout)) {
+                connection.send(QuitMessage());
+                connection.disconnected().connect(std::bind([](){ EventLoop::eventLoop()->quit(); }));
+                connection.finished().connect(std::bind([](){ EventLoop::eventLoop()->quit(); }));
+                EventLoop::eventLoop()->exec(Timeout);
+            }
+        } else {
+            sleep(1);
+        }
+        Path::rm(options.socketFile);
+    }
+    if (!success) {
         error() << "Can't seem to listen on" << mOptions.socketFile;
         return false;
     }
@@ -66,6 +87,10 @@ void Daemon::onNewMessage(Message *message, Connection *connection)
     case LocalJobMessage::MessageId:
         handleLocalJobMessage(static_cast<LocalJobMessage*>(message), connection);
         break;
+    case QuitMessage::MessageId:
+        warning() << "Quitting by request";
+        EventLoop::eventLoop()->quit();
+        break;
     default:
         error() << "Unexpected message" << message->messageId();
         break;
@@ -74,7 +99,9 @@ void Daemon::onNewMessage(Message *message, Connection *connection)
 
 void Daemon::handleLocalJobMessage(LocalJobMessage *msg, Connection *conn)
 {
-    LocalJob *localJob = new LocalJob({msg->arguments(), 0, conn, 0, 0, 0 });
+    debug() << "Got localjob" << msg->arguments() << msg->environ() << msg->cwd();
+
+    LocalJob *localJob = new LocalJob(msg->arguments(), msg->environ(), msg->cwd(), conn);
     Rct::LinkedList::insert(localJob, mFirstLocalJob, mLastLocalJob, mLastLocalJob);
     mLocalJobsByLocalConnection[conn] = localJob;
     conn->disconnected().connect([this](Connection *c) {
@@ -84,19 +111,12 @@ void Daemon::handleLocalJobMessage(LocalJobMessage *msg, Connection *conn)
                 if (job->remoteConnection)
                     mLocalJobsByRemoteConnection.remove(job->remoteConnection);
                 if (job->process) {
-                    job->process->terminate();
+                    job->process->kill();
                     mLocalJobsByProcess.remove(job->process);
                 }
             }
         });
     startJobs();
-    if (!mServerConnection.isConnected()) {
-        conn->send(LocalJobResponseMessage());
-        // we're not connected so we can't schedule anything
-        return;
-    }
-    mLocalConnections[conn] = mNextJobId++;
-    // ### should we tell the server that we're no longer interested if we get disconnected?
 }
 
 void Daemon::reconnectToServer()
@@ -114,7 +134,7 @@ void Daemon::reconnectToServer()
     }
 
     if (mOptions.serverHost.isEmpty()) {
-        mDiscoverySocket.writeTo("255.255.255.255", mOptions.discoveryPort, "?");
+        mDiscoverySocket->writeTo("255.255.255.255", mOptions.discoveryPort, "?");
     } else if (!mServerConnection.connectTcp(mOptions.serverHost, mOptions.serverPort)) {
         restartServerTimer();
     }
@@ -140,7 +160,7 @@ void Daemon::onDiscoverySocketReadyRead(Buffer &&data)
                 Serializer serializer(packet);
                 serializer << 's' << mOptions.serverHost << mOptions.serverPort;
             }
-            mDiscoverySocket.writeTo("255.255.255.255", mOptions.discoveryPort, packet);
+            mDiscoverySocket->writeTo("255.255.255.255", mOptions.discoveryPort, packet);
         }
         break;
     }
@@ -151,22 +171,106 @@ void Daemon::restartServerTimer()
     mServerTimer.restart(1000, Timer::SingleShot);
 }
 
+template <typename T>
+static inline bool addOutput(Process *process, Hash<Process*, T*> &hash,
+                             Output::Type type, const String &text)
+{
+    if (T *t = hash.value(process)) {
+        t->output.append(Output({type, text}));
+        return true;
+    }
+    return false;
+}
+
 void Daemon::onProcessReadyReadStdOut(Process *process)
 {
-
+    const String out = process->readAllStdOut();
+    debug() << "ready read stdout" << process << out;
+    if (!addOutput(process, mLocalJobsByProcess, Output::StdOut, out))
+        addOutput(process, mRemoteJobsByProcess, Output::StdOut, out);
 }
 
 void Daemon::onProcessReadyReadStdErr(Process *process)
 {
-
+    const String out = process->readAllStdErr();
+    debug() << "ready read stderr" << process << out;
+    if (!addOutput(process, mLocalJobsByProcess, Output::StdErr, out))
+        addOutput(process, mRemoteJobsByProcess, Output::StdErr, out);
 }
 
 void Daemon::onProcessFinished(Process *process)
 {
-
+    LocalJob *localJob = mLocalJobsByProcess.take(process);
+    debug() << "process finished" << process << localJob;
+    if (localJob) {
+        assert(localJob->process == process);
+        localJob->localConnection->send(LocalJobResponseMessage(process->returnCode(), localJob->output));
+        mLocalJobsByLocalConnection.remove(localJob->localConnection);
+        Rct::LinkedList::remove(localJob, mFirstLocalJob, mLastLocalJob);
+        delete localJob;
+    }
+    EventLoop::deleteLater(process);
 }
 
 void Daemon::startJobs()
 {
+    debug() << "startJobs" << mOptions.jobCount << mLocalJobsByProcess.size() << mRemoteJobsByProcess.size();
+    while (mOptions.jobCount > (mLocalJobsByProcess.size() + mRemoteJobsByProcess.size())) {
+        if (mLocalJobsByLocalConnection.size() > mLocalJobsByProcess.size()) {
+            LocalJob *job = mFirstLocalJob;
+            while (job && job->process)
+                job = job->next;
+            assert(job);
+            debug() << "Found job" << job->arguments.first();
+            String err;
+            job->process = startProcess(job->arguments, job->environ, job->cwd, &err);
+            assert(job->process);
+            mLocalJobsByProcess[job->process] = job;
+        } else {
+            break;
+        }
+    }
+}
 
+void Daemon::onConnectionDisconnected(Connection *conn)
+{
+    debug() << "Lost connection" << conn;
+    EventLoop::deleteLater(conn);
+    if (LocalJob *job = mLocalJobsByLocalConnection.take(conn)) {
+        Rct::LinkedList::remove(job, mFirstLocalJob, mLastLocalJob);
+        if (job->process) {
+            assert(!job->remoteConnection);
+            mLocalJobsByProcess.remove(job->process);
+            job->process->kill();
+        } else {
+            // need to tell remote connection that we're no longer interested
+        }
+        delete job;
+        return;
+    }
+}
+
+Process *Daemon::startProcess(const List<String> &arguments, const List<String> &environ, const Path &cwd, String *err)
+{
+    debug() << "Starting process" << arguments;
+    assert(!arguments.isEmpty());
+    const Path compiler = Plast::resolveCompiler(arguments.first());
+    if (compiler.isEmpty()) {
+        error() << "Can't resolve compiler for" << arguments.first();
+        return 0;
+    }
+    Process *process = new Process;
+    process->setCwd(cwd);
+    process->finished().connect(std::bind(&Daemon::onProcessFinished, this, std::placeholders::_1));
+    process->readyReadStdOut().connect(std::bind(&Daemon::onProcessReadyReadStdOut, this, std::placeholders::_1));
+    process->readyReadStdErr().connect(std::bind(&Daemon::onProcessReadyReadStdErr, this, std::placeholders::_1));
+    if (!process->start(compiler, arguments.mid(1), environ)) {
+        error() << "Failed to start compiler" << compiler;
+        if (err)
+            *err = "Failed to start compiler: " + compiler;
+        delete process;
+        return 0;
+    }
+    debug() << "Started process" << compiler << arguments.mid(1) << process;
+    return process;
 }
