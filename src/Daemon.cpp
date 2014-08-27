@@ -16,7 +16,7 @@
 #include "Daemon.h"
 
 Daemon::Daemon()
-    : mNextJobId(1), mExplicitServer(false)
+    : mExplicitServer(false)
 {
     const auto onNewConnection = [this](SocketServer *server) {
         while (true) {
@@ -74,6 +74,22 @@ void Daemon::onNewMessage(Message *message, Connection *connection)
 
 void Daemon::handleLocalJobMessage(LocalJobMessage *msg, Connection *conn)
 {
+    LocalJob *localJob = new LocalJob({msg->arguments(), 0, conn, 0, 0, 0 });
+    Rct::LinkedList::insert(localJob, mFirstLocalJob, mLastLocalJob, mLastLocalJob);
+    mLocalJobsByLocalConnection[conn] = localJob;
+    conn->disconnected().connect([this](Connection *c) {
+            LocalJob *job = mLocalJobsByLocalConnection.take(c);
+            if (job) {
+                Rct::LinkedList::remove(job, mFirstLocalJob, mLastLocalJob);
+                if (job->remoteConnection)
+                    mLocalJobsByRemoteConnection.remove(job->remoteConnection);
+                if (job->process) {
+                    job->process->terminate();
+                    mLocalJobsByProcess.remove(job->process);
+                }
+            }
+        });
+    startJobs();
     if (!mServerConnection.isConnected()) {
         conn->send(LocalJobResponseMessage());
         // we're not connected so we can't schedule anything
@@ -81,7 +97,6 @@ void Daemon::handleLocalJobMessage(LocalJobMessage *msg, Connection *conn)
     }
     mLocalConnections[conn] = mNextJobId++;
     // ### should we tell the server that we're no longer interested if we get disconnected?
-    conn->disconnected().connect([this](Connection *c) { mLocalConnections.remove(c); });
 }
 
 void Daemon::reconnectToServer()
@@ -134,4 +149,24 @@ void Daemon::onDiscoverySocketReadyRead(Buffer &&data)
 void Daemon::restartServerTimer()
 {
     mServerTimer.restart(1000, Timer::SingleShot);
+}
+
+void Daemon::onProcessReadyReadStdOut(Process *process)
+{
+
+}
+
+void Daemon::onProcessReadyReadStdErr(Process *process)
+{
+
+}
+
+void Daemon::onProcessFinished(Process *process)
+{
+
+}
+
+void Daemon::startJobs()
+{
+
 }

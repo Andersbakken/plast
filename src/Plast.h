@@ -44,17 +44,17 @@ public:
     LocalJobMessage(int argc = 0, char **argv = 0)
         : Message(MessageId)
     {
-        mArgs.resize(argc);
+        mArguments.resize(argc);
         for (int i=0; i<argc; ++i)
-            mArgs[i] = argv[i];
+            mArguments[i] = argv[i];
     }
 
-    const List<String> &args() const { return mArgs; }
+    const List<String> &arguments() const { return mArguments; }
 
-    virtual void encode(Serializer &serializer) const { serializer << mArgs; }
-    virtual void decode(Deserializer &deserializer) { deserializer >> mArgs; }
+    virtual void encode(Serializer &serializer) const { serializer << mArguments; }
+    virtual void decode(Deserializer &deserializer) { deserializer >> mArguments; }
 private:
-    List<String> mArgs;
+    List<String> mArguments;
 };
 
 class LocalJobResponseMessage : public Message

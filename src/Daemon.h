@@ -21,6 +21,7 @@
 #include <rct/Message.h>
 #include <rct/Timer.h>
 #include <rct/Hash.h>
+#include <rct/Process.h>
 #include "Plast.h"
 
 class Daemon
@@ -29,8 +30,9 @@ public:
     Daemon();
     struct Options {
         Path socketFile;
-        int serverPort, port, discoveryPort;
+        uint16_t serverPort, port, discoveryPort;
         String serverHost;
+        int jobCount;
     };
     bool init(const Options &options);
     const Options &options() const { return mOptions; }
@@ -41,9 +43,33 @@ private:
     void reconnectToServer();
     void onDiscoverySocketReadyRead(Buffer &&data);
 
-    uint64_t mNextJobId;
-    Hash<uint64_t, Connection *> mScheduledJobs;
-    Hash<Connection*, uint64_t> mLocalConnections;
+    void onProcessReadyReadStdOut(Process *process);
+    void onProcessReadyReadStdErr(Process *process);
+    void onProcessFinished(Process *process);
+    void startJobs();
+
+    struct LocalJob {
+        List<String> arguments;
+        Process *process;
+        Connection *localConnection, *remoteConnection;
+        LocalJob *next, *prev;
+    };
+    LocalJob *mFirstLocalJob, *mLastLocalJob;
+
+    Hash<Connection*, LocalJob*> mLocalJobsByLocalConnection, mLocalJobsByRemoteConnection;
+    Hash<Process*, LocalJob*> mLocalJobsByProcess;
+
+    struct RemoteJob {
+        List<String> arguments;
+        String source;
+        Connection *connection;
+        Process *process;
+    };
+
+    List<RemoteJob*> mRemoteJobList;
+    Hash<Connection*, RemoteJob*> mRemoteJobsByConnection;
+    Hash<Process*, RemoteJob*> mRemoteJobsByProcess;
+
     bool mExplicitServer;
     Options mOptions;
     SocketServer mLocalServer, mRemoteServer;

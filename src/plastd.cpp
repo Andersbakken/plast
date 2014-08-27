@@ -15,6 +15,7 @@
 
 #include <rct/EventLoop.h>
 #include <rct/Log.h>
+#include <rct/ThreadPool.h>
 #include <getopt.h>
 #include <signal.h>
 #include <stdio.h>
@@ -43,6 +44,7 @@ static void usage(FILE *f)
             "  --help|-h                                  Display this page.\n"
             "  --log-file|-l [file]                       Log to this file.\n"
             "  --verbose|-v                               Be more verbose.\n"
+            "  --job-count|-j [count]                     Job count (defaults to number of cores)\n"
             "  --server|-s [hostname:(port)]              Server to connect to. (defaults to port 5160 if hostname doesn't contain a port)\n"
             "  --port|-p [port]                           Use this port (default 5161)\n"
             "  --discovery-port|-P [port]                 Use this port for server discovery (default 5163)\n"
@@ -63,6 +65,7 @@ int main(int argc, char** argv)
         { "discovery-port", required_argument, 0, 'P' },
         { "socket", required_argument, 0, 'n' },
         { "server", required_argument, 0, 's' },
+        { "job-count", required_argument, 0, 'j' },
         { 0, 0, 0, 0 }
     };
     const String shortOptions = Rct::shortOptions(opts);
@@ -72,7 +75,8 @@ int main(int argc, char** argv)
         5160,
         5161,
         5162,
-        String()
+        String(),
+        ThreadPool::idealThreadCount()
     };
     const char *logFile = 0;
     int logLevel = 0;
@@ -102,6 +106,13 @@ int main(int argc, char** argv)
             options.port = atoi(optarg);
             if (options.port <= 0) {
                 fprintf(stderr, "Invalid argument to -p %s\n", optarg);
+                return 1;
+            }
+            break;
+        case 'j':
+            options.jobCount = atoi(optarg);
+            if (options.jobCount < 0) {
+                fprintf(stderr, "Invalid argument to -j %s\n", optarg);
                 return 1;
             }
             break;
