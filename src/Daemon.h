@@ -23,11 +23,13 @@
 #include <rct/Hash.h>
 #include <rct/Process.h>
 #include "Plast.h"
+#include "Console.h"
 
 class Daemon
 {
 public:
     Daemon();
+    ~Daemon();
     struct Options {
         Path socketFile;
         uint16_t serverPort, port, discoveryPort;
@@ -36,8 +38,11 @@ public:
     };
     bool init(const Options &options);
     const Options &options() const { return mOptions; }
-    void handleConsoleCommand(const String &string);
+
 private:
+    void handleConsoleCommand(const String &string);
+    void handleConsoleCompletion(const String& string, int start, int end, String& common, List<String>& candidates);
+
     void restartServerTimer();
     void onNewMessage(Message *message, Connection *connection);
     void handleLocalJobMessage(LocalJobMessage *msg, Connection *conn);

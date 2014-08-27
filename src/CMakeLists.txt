@@ -45,15 +45,15 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 add_library(plast Plast.cpp)
 target_link_libraries(plast rct)
 
-include_directories(${CMAKE_CURRENT_LIST_DIR} rct/include/ rct ${CMAKE_CURRENT_BINARY_DIR}/rct/include/rct)
+include_directories(${CMAKE_CURRENT_LIST_DIR} rct/include/ rct ${CMAKE_CURRENT_BINARY_DIR}/rct/include/rct ${Readline_INCLUDE_DIR})
 
 add_executable(plastc plastc.cpp)
 add_dependencies(plastc rct plast)
 target_link_libraries(plastc plast rct ${SYSTEM_LIBS})
 
-add_executable(plastd plastd.cpp Daemon.cpp)
+add_executable(plastd plastd.cpp Daemon.cpp Console.cpp)
 add_dependencies(plastd rct plast)
-target_link_libraries(plastd plast rct ${SYSTEM_LIBS})
+target_link_libraries(plastd plast rct ${SYSTEM_LIBS} ${Readline_LIBRARY})
 
 add_executable(plasts plasts.cpp Server.cpp)
 add_dependencies(plasts rct plast)

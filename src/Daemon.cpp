@@ -18,6 +18,9 @@
 Daemon::Daemon()
     : mFirstLocalJob(0), mLastLocalJob(0), mExplicitServer(false)
 {
+    Console::init("plastd> ",
+                  std::bind(&Daemon::handleConsoleCommand, this, std::placeholders::_1),
+                  std::bind(&Daemon::handleConsoleCompletion, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5));
     const auto onNewConnection = [this](SocketServer *server) {
         while (true) {
             auto socket = server->nextConnection();
@@ -40,6 +43,11 @@ Daemon::Daemon()
     mDiscoverySocket->readyReadFrom().connect([this](const SocketClient::SharedPtr &, const String &, uint16_t, Buffer &&data) {
             onDiscoverySocketReadyRead(std::forward<Buffer>(data));
         });
+}
+
+Daemon::~Daemon()
+{
+    Console::cleanup();
 }
 
 bool Daemon::init(const Options &options)
@@ -281,5 +289,8 @@ Process *Daemon::startProcess(const List<String> &arguments, const List<String> 
 
 void Daemon::handleConsoleCommand(const String &string)
 {
+}
 
+void Daemon::handleConsoleCompletion(const String& string, int start, int end, String& common, List<String>& candidates)
+{
 }
