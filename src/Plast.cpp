@@ -78,8 +78,8 @@ static const char *argOptions[] = {
 };
 
 static int compare(const void *s1, const void *s2) {
-    const char *key = s1;
-    const char * const *arg = s2;
+    const char *key = reinterpret_cast<const char*>(s1);
+    const char * const *arg = reinterpret_cast<const char * const *>(s2);
     return strcmp(key, *arg);
 }
 
@@ -89,24 +89,24 @@ static inline bool hasArg(const String &arg)
                    sizeof(const char*), ::compare);
 }
 
-CompilerArgs HandshakeMessage::create(const List<String> &args)
+CompilerArgs CompilerArgs::create(const List<String> &args)
 {
-    int compiler = 0;
-    int source = -1;
-    int output = -1;
-    Type type = Link;
+    CompilerArgs ret = { args, List<Path>(), Path(), args.value(0), Link, None };
     for (int i=1; i<args.size(); ++i) {
         const String &arg = args[i];
         if (arg == "-c") {
-            type = Compile;
+            if (ret.mode == Link)
+                ret.mode = Compile;
         } else if (arg == "-S") {
-
+            ret.flags |= NoAssemble;
         } else if (arg == "-E") {
-
+            ret.mode = Preprocess;
         } else if (arg == "-o") {
-
+            ret.flags |= hasOwnProperty;
         } else if (hasArg(arg)) {
-
+            ++i;
+        } else if (!arg.startsWith("-")) {
+            ret.sourceFiles.append(arg);
         }
     }
 

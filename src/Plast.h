@@ -62,16 +62,23 @@ struct CompilerArgs
     List<Path> sourceFiles;
 
     Path output, compiler;
-    enum Type {
+    enum Mode {
         Compile,
         Preprocess,
-        Link,
-        MultiSource
-    } type;
+        Link
+    } mode;
+
+    enum Flag {
+        None = 0x0,
+        NoAssemble = 0x1,
+        MultiSource = 0x2,
+        HasOutput = 0x4
+    };
+    unsigned int flags;
 
     static CompilerArgs create(const List<String> &args);
 
-    Path sourceFile(int idx = 0) const { return sourceFile.value(idx); }
+    Path sourceFile(int idx = 0) const { return sourceFiles.value(idx); }
 };
 
 class LocalJobMessage : public Message
