@@ -105,21 +105,11 @@ int main(int argc, char** argv)
 
     signal(SIGSEGV, sigSegvHandler);
 
-    error() << Config::isEnabled("verbose") << Config::value<int>("port")
-            << Config::value<String>("socket")
-            << options.jobCount;
     if (!initLogging(argv[0], LogStderr, Config::isEnabled("verbose") ? Debug : Error, Config::value<String>("log-file"), 0)) {
         fprintf(stderr, "Can't initialize logging with %d %s\n",
                 Config::isEnabled("verbose") ? Debug : Error, Config::value<String>("log-file").constData());
         return 1;
     }
-
-    error() << options.socketFile
-            << options.serverPort
-            << options.port
-            << options.discoveryPort
-            << options.serverHost
-            << options.jobCount;
 
     EventLoop::SharedPtr loop(new EventLoop);
     loop->init(EventLoop::MainEventLoop|EventLoop::EnableSigIntHandler);
