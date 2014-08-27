@@ -63,10 +63,10 @@ int main(int argc, char** argv)
 
     Path socket = getenv("PLAST_SOCKET_FILE");
     if (socket.isEmpty())
-        socket = Path::home() + "/.plastd.sock";
+        socket = Plast::defaultSocketFile();
 
-    const unsigned long connectTimeout = conf("PLAST_DAEMON_CONNECT_TIMEOUT", 2000);
-    const unsigned long jobTimeout = conf("PLAST_JOB_TIMEOUT", -1);
+    const int connectTimeout = conf("PLAST_DAEMON_CONNECT_TIMEOUT", 2000);
+    const int jobTimeout = conf("PLAST_JOB_TIMEOUT", -1);
 
     int returnValue = -1;
     Connection connection;

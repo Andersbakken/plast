@@ -21,6 +21,12 @@
 namespace Plast {
 Path resolveCompiler(const Path &path);
 bool init();
+Path defaultSocketFile();
+enum {
+    DefaultServerPort = 5160,
+    DefaultDaemonPort = 5161,
+    DefaultDaemonDiscoveryPort = 5162
+};
 }
 
 struct Output {

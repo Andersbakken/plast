@@ -11,6 +11,11 @@ bool init()
     return true;
 }
 
+Path defaultSocketFile()
+{
+    return Path::home() + ".plastd.sock";
+}
+
 Path resolveCompiler(const Path &path)
 {
     const String fileName = path.fileName();
