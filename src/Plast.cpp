@@ -5,8 +5,8 @@ namespace Plast {
 bool init()
 {
     Messages::registerMessage<HandshakeMessage>();
-    Messages::registerMessage<LocalJobMessage>();
-    Messages::registerMessage<LocalJobResponseMessage>();
+    Messages::registerMessage<ClientJobMessage>();
+    Messages::registerMessage<ClientJobResponseMessage>();
     Messages::registerMessage<QuitMessage>();
     return true;
 }
@@ -50,12 +50,12 @@ inline Serializer &operator<<(Serializer &s, const Output &output)
     return s;
 }
 
-void LocalJobResponseMessage::encode(Serializer &serializer) const
+void ClientJobResponseMessage::encode(Serializer &serializer) const
 {
     serializer << mStatus << mOutput;
 }
 
-void LocalJobResponseMessage::decode(Deserializer &deserializer)
+void ClientJobResponseMessage::decode(Deserializer &deserializer)
 {
     deserializer >> mStatus >> mOutput;
 }

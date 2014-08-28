@@ -72,8 +72,8 @@ int main(int argc, char** argv)
     Connection connection;
     connection.newMessage().connect([&returnValue, loop](Message *message, Connection *conn) {
             switch (message->messageId()) {
-            case LocalJobResponseMessage::MessageId: {
-                LocalJobResponseMessage *msg = static_cast<LocalJobResponseMessage*>(message);
+            case ClientJobResponseMessage::MessageId: {
+                ClientJobResponseMessage *msg = static_cast<ClientJobResponseMessage*>(message);
                 for (const auto &output : msg->output()) {
                     switch (output.type) {
                     case Output::StdOut:
@@ -103,7 +103,7 @@ int main(int argc, char** argv)
     List<String> env;
     for (char **e = environ; *e; ++e)
         env.append(*e);
-    connection.send(LocalJobMessage(argc, argv, env, Path::pwd()));
+    connection.send(ClientJobMessage(argc, argv, env, Path::pwd()));
     loop->exec(jobTimeout);
     if (returnValue == -1)
         return buildLocal(argc, argv);

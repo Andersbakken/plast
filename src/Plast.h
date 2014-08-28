@@ -81,12 +81,12 @@ struct CompilerArgs
     Path sourceFile(int idx = 0) const { return sourceFiles.value(idx); }
 };
 
-class LocalJobMessage : public Message
+class ClientJobMessage : public Message
 {
 public:
     enum { MessageId = HandshakeMessage::MessageId + 1 };
 
-    LocalJobMessage(int argc = 0, char **argv = 0, const List<String> &environ = List<String>(), const Path &cwd = Path())
+    ClientJobMessage(int argc = 0, char **argv = 0, const List<String> &environ = List<String>(), const Path &cwd = Path())
         : Message(MessageId), mEnviron(environ), mCwd(cwd)
     {
         mArguments.resize(argc);
@@ -105,12 +105,12 @@ private:
     Path mCwd;
 };
 
-class LocalJobResponseMessage : public Message
+class ClientJobResponseMessage : public Message
 {
 public:
-    enum { MessageId = LocalJobMessage::MessageId + 1 };
+    enum { MessageId = ClientJobMessage::MessageId + 1 };
 
-    LocalJobResponseMessage(int status = -1, const List<Output> &output = List<Output>())
+    ClientJobResponseMessage(int status = -1, const List<Output> &output = List<Output>())
         : Message(MessageId), mStatus(status), mOutput(output)
     {
     }
@@ -127,7 +127,7 @@ private:
 class QuitMessage : public Message
 {
 public:
-    enum { MessageId = LocalJobResponseMessage::MessageId + 1 };
+    enum { MessageId = ClientJobResponseMessage::MessageId + 1 };
     QuitMessage()
         : Message(MessageId)
     {}

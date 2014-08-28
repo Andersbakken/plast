@@ -100,8 +100,8 @@ bool Daemon::init(const Options &options)
 void Daemon::onNewMessage(Message *message, Connection *connection)
 {
     switch (message->messageId()) {
-    case LocalJobMessage::MessageId:
-        handleLocalJobMessage(static_cast<LocalJobMessage*>(message), connection);
+    case ClientJobMessage::MessageId:
+        handleLocalJobMessage(static_cast<ClientJobMessage*>(message), connection);
         break;
     case QuitMessage::MessageId:
         warning() << "Quitting by request";
@@ -113,7 +113,7 @@ void Daemon::onNewMessage(Message *message, Connection *connection)
     }
 }
 
-void Daemon::handleLocalJobMessage(LocalJobMessage *msg, Connection *conn)
+void Daemon::handleLocalJobMessage(ClientJobMessage *msg, Connection *conn)
 {
     debug() << "Got localjob" << msg->arguments() << msg->environ() << msg->cwd();
 
@@ -246,7 +246,7 @@ void Daemon::onProcessFinished(Process *process)
     debug() << "process finished" << process << localJob;
     if (localJob) {
         assert(localJob->process == process);
-        localJob->localConnection->send(LocalJobResponseMessage(process->returnCode(), localJob->output));
+        localJob->localConnection->send(ClientJobResponseMessage(process->returnCode(), localJob->output));
         mLocalJobsByLocalConnection.remove(localJob->localConnection);
         Rct::LinkedList::remove(localJob, mFirstLocalJob, mLastLocalJob);
         delete localJob;

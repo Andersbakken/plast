@@ -45,7 +45,7 @@ private:
 
     void restartServerTimer();
     void onNewMessage(Message *message, Connection *connection);
-    void handleLocalJobMessage(LocalJobMessage *msg, Connection *conn);
+    void handleLocalJobMessage(ClientJobMessage *msg, Connection *conn);
     void reconnectToServer();
     void onDiscoverySocketReadyRead(Buffer &&data, const String &ip);
 
