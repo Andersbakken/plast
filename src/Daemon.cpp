@@ -42,6 +42,7 @@ Daemon::Daemon()
     mServerConnection.error().connect([this](Connection*) { mSentHandshake = false; restartServerTimer(); });
 
     mServerTimer.timeout().connect([this](Timer *) { reconnectToServer(); });
+    mJobAnnouncementTimer.timeout().connect([this](Timer *) { announceJobs(); });
 }
 
 Daemon::~Daemon()
@@ -271,6 +272,28 @@ void Daemon::startJobs()
             mLocalJobsByProcess[job->process] = job;
         } else {
             break;
+        }
+    }
+    if (!mJobAnnouncementTimer.isRunning())
+        mJobAnnouncementTimer.restart(100, Timer::SingleShot);
+}
+
+void Daemon::announceJobs()
+{
+    if (mServerConnection.isConnected()) {
+        Hash<Path, int> announcements;
+        for (LocalJob *job = mFirstLocalJob; job; job = job->next) {
+            if (!job->process && !job->remoteConnection) {
+                ++announcements[job->arguments.compiler];
+            }
+        }
+        for (const auto &it : announcements) {
+            int &last = mLastAnnouncements[it.first];
+            if (last != it.second) {
+                last = it.second;
+                warning() << "Announcing" << last << it.first;
+                mServerConnection.send(JobAnnouncementMessage(last, String(), it.first));
+            }
         }
     }
 }

@@ -55,6 +55,7 @@ private:
     void onProcessFinished(Process *process);
     void startJobs();
     void sendHandshake();
+    void announceJobs();
 
     Process *startProcess(const List<String> &arguments, const List<String> &environ,
                           const Path &cwd, String *error);
@@ -87,6 +88,8 @@ private:
         Process *process;
     };
 
+    Hash<Path, int> mLastAnnouncements;
+
     List<RemoteJob*> mRemoteJobList;
     Hash<Connection*, RemoteJob*> mRemoteJobsByConnection;
     Hash<Process*, RemoteJob*> mRemoteJobsByProcess;
@@ -97,7 +100,7 @@ private:
     Connection mServerConnection;
     bool mSentHandshake;
     std::shared_ptr<SocketClient> mDiscoverySocket;
-    Timer mServerTimer;
+    Timer mServerTimer, mJobAnnouncementTimer;
 };
 
 #endif

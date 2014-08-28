@@ -90,6 +90,11 @@ void Server::onNewMessage(Message *message, Connection *connection)
     case QuitMessage::MessageId:
         EventLoop::eventLoop()->quit();
         break;
+    case JobAnnouncementMessage::MessageId: {
+        JobAnnouncementMessage *jobAnnouncement = static_cast<JobAnnouncementMessage*>(message);
+        error() << "Got job announcement from" << mConnections.value(connection)->name
+                << jobAnnouncement->compiler() << jobAnnouncement->count();
+        break; }
     case HandshakeMessage::MessageId:
         Host *&host = mConnections[connection];
         delete host;
@@ -103,7 +108,9 @@ void Server::onNewMessage(Message *message, Connection *connection)
 void Server::onConnectionDisconnected(Connection *connection)
 {
     EventLoop::deleteLater(connection);
-    delete mConnections.take(connection);
+    Host *host = mConnections.take(connection);
+    error() << "Lost connection from" << (host ? host->name : "someone");
+    delete host;
 }
 
 void Server::handleConsoleCommand(const String &string)

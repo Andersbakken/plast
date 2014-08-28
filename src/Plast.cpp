@@ -8,6 +8,7 @@ bool init()
     Messages::registerMessage<ClientJobMessage>();
     Messages::registerMessage<ClientJobResponseMessage>();
     Messages::registerMessage<QuitMessage>();
+    Messages::registerMessage<JobAnnouncementMessage>();
     return true;
 }
 

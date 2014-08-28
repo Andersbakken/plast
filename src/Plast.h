@@ -133,4 +133,24 @@ public:
     {}
 };
 
+class JobAnnouncementMessage : public Message
+{
+public:
+    enum { MessageId = QuitMessage::MessageId + 1 };
+    JobAnnouncementMessage(int count = 0, const String &sha = String(), const Path &compiler = Path())
+        : Message(MessageId), mCount(count), mSha(sha), mCompiler(compiler)
+    {}
+
+    int count() const { return mCount; }
+    const String &sha() const { return mSha; }
+    const Path &compiler() const { return mCompiler; }
+
+    virtual void encode(Serializer &serializer) const { serializer << mCount << mSha << mCompiler; }
+    virtual void decode(Deserializer &deserializer) { deserializer >> mCount >> mSha >> mCompiler; }
+private:
+    int mCount;
+    String mSha;
+    Path mCompiler;
+};
+
 #endif
