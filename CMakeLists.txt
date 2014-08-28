@@ -7,9 +7,11 @@ endif()
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 
 include(cmake/FindReadline.cmake)
+include(cmake/FindLibMagic.cmake)
+
 add_subdirectory(src)
 
-if (EXISTS "rules.ninja") 
+if (EXISTS "rules.ninja")
   add_custom_target(release COMMAND cmake -GNinja -DCMAKE_BUILD_TYPE=Release . WORKING_DIRECTORY .)
   add_custom_target(debug COMMAND cmake -GNinja -DCMAKE_BUILD_TYPE=Debug . WORKING_DIRECTORY .)
 else()
