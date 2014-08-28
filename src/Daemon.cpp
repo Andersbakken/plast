@@ -14,6 +14,7 @@
    along with Plast.  If not, see <http://www.gnu.org/licenses/>. */
 
 #include "Daemon.h"
+#include "Compiler.h"
 
 Daemon::Daemon()
     : mFirstLocalJob(0), mLastLocalJob(0), mExplicitServer(false), mSentHandshake(false)
