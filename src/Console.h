@@ -12,7 +12,11 @@ public:
                      std::function<void(const String&, int, int, String&, List<String>&)>&& handleCompletions);
     static void cleanup();
 
-    static String tryComplete(const String &text, const List<String> &candidates);
+    struct TryCompleteResults {
+        List<String> candidates;
+        String text;
+    };
+    static TryCompleteResults tryComplete(const String &text, const List<String> &candidates);
 private:
     Console();
     Console(const Console& other) = delete;

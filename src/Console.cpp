@@ -58,8 +58,54 @@ void Console::init(const String& prompt,
             rl_callback_read_char();
         });
 }
-String Console::tryComplete(const String &text, const List<String> &candidates)
+
+static int common(const String &l, const String &r)
 {
-#warning need to do this
-    return text;
+    int common = 0;
+    const int ll = l.size();
+    const int rl = r.size();
+    const int minLength = std::min(ll, rl);
+
+    while (common < minLength && l.at(common) == r.at(common)) {
+        ++common;
+    }
+    return common;
+}
+
+Console::TryCompleteResults Console::tryComplete(const String &text, const List<String> &candidates)
+{
+    int best = -1;
+    TryCompleteResults ret;
+    if (text.isEmpty()) {
+        ret.candidates = candidates;
+        for (int i=1; i<candidates.size(); ++i) {
+            const int c = common(candidates.first(), candidates.at(i));
+            if (best == -1) {
+                best = c;
+            } else {
+                best = std::min(c, best);
+            }
+        }
+        if (best > 0)
+            ret.text = candidates.first().left(best);
+    } else {
+        for (const String &candidate : candidates) {
+            const int c = common(text, candidate);
+            if (c > 0) {
+                ret.candidates.append(candidate);
+                if (best == -1) {
+                    best = c;
+                } else {
+                    best = std::min(best, c);
+                }
+            }
+        }
+        if (ret.candidates.size() == 1) {
+            ret.text = ret.candidates.first();
+            ret.candidates.clear();
+        } else {
+            ret.text = text.left(best);
+        }
+    }
+    return ret;
 }
