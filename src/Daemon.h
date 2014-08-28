@@ -54,6 +54,8 @@ private:
     void onProcessReadyReadStdErr(Process *process);
     void onProcessFinished(Process *process);
     void startJobs();
+    void sendHandshake();
+
     Process *startProcess(const List<String> &arguments, const List<String> &environ,
                           const Path &cwd, String *error);
 

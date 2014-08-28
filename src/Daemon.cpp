@@ -36,10 +36,7 @@ Daemon::Daemon()
     mServerConnection.newMessage().connect(std::bind(&Daemon::onNewMessage, this, std::placeholders::_1, std::placeholders::_2));
     mServerConnection.disconnected().connect([this](Connection*) { mSentHandshake = false; restartServerTimer(); });
     mServerConnection.connected().connect([this](Connection *) {
-            if (!mSentHandshake) {
-                mSentHandshake = true;
-                mServerConnection.send(HandshakeMessage(Rct::hostName(), mOptions.jobCount));
-            }
+            sendHandshake();
         });
 
     mServerConnection.error().connect([this](Connection*) { mSentHandshake = false; restartServerTimer(); });
@@ -146,10 +143,7 @@ void Daemon::reconnectToServer()
     if (mServerConnection.client()) {
         switch (mServerConnection.client()->state()) {
         case SocketClient::Connected:
-            if (!mSentHandshake) {
-                mSentHandshake = true;
-                mServerConnection.send(HandshakeMessage(Rct::hostName(), mOptions.jobCount));
-            }
+            sendHandshake();
             return;
         case SocketClient::Connecting:
             restartServerTimer();
@@ -165,9 +159,15 @@ void Daemon::reconnectToServer()
     } else if (!mServerConnection.connectTcp(mOptions.serverHost, mOptions.serverPort)) {
         restartServerTimer();
     } else if (mServerConnection.client()->state() == SocketClient::Connected) {
+        sendHandshake();
+    }
+}
+
+void Daemon::sendHandshake()
+{
+    if (!mSentHandshake) {
         mSentHandshake = true;
         mServerConnection.send(HandshakeMessage(Rct::hostName(), mOptions.jobCount));
-    } else {
     }
 }
 
