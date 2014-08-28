@@ -32,9 +32,8 @@ private:
     void onNewMessage(Message *message, Connection *connection);
     void onConnectionDisconnected(Connection *connection);
 
-    SocketServer mSocket;
+    SocketServer mServer;
     struct Host {
-        Host() : capacity(-1) {}
         String name;
         int capacity;
     };

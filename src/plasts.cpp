@@ -18,6 +18,7 @@
 #include <getopt.h>
 #include <rct/EventLoop.h>
 #include <rct/Log.h>
+#include <rct/Config.h>
 #include <rct/Rct.h>
 #include <signal.h>
 #include <stdio.h>
@@ -33,69 +34,35 @@ static void sigSegvHandler(int signal)
     _exit(1);
 }
 
-static void usage(FILE *f)
-{
-    fprintf(f,
-            "plasts [...options...]\n"
-            "  --help|-h                                  Display this page.\n"
-            "  --port|-p [port]                           Run server on this port. (default 5160)\n");
-}
-
 int main(int argc, char** argv)
 {
     Plast::init();
     Rct::findExecutablePath(*argv);
 
-    struct option opts[] = {
-        { "help", no_argument, 0, 'h' },
-        { "log-file", required_argument, 0, 'l' },
-        { "verbose", no_argument, 0, 'v' },
-        { "port", required_argument, 0, 'p' },
-        { 0, 0, 0, 0 }
-    };
-    const String shortOptions = Rct::shortOptions(opts);
-
-    int port = 5160;
-    const char *logFile = 0;
-    int logLevel = 0;
-
-    while (true) {
-        const int c = getopt_long(argc, argv, shortOptions.constData(), opts, 0);
-        if (c == -1)
-            break;
-        switch (c) {
-        case 'p':
-            port = atoi(optarg);
-            if (port <= 0) {
-                fprintf(stderr, "Invalid argument to -p %s\n", optarg);
-                return 1;
-            }
-            break;
-        case 'h':
-            usage(stdout);
-            return 0;
-        case 'L':
-            logFile = optarg;
-            break;
-        case 'v':
-            if (logLevel >= 0)
-                ++logLevel;
-            break;
-        case '?': {
-            usage(stderr);
-            return 1; }
-        }
-    }
-    if (optind < argc) {
-        fprintf(stderr, "plasts: unexpected option -- '%s'\n", argv[optind]);
+    Config::registerOption<bool>("help", "Display this page", 'h');
+    Config::registerOption<String>("log-file", "Log to this file", 'l');
+    Config::registerOption<bool>("verbose", "Be more verbose", 'v');
+    Config::registerOption<bool>("silent", "Be silent", 'S');
+    Config::registerOption<int>("port", String::format<129>("Use this port, (default %d)", Plast::DefaultServerPort),'p', Plast::DefaultDaemonPort,
+                                [](const int &count, String &err) {
+                                    if (count <= 0) {
+                                        err = "Invalid port. Must be > 0";
+                                        return false;
+                                    }
+                                    return true;
+                                });
+    Config::parse(argc, argv, List<Path>() << (Path::home() + ".config/plasts.rc") << "/etc/plasts.rc");
+    if (Config::isEnabled("help")) {
+        Config::showHelp(stdout);
         return 1;
     }
 
     signal(SIGSEGV, sigSegvHandler);
 
-    if (!initLogging(argv[0], LogStderr, logLevel, logFile, 0)) {
-        fprintf(stderr, "Can't initialize logging with %d %s 0x%0x\n",
-                logLevel, logFile ? logFile : "", 0);
+    const int logLevel = Config::isEnabled("silent") ? -1 : Config::isEnabled("verbose");
+    if (!initLogging(argv[0], LogStderr, logLevel, Config::value<String>("log-file"), 0)) {
+        fprintf(stderr, "Can't initialize logging with %d %s\n",
+                logLevel, Config::value<String>("log-file").constData());
         return 1;
     }
 
@@ -103,7 +70,7 @@ int main(int argc, char** argv)
     loop->init(EventLoop::MainEventLoop|EventLoop::EnableSigIntHandler);
 
     Server server;
-    if (!server.init(port))
+    if (!server.init(Config::value<int>("port")))
         return 1;
 
     loop->exec();

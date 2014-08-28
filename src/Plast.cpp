@@ -102,12 +102,11 @@ CompilerArgs CompilerArgs::create(const List<String> &args)
         } else if (arg == "-E") {
             ret.mode = Preprocess;
         } else if (arg == "-o") {
-            ret.flags |= hasOwnProperty;
+            ret.flags |= HasOutput;
         } else if (hasArg(arg)) {
             ++i;
         } else if (!arg.startsWith("-")) {
             ret.sourceFiles.append(arg);
         }
     }
-
 }

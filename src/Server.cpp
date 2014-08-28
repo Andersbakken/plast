@@ -15,6 +15,7 @@
 
 #include "Server.h"
 #include <rct/Log.h>
+#include "Plast.h"
 
 Server::Server()
 {
@@ -27,14 +28,27 @@ Server::~Server()
 }
 bool Server::init(int port)
 {
-    if (!mSocket.listen(port)) {
-        error() << "Failed to listen on port" << port;
-        return false;
+    if (!mServer.listen(port)) {
+        enum { Timeout = 1000 };
+        Connection connection;
+        bool success = false;
+        if (connection.connectTcp("127.0.0.1", port, Timeout)) {
+            connection.send(QuitMessage());
+            connection.disconnected().connect(std::bind([](){ EventLoop::eventLoop()->quit(); }));
+            connection.finished().connect(std::bind([](){ EventLoop::eventLoop()->quit(); }));
+            EventLoop::eventLoop()->exec(Timeout);
+            sleep(1);
+            success = mServer.listen(port);
+        }
+        if (!success) {
+            error() << "Can't seem to listen on" << port;
+            return false;
+        }
     }
 
-    mSocket.newConnection().connect([this](SocketServer*) {
+    mServer.newConnection().connect([this](SocketServer*) {
             while (true) {
-                auto socket = mSocket.nextConnection();
+                auto socket = mServer.nextConnection();
                 if (!socket)
                     break;
                 Connection *conn = new Connection(socket);
@@ -46,12 +60,25 @@ bool Server::init(int port)
 
     return true;
 }
+
 void Server::onNewMessage(Message *message, Connection *connection)
 {
-
+    switch (message->messageId()) {
+    case QuitMessage::MessageId:
+        EventLoop::eventLoop()->quit();
+        break;
+    case HandshakeMessage::MessageId:
+        Host *&host = mConnections[connection];
+        delete host;
+        HandshakeMessage *handShake = static_cast<HandshakeMessage*>(message);
+        host = new Host({ handShake->hostName(), handShake->capacity() });
+        error() << "Got handshake from" << handShake->hostName();
+        break;
+    }
 }
 
 void Server::onConnectionDisconnected(Connection *connection)
 {
-
+    EventLoop::deleteLater(connection);
+    delete mConnections.take(connection);
 }

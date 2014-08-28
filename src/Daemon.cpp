@@ -16,7 +16,7 @@
 #include "Daemon.h"
 
 Daemon::Daemon()
-    : mFirstLocalJob(0), mLastLocalJob(0), mExplicitServer(false)
+    : mFirstLocalJob(0), mLastLocalJob(0), mExplicitServer(false), mSentHandshake(false)
 {
     Console::init("plastd> ",
                   std::bind(&Daemon::handleConsoleCommand, this, std::placeholders::_1),
@@ -34,8 +34,8 @@ Daemon::Daemon()
     mLocalServer.newConnection().connect(onNewConnection);
     mRemoteServer.newConnection().connect(onNewConnection);
     mServerConnection.newMessage().connect(std::bind(&Daemon::onNewMessage, this, std::placeholders::_1, std::placeholders::_2));
-    mServerConnection.disconnected().connect([this](Connection*) { restartServerTimer(); });
-    mServerConnection.error().connect([this](Connection*) { restartServerTimer(); });
+    mServerConnection.disconnected().connect([this](Connection*) { mSentHandshake = false; restartServerTimer(); });
+    mServerConnection.error().connect([this](Connection*) { mSentHandshake = false; restartServerTimer(); });
 
     mServerTimer.timeout().connect([this](Timer *) { reconnectToServer(); });
 
@@ -135,6 +135,10 @@ void Daemon::reconnectToServer()
     if (mServerConnection.client()) {
         switch (mServerConnection.client()->state()) {
         case SocketClient::Connected:
+            if (!mSentHandshake) {
+                mSentHandshake = true;
+                mServerConnection.send(HandshakeMessage(Rct::hostName(), mOptions.jobCount));
+            }
             return;
         case SocketClient::Connecting:
             restartServerTimer();
@@ -148,6 +152,9 @@ void Daemon::reconnectToServer()
         mDiscoverySocket->writeTo("255.255.255.255", mOptions.discoveryPort, "?");
     } else if (!mServerConnection.connectTcp(mOptions.serverHost, mOptions.serverPort)) {
         restartServerTimer();
+    } else if (mServerConnection.client()->state() == SocketClient::Connected) {
+        mSentHandshake = true;
+        mServerConnection.send(HandshakeMessage(Rct::hostName(), mOptions.jobCount));
     }
 }
 
@@ -233,9 +240,9 @@ void Daemon::startJobs()
             while (job && job->process)
                 job = job->next;
             assert(job);
-            debug() << "Found job" << job->arguments.first();
+            debug() << "Found job" << job->arguments.sourceFiles;
             String err;
-            job->process = startProcess(job->arguments, job->environ, job->cwd, &err);
+            job->process = startProcess(job->arguments.arguments, job->environ, job->cwd, &err);
             assert(job->process);
             mLocalJobsByProcess[job->process] = job;
         } else {
@@ -289,8 +296,26 @@ Process *Daemon::startProcess(const List<String> &arguments, const List<String> 
 
 void Daemon::handleConsoleCommand(const String &string)
 {
+    String str = string;
+    while (str.endsWith(' '))
+        str.chop(1);
+    if (str == "jobs") {
+        for (LocalJob *job = mFirstLocalJob; job; job = job->next) {
+            printf("Job: %s Received: %s\n",
+                   String::join(job->arguments.sourceFiles, ", ").constData(),
+                   String::formatTime(job->received).constData());
+        }
+    } else if (str == "quit") {
+        EventLoop::eventLoop()->quit();
+    }
 }
 
-void Daemon::handleConsoleCompletion(const String& string, int start, int end, String& common, List<String>& candidates)
+void Daemon::handleConsoleCompletion(const String& string, int, int,
+                                     String &common, List<String> &candidates)
 {
+    static const List<String> cands = List<String>() << "jobs" << "quit";
+    auto res = Console::tryComplete(string, cands);
+    // error() << res.text << res.candidates;
+    common = res.text;
+    candidates = res.candidates;
 }

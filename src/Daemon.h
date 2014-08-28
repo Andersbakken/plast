@@ -59,23 +59,13 @@ private:
 
     struct LocalJob {
         LocalJob(const List<String> &args, const List<String> &env, const Path &dir, Connection *conn)
-            : type(Link), arguments(args), environ(env), cwd(dir), process(0), localConnection(conn), remoteConnection(0), next(0), prev(0)
+            : received(time(0)), arguments(CompilerArgs::create(args)), environ(env), cwd(dir),
+              process(0), localConnection(conn), remoteConnection(0), next(0), prev(0)
         {
-            for (const String &arg : arguments) {
-                if (arg == "-c") {
-                    type = Compile;
-                } else if (arg == "-E") {
-                    type = Preprocess;
-                    break;
-                }
-            }
         }
-        enum Type {
-            Compile,
-            Preprocess,
-            Link
-        } type;
-        List<String> arguments, environ;
+        time_t received;
+        CompilerArgs arguments;
+        List<String> environ;
         Path cwd;
         List<Output> output;
         Process *process;
@@ -103,6 +93,7 @@ private:
     Options mOptions;
     SocketServer mLocalServer, mRemoteServer;
     Connection mServerConnection;
+    bool mSentHandshake;
     std::shared_ptr<SocketClient> mDiscoverySocket;
     Timer mServerTimer;
 };
