@@ -44,7 +44,7 @@ int main(int argc, char** argv)
     Config::registerOption<String>("log-file", "Log to this file", 'l');
     Config::registerOption<bool>("verbose", "Be more verbose", 'v');
     Config::registerOption<bool>("silent", "Be silent", 'S');
-    Config::registerOption<int>("port", String::format<129>("Use this port, (default %d)", Plast::DefaultServerPort),'p', Plast::DefaultDaemonPort,
+    Config::registerOption<int>("port", String::format<129>("Use this port, (default %d)", Plast::DefaultServerPort),'p', Plast::DefaultServerPort,
                                 [](const int &count, String &err) {
                                     if (count <= 0) {
                                         err = "Invalid port. Must be > 0";
@@ -52,6 +52,16 @@ int main(int argc, char** argv)
                                     }
                                     return true;
                                 });
+    Config::registerOption<int>("discovery-port", String::format<128>("Use this port for server discovery (default %d)", Plast::DefaultDiscoveryPort),
+                                'P', Plast::DefaultDiscoveryPort,
+                                [](const int &count, String &err) {
+                                    if (count < 0) {
+                                        err = "Invalid discovery-port. Must be >= 0";
+                                        return false;
+                                    }
+                                    return true;
+                                });
+
     Config::parse(argc, argv, List<Path>() << (Path::home() + ".config/plasts.rc") << "/etc/plasts.rc");
     if (Config::isEnabled("help")) {
         Config::showHelp(stdout);
@@ -71,7 +81,7 @@ int main(int argc, char** argv)
     loop->init(EventLoop::MainEventLoop|EventLoop::EnableSigIntHandler);
 
     Server server;
-    if (!server.init(Config::value<int>("port")))
+    if (!server.init(Config::value<int>("port"), Config::value<int>("discovery-port")))
         return 1;
 
     loop->exec();

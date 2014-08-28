@@ -28,7 +28,7 @@ public:
     Server();
     ~Server();
 
-    bool init(int port);
+    bool init(uint16_t port, uint16_t discoveryPort);
 private:
     void handleConsoleCommand(const String &string);
     void handleConsoleCompletion(const String& string, int start, int end, String& common, List<String>& candidates);
@@ -43,6 +43,7 @@ private:
         int jobsSent, jobsReceived;
     };
     Hash<Connection *, Host*> mConnections;
+    std::shared_ptr<SocketClient> mDiscoverySocket;
 };
 
 #endif

@@ -47,7 +47,7 @@ private:
     void onNewMessage(Message *message, Connection *connection);
     void handleLocalJobMessage(LocalJobMessage *msg, Connection *conn);
     void reconnectToServer();
-    void onDiscoverySocketReadyRead(Buffer &&data);
+    void onDiscoverySocketReadyRead(Buffer &&data, const String &ip);
 
     void onConnectionDisconnected(Connection *conn);
     void onProcessReadyReadStdOut(Process *process);

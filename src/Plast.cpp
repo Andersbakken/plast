@@ -109,4 +109,5 @@ CompilerArgs CompilerArgs::create(const List<String> &args)
             ret.sourceFiles.append(arg);
         }
     }
+    return ret;
 }

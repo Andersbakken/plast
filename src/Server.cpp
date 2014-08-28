@@ -28,7 +28,7 @@ Server::~Server()
 {
 
 }
-bool Server::init(int port)
+bool Server::init(uint16_t port, uint16_t discoveryPort)
 {
     if (!mServer.listen(port)) {
         enum { Timeout = 1000 };
@@ -47,6 +47,27 @@ bool Server::init(int port)
             return false;
         }
     }
+    error() << "listening on" << port;
+
+    if (discoveryPort) {
+        mDiscoverySocket.reset(new SocketClient);
+        mDiscoverySocket->bind(discoveryPort);
+        const String hostName = Rct::hostName();
+        mDiscoverySocket->readyReadFrom().connect([port, hostName, discoveryPort](const SocketClient::SharedPtr &socket, const String &ip, uint16_t p, Buffer &&data) {
+                if (p == discoveryPort) {
+                    const Buffer dat = std::forward<Buffer>(data);
+                    if (dat.size() == 1 && dat.data()[0] == '?') {
+                        String packet;
+                        {
+                            Serializer serializer(packet);
+                            serializer << 'S' << port;
+                        }
+                        socket->writeTo(ip, discoveryPort, packet);
+                    }
+                }
+            });
+    }
+
 
     mServer.newConnection().connect([this](SocketServer*) {
             while (true) {

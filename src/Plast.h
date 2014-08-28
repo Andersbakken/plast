@@ -25,7 +25,7 @@ Path defaultSocketFile();
 enum {
     DefaultServerPort = 5160,
     DefaultDaemonPort = 5161,
-    DefaultDaemonDiscoveryPort = 5162
+    DefaultDiscoveryPort = 5162
 };
 }
 

@@ -35,14 +35,16 @@ Daemon::Daemon()
     mRemoteServer.newConnection().connect(onNewConnection);
     mServerConnection.newMessage().connect(std::bind(&Daemon::onNewMessage, this, std::placeholders::_1, std::placeholders::_2));
     mServerConnection.disconnected().connect([this](Connection*) { mSentHandshake = false; restartServerTimer(); });
+    mServerConnection.connected().connect([this](Connection *) {
+            if (!mSentHandshake) {
+                mSentHandshake = true;
+                mServerConnection.send(HandshakeMessage(Rct::hostName(), mOptions.jobCount));
+            }
+        });
+
     mServerConnection.error().connect([this](Connection*) { mSentHandshake = false; restartServerTimer(); });
 
     mServerTimer.timeout().connect([this](Timer *) { reconnectToServer(); });
-
-    mDiscoverySocket.reset(new SocketClient);
-    mDiscoverySocket->readyReadFrom().connect([this](const SocketClient::SharedPtr &, const String &, uint16_t, Buffer &&data) {
-            onDiscoverySocketReadyRead(std::forward<Buffer>(data));
-        });
 }
 
 Daemon::~Daemon()
@@ -80,6 +82,15 @@ bool Daemon::init(const Options &options)
     if (!mRemoteServer.listen(mOptions.port)) {
         error() << "Can't seem to listen on" << mOptions.port;
         return false;
+    }
+
+    if (options.discoveryPort) {
+        mDiscoverySocket.reset(new SocketClient);
+        mDiscoverySocket->bind(options.discoveryPort);
+        mDiscoverySocket->readyReadFrom().connect([this](const SocketClient::SharedPtr &, const String &ip, uint16_t port, Buffer &&data) {
+                if (port == mOptions.discoveryPort)
+                    onDiscoverySocketReadyRead(std::forward<Buffer>(data), ip);
+            });
     }
 
     mOptions = options;
@@ -148,6 +159,7 @@ void Daemon::reconnectToServer()
         }
     }
 
+    error() << "Trying to connect" << mOptions.serverHost << mOptions.serverPort;
     if (mOptions.serverHost.isEmpty()) {
         mDiscoverySocket->writeTo("255.255.255.255", mOptions.discoveryPort, "?");
     } else if (!mServerConnection.connectTcp(mOptions.serverHost, mOptions.serverPort)) {
@@ -155,19 +167,30 @@ void Daemon::reconnectToServer()
     } else if (mServerConnection.client()->state() == SocketClient::Connected) {
         mSentHandshake = true;
         mServerConnection.send(HandshakeMessage(Rct::hostName(), mOptions.jobCount));
+    } else {
     }
 }
 
-void Daemon::onDiscoverySocketReadyRead(Buffer &&data)
+void Daemon::onDiscoverySocketReadyRead(Buffer &&data, const String &ip)
 {
     Buffer buf = std::forward<Buffer>(data);
     Deserializer deserializer(reinterpret_cast<const char*>(buf.data()), buf.size());
     char command;
     deserializer >> command;
+    warning() << "Got discovery packet" << command;
     switch (command) {
     case 's':
         if (!mExplicitServer && !mServerConnection.isConnected()) {
             deserializer >> mOptions.serverHost >> mOptions.serverPort;
+            warning() << "found server" << mOptions.serverHost << mOptions.serverPort;
+            reconnectToServer();
+        }
+        break;
+    case 'S':
+        if (!mExplicitServer && !mServerConnection.isConnected()) {
+            deserializer >> mOptions.serverPort;
+            mOptions.serverHost = ip;
+            warning() << "found server" << mOptions.serverHost << mOptions.serverPort;
             reconnectToServer();
         }
         break;
@@ -176,9 +199,10 @@ void Daemon::onDiscoverySocketReadyRead(Buffer &&data)
             String packet;
             {
                 Serializer serializer(packet);
-                serializer << 's' << mOptions.serverHost << mOptions.serverPort;
+                serializer << 's' << mServerConnection.client()->peerName() << mOptions.serverPort;
             }
-            mDiscoverySocket->writeTo("255.255.255.255", mOptions.discoveryPort, packet);
+            warning() << "telling" << ip << "about server" << mServerConnection.client()->peerName() << mOptions.serverPort;
+            mDiscoverySocket->writeTo(ip, mOptions.discoveryPort, packet);
         }
         break;
     }

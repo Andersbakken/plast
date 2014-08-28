@@ -39,6 +39,14 @@ static void sigSegvHandler(int signal)
     _exit(1);
 }
 
+static inline bool validate(int c, const char *name, String &err)
+{
+    if (c < 0) {
+        err = String::format<128>("Invalid %s. Must be >= 0", name);
+        return false;
+    }
+    return true;
+}
 int main(int argc, char** argv)
 {
     Rct::findExecutablePath(*argv);
@@ -48,32 +56,14 @@ int main(int argc, char** argv)
     Config::registerOption<bool>("silent", "Be silent", 'S');
     const int idealThreadCount = ThreadPool::idealThreadCount();
     Config::registerOption<int>("job-count", String::format<128>("Job count (defaults to %d", idealThreadCount), 'j', idealThreadCount,
-                                [](const int &count, String &err) {
-                                    if (count < 0) {
-                                        err = "Invalid job-count. Must be >= 0";
-                                        return false;
-                                    }
-                                    return true;
-                                });
+                                [](const int &count, String &err) { return validate(count, "job-count", err); });
     Config::registerOption<String>("server",
                                    String::format<128>("Server to connect to. (defaults to port %d if hostname doesn't contain a port)", Plast::DefaultServerPort), 's');
     Config::registerOption<int>("port", String::format<129>("Use this port, (default %d)", Plast::DefaultDaemonPort),'p', Plast::DefaultDaemonPort,
-                                [](const int &count, String &err) {
-                                    if (count <= 0) {
-                                        err = "Invalid port. Must be > 0";
-                                        return false;
-                                    }
-                                    return true;
-                                });
-    Config::registerOption<int>("discovery-port", String::format<128>("Use this port for server discovery (default %d)", Plast::DefaultDaemonDiscoveryPort),
-                                'P', Plast::DefaultDaemonDiscoveryPort,
-                                [](const int &count, String &err) {
-                                    if (count <= 0) {
-                                        err = "Invalid discovery-port. Must be > 0";
-                                        return false;
-                                    }
-                                    return true;
-                                });
+                                [](const int &count, String &err) { return validate(count, "port", err); });
+    Config::registerOption<int>("discovery-port", String::format<128>("Use this port for server discovery (default %d)", Plast::DefaultDiscoveryPort),
+                                'P', Plast::DefaultDiscoveryPort,
+                                [](const int &count, String &err) { return validate(count, "discovery-port", err); });
     const String socketPath = Plast::defaultSocketFile();
     Config::registerOption<String>("socket",
                                    String::format<128>("Run daemon with this domain socket. (default %s)", socketPath.constData()),
