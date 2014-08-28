@@ -26,6 +26,7 @@
 
 static void sigSegvHandler(int signal)
 {
+    Console::cleanup();
     fprintf(stderr, "Caught signal %d\n", signal);
     // this is not really allowed in signal handlers but will mostly work
     const String trace = Rct::backtrace();
@@ -74,6 +75,7 @@ int main(int argc, char** argv)
         return 1;
 
     loop->exec();
+    Console::cleanup();
     cleanupLogging();
     return 0;
 }

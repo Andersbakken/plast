@@ -19,7 +19,9 @@
 
 Server::Server()
 {
-
+    Console::init("plasts> ",
+                  std::bind(&Server::handleConsoleCommand, this, std::placeholders::_1),
+                  std::bind(&Server::handleConsoleCompletion, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5));
 }
 
 Server::~Server()
@@ -81,4 +83,30 @@ void Server::onConnectionDisconnected(Connection *connection)
 {
     EventLoop::deleteLater(connection);
     delete mConnections.take(connection);
+}
+
+void Server::handleConsoleCommand(const String &string)
+{
+    String str = string;
+    while (str.endsWith(' '))
+        str.chop(1);
+    if (str == "hosts") {
+        for (const auto it : mConnections) {
+            printf("Host: %s Capacity: %d Jobs sent: %d Jobs received: %d\n",
+                   it.second->name.constData(), it.second->capacity,
+                   it.second->jobsSent, it.second->jobsReceived);
+        }
+    } else if (str == "quit") {
+        EventLoop::eventLoop()->quit();
+    }
+}
+
+void Server::handleConsoleCompletion(const String& string, int, int,
+                                     String &common, List<String> &candidates)
+{
+    static const List<String> cands = List<String>() << "hosts" << "quit";
+    auto res = Console::tryComplete(string, cands);
+    // error() << res.text << res.candidates;
+    common = res.text;
+    candidates = res.candidates;
 }

@@ -20,6 +20,7 @@
 #include <rct/Hash.h>
 #include <rct/Connection.h>
 #include <rct/Message.h>
+#include "Console.h"
 
 class Server
 {
@@ -29,6 +30,9 @@ public:
 
     bool init(int port);
 private:
+    void handleConsoleCommand(const String &string);
+    void handleConsoleCompletion(const String& string, int start, int end, String& common, List<String>& candidates);
+
     void onNewMessage(Message *message, Connection *connection);
     void onConnectionDisconnected(Connection *connection);
 
@@ -36,6 +40,7 @@ private:
     struct Host {
         String name;
         int capacity;
+        int jobsSent, jobsReceived;
     };
     Hash<Connection *, Host*> mConnections;
 };

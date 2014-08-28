@@ -55,9 +55,9 @@ add_executable(plastd plastd.cpp Daemon.cpp Console.cpp)
 add_dependencies(plastd rct plast)
 target_link_libraries(plastd plast rct ${SYSTEM_LIBS} ${Readline_LIBRARY})
 
-add_executable(plasts plasts.cpp Server.cpp)
+add_executable(plasts plasts.cpp Server.cpp Console.cpp)
 add_dependencies(plasts rct plast)
-target_link_libraries(plasts plast rct ${SYSTEM_LIBS})
+target_link_libraries(plasts plast rct ${SYSTEM_LIBS} ${Readline_LIBRARY})
 
 install(CODE "message(\"Installing plast...\")")
 install(TARGETS plastc plastd plasts RUNTIME DESTINATION bin COMPONENT plast)
