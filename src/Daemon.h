@@ -63,7 +63,7 @@ private:
     struct LocalJob {
         LocalJob(const List<String> &args, const List<String> &env, const Path &dir, Connection *conn)
             : received(time(0)), arguments(CompilerArgs::create(args)), environ(env), cwd(dir),
-              process(0), localConnection(conn), remoteConnection(0), next(0), prev(0)
+              process(0), flags(0), localConnection(conn), remoteConnection(0), next(0), prev(0)
         {
         }
         time_t received;
@@ -72,6 +72,11 @@ private:
         Path cwd;
         List<Output> output;
         Process *process;
+        enum Flag {
+            None = 0x0,
+            Announced = 0x1
+        };
+        uint32_t flags;
         Connection *localConnection, *remoteConnection;
         LocalJob *next, *prev;
     };
