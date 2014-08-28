@@ -35,6 +35,11 @@ public:
         uint16_t serverPort, port, discoveryPort;
         String serverHost;
         int jobCount;
+        enum Flag {
+            None = 0x0,
+            NoLocalJobs = 0x1
+        };
+        unsigned int flags;
     };
     bool init(const Options &options);
     const Options &options() const { return mOptions; }
@@ -92,8 +97,6 @@ private:
         Connection *connection;
         Process *process;
     };
-
-    Hash<Path, int> mLastAnnouncements;
 
     List<RemoteJob*> mRemoteJobList;
     Hash<Connection*, RemoteJob*> mRemoteJobsByConnection;

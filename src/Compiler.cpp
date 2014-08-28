@@ -49,6 +49,12 @@ std::shared_ptr<Compiler> Compiler::compiler(const Path &compiler, const String 
 
     std::shared_ptr<Compiler> &c = sByPath[compiler];
     if (!c) {
+        Path resolved = compiler.resolved();
+        std::shared_ptr<Compiler> &resolvedCompiler = sByPath[compiler];
+        if (resolvedCompiler) {
+            c = resolvedCompiler;
+            return c;
+        }
         Process process;
         List<String> environment;
         if (!path.isEmpty()) {
@@ -91,6 +97,8 @@ std::shared_ptr<Compiler> Compiler::compiler(const Path &compiler, const String 
             c->mPath = compiler;
             sBySha[c->mSha256] = c;
             sByPath[compiler] = c;
+            if (!resolvedCompiler)
+                resolvedCompiler = c;
             warning() << "Created package" << compiler << c->mFiles << c->mSha256;
         }
     }

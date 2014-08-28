@@ -40,10 +40,11 @@ int main(int argc, char** argv)
     Plast::init();
     Rct::findExecutablePath(*argv);
 
-    Config::registerOption<bool>("help", "Display this page", 'h');
-    Config::registerOption<String>("log-file", "Log to this file", 'l');
-    Config::registerOption<bool>("verbose", "Be more verbose", 'v');
-    Config::registerOption<bool>("silent", "Be silent", 'S');
+    Config::registerOption<bool>("help", "Display this page.", 'h');
+    Config::registerOption<String>("log-file", "Log to this file.", 'l');
+    Config::registerOption<bool>("verbose", "Be more verbose.", 'v');
+    Config::registerOption<bool>("silent", "Be silent.", 'S');
+    Config::registerOption<bool>("return-to-sender", "Return job requests to sender. Only useful for debugging.", 'r');
     Config::registerOption<int>("port", String::format<129>("Use this port, (default %d)", Plast::DefaultServerPort),'p', Plast::DefaultServerPort,
                                 [](const int &count, String &err) {
                                     if (count <= 0) {
@@ -52,7 +53,7 @@ int main(int argc, char** argv)
                                     }
                                     return true;
                                 });
-    Config::registerOption<int>("discovery-port", String::format<128>("Use this port for server discovery (default %d)", Plast::DefaultDiscoveryPort),
+    Config::registerOption<int>("discovery-port", String::format<128>("Use this port for server discovery (default %d).", Plast::DefaultDiscoveryPort),
                                 'P', Plast::DefaultDiscoveryPort,
                                 [](const int &count, String &err) {
                                     if (count < 0) {
@@ -81,7 +82,7 @@ int main(int argc, char** argv)
     loop->init(EventLoop::MainEventLoop|EventLoop::EnableSigIntHandler);
 
     Server server;
-    if (!server.init(Config::value<int>("port"), Config::value<int>("discovery-port")))
+    if (!server.init())
         return 1;
 
     loop->exec();

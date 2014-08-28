@@ -54,6 +54,7 @@ int main(int argc, char** argv)
     Config::registerOption<String>("log-file", "Log to this file", 'l');
     Config::registerOption<bool>("verbose", "Be more verbose", 'v');
     Config::registerOption<bool>("silent", "Be silent", 'S');
+    Config::registerOption<bool>("no-local-jobs", "Don't run any local jobs. Only useful for debugging", 'L');
     const int idealThreadCount = ThreadPool::idealThreadCount();
     Config::registerOption<int>("job-count", String::format<128>("Job count (defaults to %d", idealThreadCount), 'j', idealThreadCount,
                                 [](const int &count, String &err) { return validate(count, "job-count", err); });
@@ -83,7 +84,8 @@ int main(int argc, char** argv)
         static_cast<uint16_t>(Config::value<int>("port")),
         static_cast<uint16_t>(Config::value<int>("discovery-port")),
         String(),
-        Config::value<int>("job-count")
+        Config::value<int>("job-count"),
+        Config::isEnabled("no-local-jobs") ? Daemon::Options::NoLocalJobs : Daemon::Options::None
     };
 
     const String serverValue = Config::value<String>("server");

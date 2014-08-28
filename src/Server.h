@@ -28,7 +28,7 @@ public:
     Server();
     ~Server();
 
-    bool init(uint16_t port, uint16_t discoveryPort);
+    bool init();
 private:
     void handleConsoleCommand(const String &string);
     void handleConsoleCompletion(const String& string, int start, int end, String& common, List<String>& candidates);

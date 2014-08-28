@@ -36,7 +36,8 @@ Daemon::Daemon()
     mRemoteServer.newConnection().connect(onNewConnection);
     mServerConnection.newMessage().connect(std::bind(&Daemon::onNewMessage, this, std::placeholders::_1, std::placeholders::_2));
     mServerConnection.disconnected().connect([this](Connection*) { mSentHandshake = false; restartServerTimer(); });
-    mServerConnection.connected().connect([this](Connection *) {
+    mServerConnection.connected().connect([this](Connection *conn) {
+            warning() << "Connected to" << conn->client()->peerString();
             sendHandshake();
         });
 
@@ -109,6 +110,15 @@ void Daemon::onNewMessage(Message *message, Connection *connection)
         warning() << "Quitting by request";
         EventLoop::eventLoop()->quit();
         break;
+    case ServerJobAnnouncementMessage::MessageId:
+        fetchJobs();
+        break;
+    case CompilerMessage::MessageId:
+        break;
+    case CompilerRequestMessage::MessageId:
+        break;
+    case DaemonJobRequestMessage::MessageId:
+        break;
     default:
         error() << "Unexpected message" << message->messageId();
         break;
@@ -155,7 +165,7 @@ void Daemon::reconnectToServer()
         }
     }
 
-    error() << "Trying to connect" << mOptions.serverHost << mOptions.serverPort;
+    warning() << "Trying to connect" << mOptions.serverHost << mOptions.serverPort;
     if (mOptions.serverHost.isEmpty()) {
         mDiscoverySocket->writeTo("255.255.255.255", mOptions.discoveryPort, "?");
     } else if (!mServerConnection.connectTcp(mOptions.serverHost, mOptions.serverPort)) {
@@ -260,19 +270,29 @@ void Daemon::onProcessFinished(Process *process)
 void Daemon::startJobs()
 {
     debug() << "startJobs" << mOptions.jobCount << mLocalJobsByProcess.size() << mRemoteJobsByProcess.size();
-    while (mOptions.jobCount > (mLocalJobsByProcess.size() + mRemoteJobsByProcess.size())) {
-        if (mLocalJobsByLocalConnection.size() > mLocalJobsByProcess.size()) {
-            LocalJob *job = mFirstLocalJob;
-            while (job && job->process)
-                job = job->next;
-            assert(job);
-            debug() << "Found job" << job->arguments.sourceFiles;
-            String err;
-            job->process = startProcess(job->arguments.arguments, job->environ, job->cwd, &err);
-            assert(job->process);
-            mLocalJobsByProcess[job->process] = job;
-        } else {
-            break;
+    if (!mOptions.flags & Options::NoLocalJobs) {
+        while (mOptions.jobCount > (mLocalJobsByProcess.size() + mRemoteJobsByProcess.size())) {
+            if (mLocalJobsByLocalConnection.size() > mLocalJobsByProcess.size()) {
+                LocalJob *job = mFirstLocalJob;
+                // ### this is kinda non-optimal
+                LocalJob *remoteCandidate = 0;
+                while (job && (job->process || job->remoteConnection)) {
+                    if (!job->process)
+                        remoteCandidate = job;
+                    job = job->next;
+                }
+                if (!job)
+                    job = remoteCandidate;
+
+                assert(job);
+                debug() << "Found job" << job->arguments.sourceFiles;
+                String err;
+                job->process = startProcess(job->arguments.arguments, job->environ, job->cwd, &err);
+                assert(job->process);
+                mLocalJobsByProcess[job->process] = job;
+            } else {
+                break;
+            }
         }
     }
     if (!mJobAnnouncementTimer.isRunning())
@@ -282,19 +302,15 @@ void Daemon::startJobs()
 void Daemon::announceJobs()
 {
     if (mServerConnection.isConnected()) {
-        Hash<Path, int> announcements;
+        Hash<std::shared_ptr<Compiler>, int> announcements;
         for (LocalJob *job = mFirstLocalJob; job; job = job->next) {
-            if (!job->process && !job->remoteConnection) {
-                ++announcements[job->arguments.compiler];
+            if (!job->process && !job->remoteConnection && !job->flags & LocalJob::Announced) {
+                ++announcements[Compiler::compiler(job->arguments.compiler)];
             }
         }
         for (const auto &it : announcements) {
-            int &last = mLastAnnouncements[it.first];
-            if (last != it.second) {
-                last = it.second;
-                warning() << "Announcing" << last << it.first;
-                mServerConnection.send(JobAnnouncementMessage(last, String(), it.first));
-            }
+            warning() << "Announcing" << it.first->path() << it.second;
+            mServerConnection.send(DaemonJobAnnouncementMessage(it.second, it.first->sha256(), it.first->path()));
         }
     }
 }

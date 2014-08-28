@@ -29,6 +29,18 @@ enum {
 };
 }
 
+struct Host
+{
+    String address;
+    uint16_t port;
+    String toString() const { return String::format<128>("%s:%d", address.constData(), port); }
+    bool operator==(const Host &other) const { return address == other.address && port == other.port; }
+    bool operator<(const Host &other) const
+    {
+        const int cmp = address.compare(other.address);
+        return cmp < 0 || (!cmp && port < other.port);
+    }
+};
 struct Output {
     enum Type {
         StdOut,
@@ -133,24 +145,50 @@ public:
     {}
 };
 
-class JobAnnouncementMessage : public Message
+class DaemonJobAnnouncementMessage : public Message
 {
 public:
     enum { MessageId = QuitMessage::MessageId + 1 };
-    JobAnnouncementMessage(int count = 0, const String &sha = String(), const Path &compiler = Path())
-        : Message(MessageId), mCount(count), mSha(sha), mCompiler(compiler)
+    DaemonJobAnnouncementMessage(int count = 0, const String &sha256 = String(), const Path &compiler = Path())
+        : Message(MessageId), mCount(count), mSha256(sha256), mCompiler(compiler)
     {}
 
     int count() const { return mCount; }
-    const String &sha() const { return mSha; }
+    const String &sha256() const { return mSha256; }
     const Path &compiler() const { return mCompiler; }
 
-    virtual void encode(Serializer &serializer) const { serializer << mCount << mSha << mCompiler; }
-    virtual void decode(Deserializer &deserializer) { deserializer >> mCount >> mSha >> mCompiler; }
+    virtual void encode(Serializer &serializer) const { serializer << mCount << mSha256 << mCompiler; }
+    virtual void decode(Deserializer &deserializer) { deserializer >> mCount >> mSha256 >> mCompiler; }
 private:
     int mCount;
-    String mSha;
+    String mSha256;
     Path mCompiler;
+};
+
+class ServerJobAnnouncementMessage : public Message
+{
+public:
+    enum { MessageId = DaemonJobAnnouncementMessage::MessageId + 1 };
+    ServerJobAnnouncementMessage(int count = 0, const String &sha256 = String(), const Path &compiler = Path(),
+                                 const String &host = String(), uint16_t port = 0)
+        : Message(MessageId), mCount(0), mSha256(sha256), mCompiler(compiler), mHost(host), mPort(port)
+    {}
+
+    int count() const { return mCount; }
+    const String &sha256() const { return mSha256; }
+    const Path &compiler() const { return mCompiler; }
+
+    const String &host() const { return mHost; }
+    uint16_t port() const { return mPort; }
+
+    virtual void encode(Serializer &serializer) const { serializer << mCount << mSha256 << mCompiler; }
+    virtual void decode(Deserializer &deserializer) { deserializer >> mCount >> mSha256 >> mCompiler; }
+private:
+    int mCount;
+    String mSha256;
+    Path mCompiler;
+    String mHost;
+    uint16_t mPort;
 };
 
 class CompilerPackage;
@@ -158,7 +196,7 @@ class CompilerPackage;
 class CompilerMessage : public Message
 {
 public:
-    enum { MessageId = JobAnnouncementMessage::MessageId + 1 };
+    enum { MessageId = ServerJobAnnouncementMessage::MessageId + 1 };
     CompilerMessage(const String& sha256 = String()) : Message(MessageId), mPackage(0) { mSha256 = sha256; }
     CompilerMessage(const Path &compiler, const Set<Path> &paths, const String &sha256);
     ~CompilerMessage();
@@ -181,6 +219,59 @@ private:
     Path mCompiler;
     String mSha256;
     CompilerPackage* mPackage;
+};
+
+class CompilerRequestMessage : public Message
+{
+public:
+    enum { MessageId = CompilerMessage::MessageId + 1 };
+    CompilerRequestMessage(const String &sha256 = String())
+        : Message(MessageId)
+    {}
+
+    const String &sha256() const { return mSha256; }
+    virtual void encode(Serializer &serializer) const { serializer << mSha256; }
+    virtual void decode(Deserializer &deserializer) { deserializer >> mSha256; }
+private:
+    String mSha256;
+};
+
+class DaemonJobRequestMessage : public Message
+{
+public:
+    enum { MessageId = CompilerRequestMessage::MessageId + 1 };
+    DaemonJobRequestMessage(uint64_t id = 0, const String &sha256 = String())
+        : Message(MessageId), mId(id), mSha256(sha256)
+    {}
+
+    uint64_t id() const { return mId; }
+    const String &sha256() const { return mSha256; }
+    virtual void encode(Serializer &serializer) const { serializer << mId << mSha256; }
+    virtual void decode(Deserializer &deserializer) { deserializer >> mId >> mSha256; }
+private:
+    uint64_t mId;
+    String mSha256;
+};
+
+class DaemonJobResponseMessage : public Message
+{
+public:
+    enum { MessageId = DaemonJobRequestMessage::MessageId + 1 };
+    DaemonJobResponseMessage(uint64_t id = 0,
+                             const String &preprocessed = String(),
+                             const List<String> &args = List<String>())
+        : Message(MessageId), mId(id), mPreprocessed(preprocessed), mArgs(args)
+    {}
+
+    uint64_t id() const { return mId; }
+    const String &preprocessed() const { return mPreprocessed; }
+    const List<String> &args() const { return mArgs; }
+    virtual void encode(Serializer &serializer) const { serializer << mId << mPreprocessed << mArgs; }
+    virtual void decode(Deserializer &deserializer) { deserializer >> mId >> mPreprocessed >> mArgs; }
+private:
+    uint64_t mId;
+    String mPreprocessed;
+    List<String> mArgs;
 };
 
 #endif

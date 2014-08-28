@@ -15,6 +15,7 @@
 
 #include "Server.h"
 #include <rct/Log.h>
+#include <rct/Config.h>
 #include "Plast.h"
 
 Server::Server()
@@ -28,8 +29,11 @@ Server::~Server()
 {
 
 }
-bool Server::init(uint16_t port, uint16_t discoveryPort)
+
+bool Server::init()
 {
+    const uint16_t port = Config::value<int>("port");
+    const uint16_t discoveryPort = Config::value<int>("discovery-port");
     if (!mServer.listen(port)) {
         enum { Timeout = 1000 };
         Connection connection;
@@ -90,10 +94,18 @@ void Server::onNewMessage(Message *message, Connection *connection)
     case QuitMessage::MessageId:
         EventLoop::eventLoop()->quit();
         break;
-    case JobAnnouncementMessage::MessageId: {
-        JobAnnouncementMessage *jobAnnouncement = static_cast<JobAnnouncementMessage*>(message);
+    case DaemonJobAnnouncementMessage::MessageId: {
+        DaemonJobAnnouncementMessage *jobAnnouncement = static_cast<DaemonJobAnnouncementMessage*>(message);
+        const ServerJobAnnouncementMessage msg(jobAnnouncement->count(), jobAnnouncement->sha256(),
+                                               jobAnnouncement->compiler(), connection->client()->peerName(), connection->client()->port());
         error() << "Got job announcement from" << mConnections.value(connection)->name
                 << jobAnnouncement->compiler() << jobAnnouncement->count();
+        static const bool returnToSender = Config::isEnabled("return-to-sender");
+        for (auto it : mConnections) {
+            if (it.first != connection || returnToSender) {
+                it.first->send(msg);
+            }
+        }
         break; }
     case HandshakeMessage::MessageId:
         Host *&host = mConnections[connection];
@@ -109,7 +121,7 @@ void Server::onConnectionDisconnected(Connection *connection)
 {
     EventLoop::deleteLater(connection);
     Host *host = mConnections.take(connection);
-    error() << "Lost connection from" << (host ? host->name : "someone");
+    error() << "Lost connection to" << (host ? host->name : "someone");
     delete host;
 }
 

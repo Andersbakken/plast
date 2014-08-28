@@ -11,8 +11,12 @@ bool init()
     Messages::registerMessage<ClientJobMessage>();
     Messages::registerMessage<ClientJobResponseMessage>();
     Messages::registerMessage<QuitMessage>();
-    Messages::registerMessage<JobAnnouncementMessage>();
+    Messages::registerMessage<DaemonJobAnnouncementMessage>();
+    Messages::registerMessage<ServerJobAnnouncementMessage>();
     Messages::registerMessage<CompilerMessage>();
+    Messages::registerMessage<CompilerRequestMessage>();
+    Messages::registerMessage<DaemonJobRequestMessage>();
+    Messages::registerMessage<DaemonJobResponseMessage>();
     return true;
 }
 
