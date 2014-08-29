@@ -22,6 +22,7 @@
 #include <rct/Timer.h>
 #include <rct/Hash.h>
 #include <rct/Process.h>
+#include "Compiler.h"
 #include "Plast.h"
 #include "Console.h"
 
@@ -34,7 +35,7 @@ public:
         Path socketFile;
         uint16_t serverPort, port, discoveryPort;
         String serverHost;
-        int jobCount;
+        int jobCount, preprocessCount;
         enum Flag {
             None = 0x0,
             NoLocalJobs = 0x1
@@ -50,7 +51,11 @@ private:
 
     void restartServerTimer();
     void onNewMessage(Message *message, Connection *connection);
-    void handleLocalJobMessage(ClientJobMessage *msg, Connection *conn);
+    void handleClientJobMessage(ClientJobMessage *msg, Connection *conn);
+    void handleServerJobAnnouncementMessage(ServerJobAnnouncementMessage *message, Connection *conn);
+    void handleCompilerMessage(CompilerMessage* message, Connection *connection);
+    void handleCompilerRequestMessage(CompilerRequestMessage *message, Connection *connection);
+    void handleDaemonJobRequestMessage(DaemonJobRequestMessage *message, Connection *connection);
     void reconnectToServer();
     void onDiscoverySocketReadyRead(Buffer &&data, const String &ip);
 
@@ -66,11 +71,13 @@ private:
                           const Path &cwd, String *error);
 
     struct LocalJob {
-        LocalJob(const List<String> &args, const List<String> &env, const Path &dir, Connection *conn)
+        LocalJob(const List<String> &args, const List<String> &env, const Path &dir,
+                 std::shared_ptr<Compiler> &c, Connection *conn)
             : received(time(0)), arguments(CompilerArgs::create(args)), environ(env), cwd(dir),
-              process(0), flags(0), localConnection(conn), remoteConnection(0), next(0), prev(0)
+              process(0), flags(0), compiler(c), localConnection(conn), remoteConnection(0), next(0), prev(0)
         {
         }
+
         time_t received;
         CompilerArgs arguments;
         List<String> environ;
@@ -81,14 +88,18 @@ private:
             None = 0x0,
             Announced = 0x1
         };
+
+        String preprocessed;
         uint32_t flags;
+        std::shared_ptr<Compiler> compiler;
         Connection *localConnection, *remoteConnection;
         LocalJob *next, *prev;
     };
-    LocalJob *mFirstLocalJob, *mLastLocalJob;
+    LocalJob *mFirstPendingPreprocessLocalJob, *mLastPendingPreprocessLocalJob; // these jobs are ready to be preprocessed
+    LocalJob *mFirstPendingCompileLocalJob, *mLastPendingCompileLocalJob; // these jobs are ready to be compiled
 
     Hash<Connection*, LocalJob*> mLocalJobsByLocalConnection, mLocalJobsByRemoteConnection;
-    Hash<Process*, LocalJob*> mLocalJobsByProcess;
+    Hash<Process*, LocalJob*> mLocalCompileJobsByProcess, mLocalPreprocessJobsByProcess;
 
     struct RemoteJob {
         List<String> arguments, environ;

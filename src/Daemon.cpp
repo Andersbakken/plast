@@ -17,7 +17,9 @@
 #include "Compiler.h"
 
 Daemon::Daemon()
-    : mFirstLocalJob(0), mLastLocalJob(0), mExplicitServer(false), mSentHandshake(false)
+    : mFirstPendingPreprocessLocalJob(0), mLastPendingPreprocessLocalJob(0),
+      mFirstPendingCompileLocalJob(0), mLastPendingCompileLocalJob(0),
+      mExplicitServer(false), mSentHandshake(false)
 {
     Console::init("plastd> ",
                   std::bind(&Daemon::handleConsoleCommand, this, std::placeholders::_1),
@@ -104,20 +106,23 @@ void Daemon::onNewMessage(Message *message, Connection *connection)
 {
     switch (message->messageId()) {
     case ClientJobMessage::MessageId:
-        handleLocalJobMessage(static_cast<ClientJobMessage*>(message), connection);
+        handleClientJobMessage(static_cast<ClientJobMessage*>(message), connection);
         break;
     case QuitMessage::MessageId:
         warning() << "Quitting by request";
         EventLoop::eventLoop()->quit();
         break;
     case ServerJobAnnouncementMessage::MessageId:
-        fetchJobs();
+        handleServerJobAnnouncementMessage(static_cast<ServerJobAnnouncementMessage*>(message), connection);
         break;
     case CompilerMessage::MessageId:
+        handleCompilerMessage(static_cast<CompilerMessage*>(message), connection);
         break;
     case CompilerRequestMessage::MessageId:
+        handleCompilerRequestMessage(static_cast<CompilerRequestMessage*>(message), connection);
         break;
     case DaemonJobRequestMessage::MessageId:
+        handleDaemonJobRequestMessage(static_cast<DaemonJobRequestMessage*>(message), connection);
         break;
     default:
         error() << "Unexpected message" << message->messageId();
@@ -125,29 +130,47 @@ void Daemon::onNewMessage(Message *message, Connection *connection)
     }
 }
 
-void Daemon::handleLocalJobMessage(ClientJobMessage *msg, Connection *conn)
+void Daemon::handleClientJobMessage(ClientJobMessage *msg, Connection *conn)
 {
     debug() << "Got localjob" << msg->arguments() << msg->environ() << msg->cwd();
 
     List<String> env = msg->environ();
     assert(!env.contains("PLAST=1"));
     env.append("PLAST=1");
-    LocalJob *localJob = new LocalJob(msg->arguments(), env, msg->cwd(), conn);
-    Rct::LinkedList::insert(localJob, mFirstLocalJob, mLastLocalJob, mLastLocalJob);
+    std::shared_ptr<Compiler> compiler = Compiler::compiler(msg->arguments().first());
+    if (!compiler) {
+        conn->send(ClientJobResponseMessage());
+        return;
+    }
+    LocalJob *localJob = new LocalJob(msg->arguments(), env, msg->cwd(), compiler, conn);
+    if (localJob->arguments.mode != CompilerArgs::Compile) {
+        delete localJob;
+        conn->send(ClientJobResponseMessage());
+        return;
+    }
+    Rct::LinkedList::insert(localJob, mFirstPendingPreprocessLocalJob, mLastPendingPreprocessLocalJob, mLastPendingPreprocessLocalJob);
     mLocalJobsByLocalConnection[conn] = localJob;
-    conn->disconnected().connect([this](Connection *c) {
-            LocalJob *job = mLocalJobsByLocalConnection.take(c);
-            if (job) {
-                Rct::LinkedList::remove(job, mFirstLocalJob, mLastLocalJob);
-                if (job->remoteConnection)
-                    mLocalJobsByRemoteConnection.remove(job->remoteConnection);
-                if (job->process) {
-                    job->process->kill();
-                    mLocalJobsByProcess.remove(job->process);
-                }
-            }
-        });
     startJobs();
+}
+
+void Daemon::handleServerJobAnnouncementMessage(ServerJobAnnouncementMessage *message, Connection *conn)
+{
+
+}
+
+void Daemon::handleCompilerMessage(CompilerMessage* message, Connection *connection)
+{
+
+}
+
+void Daemon::handleCompilerRequestMessage(CompilerRequestMessage *message, Connection *connection)
+{
+
+}
+
+void Daemon::handleDaemonJobRequestMessage(DaemonJobRequestMessage *message, Connection *connection)
+{
+
 }
 
 void Daemon::reconnectToServer()
@@ -240,7 +263,7 @@ void Daemon::onProcessReadyReadStdOut(Process *process)
 {
     const String out = process->readAllStdOut();
     debug() << "ready read stdout" << process << out;
-    if (!addOutput(process, mLocalJobsByProcess, Output::StdOut, out))
+    if (!addOutput(process, mLocalCompileJobsByProcess, Output::StdOut, out))
         addOutput(process, mRemoteJobsByProcess, Output::StdOut, out);
 }
 
@@ -248,19 +271,19 @@ void Daemon::onProcessReadyReadStdErr(Process *process)
 {
     const String out = process->readAllStdErr();
     debug() << "ready read stderr" << process << out;
-    if (!addOutput(process, mLocalJobsByProcess, Output::StdErr, out))
+    if (!addOutput(process, mLocalCompileJobsByProcess, Output::StdErr, out))
         addOutput(process, mRemoteJobsByProcess, Output::StdErr, out);
 }
 
 void Daemon::onProcessFinished(Process *process)
 {
-    LocalJob *localJob = mLocalJobsByProcess.take(process);
+    LocalJob *localJob = mLocalCompileJobsByProcess.take(process);
     debug() << "process finished" << process << localJob;
     if (localJob) {
         assert(localJob->process == process);
         localJob->localConnection->send(ClientJobResponseMessage(process->returnCode(), localJob->output));
         mLocalJobsByLocalConnection.remove(localJob->localConnection);
-        Rct::LinkedList::remove(localJob, mFirstLocalJob, mLastLocalJob);
+        Rct::LinkedList::remove(localJob, mFirstPendingCompileLocalJob, mLastPendingCompileLocalJob);
         delete localJob;
     }
     EventLoop::deleteLater(process);
@@ -269,11 +292,69 @@ void Daemon::onProcessFinished(Process *process)
 
 void Daemon::startJobs()
 {
-    debug() << "startJobs" << mOptions.jobCount << mLocalJobsByProcess.size() << mRemoteJobsByProcess.size();
+    debug() << "startJobs" << mOptions.jobCount << mOptions.preprocessCount << mLocalPreprocessJobsByProcess.size()
+            << mLocalCompileJobsByProcess.size() << mRemoteJobsByProcess.size();
+    while (mLocalPreprocessJobsByProcess.size() < mOptions.preprocessCount && mFirstPendingPreprocessLocalJob) {
+        auto job = Rct::LinkedList::remove(mFirstPendingPreprocessLocalJob,
+                                           mFirstPendingPreprocessLocalJob,
+                                           mLastPendingPreprocessLocalJob);
+        job->process = new Process;
+        List<String> args = job->arguments.arguments;
+        if (job->arguments.flags & CompilerArgs::HasOutput) {
+            for (int i=0; i<args.size(); ++i) {
+                if (args.at(i) == "-o") {
+                    if (++i == args.size()) {
+                        job->localConnection->send(ClientJobResponseMessage());
+                        delete job;
+                        job = 0;
+                    } else {
+                        args[i] = "-";
+                    }
+                    break;
+                }
+            }
+        }
+        if (!job)
+            continue;
+        args.append("-E");
+        // debug() << "Starting process" << arguments;
+        // assert(!arguments.isEmpty());
+        const Path compiler = Plast::resolveCompiler(args.first());
+        if (compiler.isEmpty()) {
+            job->localConnection->send(ClientJobResponseMessage());
+            delete job;
+            error() << "Can't resolve compiler for" << args.first();
+            continue;
+        }
+        Process *process = new Process;
+        process->setCwd(job->cwd);
+        process->finished().connect([job](Process *proc) {
+                if (proc->returnCode() != 0) {
+                    job->localConnection->send(ClientJobResponseMessage());
+                    delete job;
+                }
+            });
+
+            std::bind(&Daemon::onProcessFinished, this, std::placeholders::_1));
+        process->readyReadStdOut().connect(std::bind(&Daemon::onProcessReadyReadStdOut, this, std::placeholders::_1));
+        process->readyReadStdErr().connect(std::bind(&Daemon::onProcessReadyReadStdErr, this, std::placeholders::_1));
+        // if (!process->start(compiler, arguments.mid(1), environ)) {
+        //     error() << "Failed to start compiler" << compiler;
+        //     if (err)
+        //         *err = "Failed to start compiler: " + compiler;
+        //     delete process;
+        //     return 0;
+        // }
+        // debug() << "Started process" << compiler << arguments.mid(1) << process;
+        // return process;
+
+        // job->process
+        // assert(job);
+    }
     if (!mOptions.flags & Options::NoLocalJobs) {
-        while (mOptions.jobCount > (mLocalJobsByProcess.size() + mRemoteJobsByProcess.size())) {
-            if (mLocalJobsByLocalConnection.size() > mLocalJobsByProcess.size()) {
-                LocalJob *job = mFirstLocalJob;
+        while (mOptions.jobCount > (mLocalCompileJobsByProcess.size() + mRemoteJobsByProcess.size())) {
+            if (mLocalJobsByLocalConnection.size() > mLocalCompileJobsByProcess.size()) {
+                LocalJob *job = mFirstPendingCompileLocalJob;
                 // ### this is kinda non-optimal
                 LocalJob *remoteCandidate = 0;
                 while (job && (job->process || job->remoteConnection)) {
@@ -289,7 +370,7 @@ void Daemon::startJobs()
                 String err;
                 job->process = startProcess(job->arguments.arguments, job->environ, job->cwd, &err);
                 assert(job->process);
-                mLocalJobsByProcess[job->process] = job;
+                mLocalCompileJobsByProcess[job->process] = job;
             } else {
                 break;
             }
@@ -303,9 +384,13 @@ void Daemon::announceJobs()
 {
     if (mServerConnection.isConnected()) {
         Hash<std::shared_ptr<Compiler>, int> announcements;
-        for (LocalJob *job = mFirstLocalJob; job; job = job->next) {
+        for (LocalJob *job = mFirstPendingCompileLocalJob; job; job = job->next) {
             if (!job->process && !job->remoteConnection && !job->flags & LocalJob::Announced) {
-                ++announcements[Compiler::compiler(job->arguments.compiler)];
+                if (auto compiler = Compiler::compiler(job->arguments.compiler)) {
+                    ++announcements[compiler];
+                } else {
+
+                }
             }
         }
         for (const auto &it : announcements) {
@@ -320,10 +405,11 @@ void Daemon::onConnectionDisconnected(Connection *conn)
     debug() << "Lost connection" << conn;
     EventLoop::deleteLater(conn);
     if (LocalJob *job = mLocalJobsByLocalConnection.take(conn)) {
-        Rct::LinkedList::remove(job, mFirstLocalJob, mLastLocalJob);
+        Rct::LinkedList::remove(job, mFirstPendingCompileLocalJob, mLastPendingCompileLocalJob);
         if (job->process) {
             assert(!job->remoteConnection);
-            mLocalJobsByProcess.remove(job->process);
+            mLocalCompileJobsByProcess.remove(job->process);
+            mLocalPreprocessJobsByProcess.remove(job->process);
             job->process->kill();
         } else {
             // need to tell remote connection that we're no longer interested
@@ -364,7 +450,7 @@ void Daemon::handleConsoleCommand(const String &string)
     while (str.endsWith(' '))
         str.chop(1);
     if (str == "jobs") {
-        for (LocalJob *job = mFirstLocalJob; job; job = job->next) {
+        for (LocalJob *job = mFirstPendingCompileLocalJob; job; job = job->next) {
             printf("Job: %s Received: %s\n",
                    String::join(job->arguments.sourceFiles, ", ").constData(),
                    String::formatTime(job->received).constData());
