@@ -51,18 +51,18 @@ private:
 
     void restartServerTimer();
     void onNewMessage(Message *message, Connection *connection);
-    void handleClientJobMessage(ClientJobMessage *msg, Connection *conn);
-    void handleServerJobAnnouncementMessage(ServerJobAnnouncementMessage *message, Connection *conn);
-    void handleCompilerMessage(CompilerMessage* message, Connection *connection);
-    void handleCompilerRequestMessage(CompilerRequestMessage *message, Connection *connection);
-    void handleDaemonJobRequestMessage(DaemonJobRequestMessage *message, Connection *connection);
+    void handleClientJobMessage(ClientJobMessage *msg, const std::shared_ptr<Connection> &conn);
+    void handleServerJobAnnouncementMessage(ServerJobAnnouncementMessage *message, const std::shared_ptr<Connection> &conn);
+    void handleCompilerMessage(CompilerMessage* message, const std::shared_ptr<Connection> &connection);
+    void handleCompilerRequestMessage(CompilerRequestMessage *message, const std::shared_ptr<Connection> &connection);
+    void handleDaemonJobRequestMessage(DaemonJobRequestMessage *message, const std::shared_ptr<Connection> &connection);
     void reconnectToServer();
     void onDiscoverySocketReadyRead(Buffer &&data, const String &ip);
 
     void onConnectionDisconnected(Connection *conn);
-    void onProcessReadyReadStdOut(Process *process);
-    void onProcessReadyReadStdErr(Process *process);
-    void onProcessFinished(Process *process);
+    void onCompileProcessReadyReadStdOut(Process *process);
+    void onCompileProcessReadyReadStdErr(Process *process);
+    void onCompileProcessFinished(Process *process);
     void startJobs();
     void sendHandshake();
     void announceJobs();
@@ -72,9 +72,9 @@ private:
 
     struct LocalJob {
         LocalJob(const List<String> &args, const List<String> &env, const Path &dir,
-                 std::shared_ptr<Compiler> &c, Connection *conn)
+                 std::shared_ptr<Compiler> &c, const std::shared_ptr<Connection> &conn)
             : received(time(0)), arguments(CompilerArgs::create(args)), environ(env), cwd(dir),
-              process(0), flags(0), compiler(c), localConnection(conn), remoteConnection(0), next(0), prev(0)
+              process(0), flags(0), compiler(c), localConnection(conn)
         {
         }
 
@@ -85,27 +85,82 @@ private:
         List<Output> output;
         Process *process;
         enum Flag {
-            None = 0x0,
-            Announced = 0x1
+            None = 0x00,
+            Announced = 0x01,
+            PendingPreprocessing = 0x02,
+            Preprocessing = 0x04,
+            PendingCompiling = 0x08,
+            Compiling = 0x10,
+            StateMask = PendingPreprocessing|Preprocessing|PendingPreprocessing|PendingCompiling
         };
 
         String preprocessed;
         uint32_t flags;
+        LinkedList<std::shared_ptr<LocalJob> >::iterator position;
         std::shared_ptr<Compiler> compiler;
-        Connection *localConnection, *remoteConnection;
-        LocalJob *next, *prev;
+        std::shared_ptr<Connection> localConnection, remoteConnection;
     };
-    LocalJob *mFirstPendingPreprocessLocalJob, *mLastPendingPreprocessLocalJob; // these jobs are ready to be preprocessed
-    LocalJob *mFirstPendingCompileLocalJob, *mLastPendingCompileLocalJob; // these jobs are ready to be compiled
 
-    Hash<Connection*, LocalJob*> mLocalJobsByLocalConnection, mLocalJobsByRemoteConnection;
-    Hash<Process*, LocalJob*> mLocalCompileJobsByProcess, mLocalPreprocessJobsByProcess;
+    void addLocalJob(LocalJob::Flag flag, const std::shared_ptr<LocalJob> &job)
+    {
+        assert(job);
+        assert(!(job->flags & LocalJob::StateMask));
+        assert(flag & LocalJob::StateMask);
+        job->flags |= flag;
+        switch (flag) {
+        case LocalJob::PendingPreprocessing:
+            job->position = mPendingPreprocessJobs.insert(mPendingPreprocessJobs.end(), job);
+            break;
+        case LocalJob::Preprocessing:
+            job->position = mPreprocessingJobs.insert(mPreprocessingJobs.end(), job);
+            break;
+        case LocalJob::PendingCompiling:
+            job->position = mPendingCompileJobs.insert(mPendingCompileJobs.end(), job);
+            break;
+        case LocalJob::Compiling:
+            job->position = mCompilingJobs.insert(mCompilingJobs.end(), job);
+            break;
+        default:
+            assert(0);
+        }
+    }
+
+    void removeLocalJob(const std::shared_ptr<LocalJob> &job)
+    {
+        assert(job);
+        const LocalJob::Flag flag = static_cast<LocalJob::Flag>(job->flags & LocalJob::StateMask);
+        assert(flag);
+        job->flags &= ~flag;
+        switch (flag) {
+        case LocalJob::PendingPreprocessing:
+            mPendingPreprocessJobs.erase(job->position);
+            break;
+        case LocalJob::Preprocessing:
+            mPreprocessingJobs.erase(job->position);
+            break;
+        case LocalJob::PendingCompiling:
+            mPendingCompileJobs.erase(job->position);
+            break;
+        case LocalJob::Compiling:
+            mCompilingJobs.erase(job->position);
+            break;
+        default:
+            assert(0);
+        }
+    }
+
+    LinkedList<std::shared_ptr<LocalJob> > mPendingPreprocessJobs, mPendingCompileJobs, mPreprocessingJobs, mCompilingJobs;
+
+    Hash<std::shared_ptr<Connection>, std::shared_ptr<LocalJob> > mLocalJobsByLocalConnection, mLocalJobsByRemoteConnection;
+    Hash<Process*, std::shared_ptr<LocalJob> > mLocalCompileJobsByProcess, mPreprocessJobsByProcess;
+
+    Hash<String, int> mLastAnnouncements;
 
     struct RemoteJob {
         List<String> arguments, environ;
         List<Output> output;
         String source;
-        Connection *connection;
+        std::shared_ptr<Connection> &connection;
         Process *process;
     };
 

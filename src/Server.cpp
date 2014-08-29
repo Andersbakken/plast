@@ -95,17 +95,17 @@ void Server::onNewMessage(Message *message, Connection *connection)
         EventLoop::eventLoop()->quit();
         break;
     case DaemonJobAnnouncementMessage::MessageId: {
-        DaemonJobAnnouncementMessage *jobAnnouncement = static_cast<DaemonJobAnnouncementMessage*>(message);
-        const ServerJobAnnouncementMessage msg(jobAnnouncement->count(), jobAnnouncement->sha256(),
-                                               jobAnnouncement->compiler(), connection->client()->peerName(), connection->client()->port());
-        error() << "Got job announcement from" << mConnections.value(connection)->name
-                << jobAnnouncement->compiler() << jobAnnouncement->count();
-        static const bool returnToSender = Config::isEnabled("return-to-sender");
-        for (auto it : mConnections) {
-            if (it.first != connection || returnToSender) {
-                it.first->send(msg);
-            }
-        }
+        // DaemonJobAnnouncementMessage *jobAnnouncement = static_cast<DaemonJobAnnouncementMessage*>(message);
+        // const ServerJobAnnouncementMessage msg(jobAnnouncement->count(), jobAnnouncement->sha256(),
+        //                                        jobAnnouncement->compiler(), connection->client()->peerName(), connection->client()->port());
+        // error() << "Got job announcement from" << mConnections.value(connection)->name
+        //         << jobAnnouncement->compiler() << jobAnnouncement->count();
+        // static const bool returnToSender = Config::isEnabled("return-to-sender");
+        // for (auto it : mConnections) {
+        //     if (it.first != connection || returnToSender) {
+        //         it.first->send(msg);
+        //     }
+        // }
         break; }
     case HandshakeMessage::MessageId:
         Host *&host = mConnections[connection];

@@ -149,20 +149,16 @@ class DaemonJobAnnouncementMessage : public Message
 {
 public:
     enum { MessageId = QuitMessage::MessageId + 1 };
-    DaemonJobAnnouncementMessage(int count = 0, const String &sha256 = String(), const Path &compiler = Path())
-        : Message(MessageId), mCount(count), mSha256(sha256), mCompiler(compiler)
+    DaemonJobAnnouncementMessage(const Hash<String, int> &announcement = Hash<String, int>())
+        : Message(MessageId), mAnnouncement(announcement)
     {}
 
-    int count() const { return mCount; }
-    const String &sha256() const { return mSha256; }
-    const Path &compiler() const { return mCompiler; }
+    const Hash<String, int> &announcement() const { return mAnnouncement; }
 
-    virtual void encode(Serializer &serializer) const { serializer << mCount << mSha256 << mCompiler; }
-    virtual void decode(Deserializer &deserializer) { deserializer >> mCount >> mSha256 >> mCompiler; }
+    virtual void encode(Serializer &serializer) const { serializer << mAnnouncement; }
+    virtual void decode(Deserializer &deserializer) { deserializer >> mAnnouncement; }
 private:
-    int mCount;
-    String mSha256;
-    Path mCompiler;
+    Hash<String, int> mAnnouncement;
 };
 
 class ServerJobAnnouncementMessage : public Message
