@@ -156,14 +156,19 @@ void Daemon::handleServerJobAnnouncementMessage(ServerJobAnnouncementMessage *me
 
 }
 
-void Daemon::handleCompilerMessage(CompilerMessage* message, const std::shared_ptr<Connection> &connection)
+void Daemon::handleCompilerMessage(CompilerMessage* message, const std::shared_ptr<Connec tion> &connection)
 {
 
 }
 
 void Daemon::handleCompilerRequestMessage(CompilerRequestMessage *message, const std::shared_ptr<Connection> &connection)
 {
-
+    std::shared_ptr<Compiler> compiler = Compiler::compilerBySha256(message->sha256());
+    if (compiler) {
+        connection->send(CompilerMessage(message->sha256()));
+    } else {
+        error() << "I don't know nothing.";
+    }
 }
 
 void Daemon::handleDaemonJobRequestMessage(DaemonJobRequestMessage *message, const std::shared_ptr<Connection> &connection)

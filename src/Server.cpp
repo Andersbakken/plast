@@ -78,7 +78,7 @@ bool Server::init()
                 auto socket = mServer.nextConnection();
                 if (!socket)
                     break;
-                Connection *conn = new Connection(socket);
+                std::shared_ptr<Connection> conn = std::make_shared<Connection>(socket);
                 conn->disconnected().connect(std::bind(&Server::onConnectionDisconnected, this, std::placeholders::_1));
                 conn->newMessage().connect(std::bind(&Server::onNewMessage, this, std::placeholders::_1, std::placeholders::_2));
                 mConnections[conn] = new Host;
@@ -108,7 +108,7 @@ void Server::onNewMessage(Message *message, Connection *connection)
         // }
         break; }
     case HandshakeMessage::MessageId:
-        Host *&host = mConnections[connection];
+        Host *&host = mConnections[connection->shared_from_this()];
         delete host;
         HandshakeMessage *handShake = static_cast<HandshakeMessage*>(message);
         host = new Host({ handShake->hostName(), handShake->capacity() });
@@ -119,8 +119,7 @@ void Server::onNewMessage(Message *message, Connection *connection)
 
 void Server::onConnectionDisconnected(Connection *connection)
 {
-    EventLoop::deleteLater(connection);
-    Host *host = mConnections.take(connection);
+    Host *host = mConnections.take(connection->shared_from_this());
     error() << "Lost connection to" << (host ? host->name : "someone");
     delete host;
 }

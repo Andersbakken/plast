@@ -42,7 +42,7 @@ private:
         int capacity;
         int jobsSent, jobsReceived;
     };
-    Hash<Connection *, Host*> mConnections;
+    Hash<std::shared_ptr<Connection>, Host*> mConnections;
     std::shared_ptr<SocketClient> mDiscoverySocket;
 };
 
