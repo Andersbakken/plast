@@ -156,9 +156,12 @@ void Daemon::handleServerJobAnnouncementMessage(ServerJobAnnouncementMessage *me
 
 }
 
-void Daemon::handleCompilerMessage(CompilerMessage* message, const std::shared_ptr<Connec tion> &connection)
+void Daemon::handleCompilerMessage(CompilerMessage *message, const std::shared_ptr<Connection> &connection)
 {
-
+    assert(message->isValid());
+    if (!message->writeFiles(mOptions.cacheDir)) {
+        error() << "Couldn't write files to" << mOptions.cacheDir;
+    }
 }
 
 void Daemon::handleCompilerRequestMessage(CompilerRequestMessage *message, const std::shared_ptr<Connection> &connection)

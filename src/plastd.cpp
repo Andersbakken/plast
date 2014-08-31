@@ -55,6 +55,18 @@ int main(int argc, char** argv)
     Config::registerOption<bool>("verbose", "Be more verbose", 'v');
     Config::registerOption<bool>("silent", "Be silent", 'S');
     Config::registerOption<bool>("no-local-jobs", "Don't run any local jobs. Only useful for debugging", 'L');
+    Config::registerOption<String>("cache-dir", "Where to put compiler cache. Default ~/.plastd/cache", 'c', Path::home() + ".plastd/cache",
+                                   [](const String &dir, String &err) {
+                                       if (dir.isEmpty()) {
+                                           err = "cache-dir can't be empty";
+                                           return false;
+                                       }
+                                       if (!Path::mkdir(dir, Path::Recursive)) {
+                                           err = "Can't create directory: " + dir;
+                                           return false;
+                                       }
+                                       return true;
+                                   });
     const int idealThreadCount = ThreadPool::idealThreadCount();
     Config::registerOption<int>("job-count", String::format<128>("Job count (defaults to %d", idealThreadCount), 'j', idealThreadCount,
                                 [](const int &count, String &err) { return validate(count, "job-count", err); });
@@ -86,6 +98,7 @@ int main(int argc, char** argv)
         static_cast<uint16_t>(Config::value<int>("port")),
         static_cast<uint16_t>(Config::value<int>("discovery-port")),
         String(),
+        Config::value<String>("cache-dir"),
         Config::value<int>("job-count"),
         Config::value<int>("preprocess-count"),
         Config::isEnabled("no-local-jobs") ? Daemon::Options::NoLocalJobs : Daemon::Options::None

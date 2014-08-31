@@ -35,6 +35,7 @@ public:
         Path socketFile;
         uint16_t serverPort, port, discoveryPort;
         String serverHost;
+        Path cacheDir;
         int jobCount, preprocessCount;
         enum Flag {
             None = 0x0,
