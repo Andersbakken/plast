@@ -50,7 +50,8 @@ void Console::init(const String& prompt,
 
     rl_readline_name = strdup("console");
     rl_attempted_completion_function = attemptShellCompletion;
-    rl_completer_quote_characters = "'\"";
+    static char *quote_characters = strdup("'\"");
+    rl_completer_quote_characters = quote_characters;
 
     rl_callback_handler_install(prompt.constData(), handleReadLine);
 
