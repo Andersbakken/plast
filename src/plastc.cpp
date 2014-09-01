@@ -101,6 +101,7 @@ int main(int argc, char** argv)
     }
 
     List<String> env;
+    extern char **environ;
     for (char **e = environ; *e; ++e)
         env.append(*e);
     connection.send(ClientJobMessage(argc, argv, env, Path::pwd()));
