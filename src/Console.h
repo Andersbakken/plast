@@ -3,6 +3,7 @@
 
 #include <rct/String.h>
 #include <rct/List.h>
+#include <functional>
 
 class Console
 {
