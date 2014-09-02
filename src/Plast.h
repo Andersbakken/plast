@@ -109,17 +109,19 @@ class HandshakeMessage : public Message
 {
 public:
     enum { MessageId = HandshakeMessageId };
-    HandshakeMessage(const String &h = String(), int c = -1)
-        : Message(MessageId), mHostName(h), mCapacity(c)
+    HandshakeMessage(const String &f = String(), uint16_t port = 0, int c = -1)
+        : Message(MessageId), mFriendlyName(f), mPort(port), mCapacity(c)
     {}
 
-    String hostName() const { return mHostName; }
+    String friendlyName() const { return mFriendlyName; }
+    uint16_t port() const { return mPort; }
     int capacity() const { return mCapacity; }
 
-    virtual void encode(Serializer &serializer) const { serializer << mHostName << mCapacity; }
-    virtual void decode(Deserializer &deserializer) { deserializer >> mHostName >> mCapacity; }
+    virtual void encode(Serializer &serializer) const { serializer << mFriendlyName << mPort << mCapacity; }
+    virtual void decode(Deserializer &deserializer) { deserializer >> mFriendlyName >> mPort >> mCapacity; }
 private:
-    String mHostName;
+    String mFriendlyName;
+    uint16_t mPort;
     int mCapacity;
 };
 
@@ -127,7 +129,7 @@ class DaemonListMessage : public Message
 {
 public:
     enum { MessageId = DaemonListMessageId };
-    DaemonListMessage(const Set<Host> &hosts)
+    DaemonListMessage(const Set<Host> &hosts = Set<Host>())
         : Message(MessageId), mHosts(hosts)
     {}
 

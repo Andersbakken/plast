@@ -20,6 +20,7 @@
 #include <rct/Hash.h>
 #include <rct/Connection.h>
 #include <rct/Message.h>
+#include "Plast.h"
 #include "Console.h"
 
 class Server
@@ -37,12 +38,12 @@ private:
     void onConnectionDisconnected(Connection *connection);
 
     SocketServer mServer;
-    struct Host {
-        String name;
-        int capacity;
-        int jobsSent, jobsReceived;
+    struct Node {
+        Host host;
+        String friendyName;
+        int capacity, jobsSent, jobsReceived;
     };
-    Hash<std::shared_ptr<Connection>, Host*> mConnections;
+    Hash<std::shared_ptr<Connection>, Node*> mNodes;
     std::shared_ptr<SocketClient> mDiscoverySocket;
 };
 

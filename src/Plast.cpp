@@ -17,6 +17,7 @@ bool init()
     Messages::registerMessage<CompilerRequestMessage>();
     Messages::registerMessage<DaemonJobRequestMessage>();
     Messages::registerMessage<DaemonJobResponseMessage>();
+    Messages::registerMessage<DaemonListMessage>();
     return true;
 }
 

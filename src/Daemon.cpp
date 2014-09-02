@@ -17,7 +17,7 @@
 #include "Compiler.h"
 
 Daemon::Daemon()
-    : mExplicitServer(false), mSentHandshake(false)
+    : mExplicitServer(false), mSentHandshake(false), mServerConnection(std::make_shared<Connection>())
 {
     Console::init("plastd> ",
                   std::bind(&Daemon::handleConsoleCommand, this, std::placeholders::_1),
@@ -34,14 +34,14 @@ Daemon::Daemon()
     };
     mLocalServer.newConnection().connect(onNewConnection);
     mRemoteServer.newConnection().connect(onNewConnection);
-    mServerConnection.newMessage().connect(std::bind(&Daemon::onNewMessage, this, std::placeholders::_1, std::placeholders::_2));
-    mServerConnection.disconnected().connect([this](Connection*) { mSentHandshake = false; restartServerTimer(); });
-    mServerConnection.connected().connect([this](Connection *conn) {
+    mServerConnection->newMessage().connect(std::bind(&Daemon::onNewMessage, this, std::placeholders::_1, std::placeholders::_2));
+    mServerConnection->disconnected().connect([this](Connection*) { mSentHandshake = false; restartServerTimer(); });
+    mServerConnection->connected().connect([this](Connection *conn) {
             warning() << "Connected to" << conn->client()->peerString();
             sendHandshake();
         });
 
-    mServerConnection.error().connect([this](Connection*) { mSentHandshake = false; restartServerTimer(); });
+    mServerConnection->error().connect([this](Connection*) { mSentHandshake = false; restartServerTimer(); });
 
     mServerTimer.timeout().connect([this](Timer *) { reconnectToServer(); });
     mJobAnnouncementTimer.timeout().connect([this](Timer *) { announceJobs(); });
@@ -123,6 +123,9 @@ void Daemon::onNewMessage(Message *message, Connection *conn)
     case DaemonJobRequestMessage::MessageId:
         handleDaemonJobRequestMessage(static_cast<DaemonJobRequestMessage*>(message), connection);
         break;
+    case DaemonListMessage::MessageId:
+        handleDaemonListMessage(static_cast<DaemonListMessage*>(message), connection);
+        break;
     default:
         error() << "Unexpected message" << message->messageId();
         break;
@@ -179,10 +182,21 @@ void Daemon::handleDaemonJobRequestMessage(DaemonJobRequestMessage *message, con
 
 }
 
+void Daemon::handleDaemonListMessage(DaemonListMessage *message, const std::shared_ptr<Connection> &connection)
+{
+    for (const auto &host : message->hosts()) {
+        std::shared_ptr<Connection> &conn = mHosts[host];
+        if (!conn) {
+            conn = std::make_shared<Connection>();
+            conn->connectTcp(host.address, host.port);
+        }
+    }
+}
+
 void Daemon::reconnectToServer()
 {
-    if (mServerConnection.client()) {
-        switch (mServerConnection.client()->state()) {
+    if (mServerConnection->client()) {
+        switch (mServerConnection->client()->state()) {
         case SocketClient::Connected:
             sendHandshake();
             return;
@@ -197,9 +211,9 @@ void Daemon::reconnectToServer()
     warning() << "Trying to connect" << mOptions.serverHost << mOptions.serverPort;
     if (mOptions.serverHost.isEmpty()) {
         mDiscoverySocket->writeTo("255.255.255.255", mOptions.discoveryPort, "?");
-    } else if (!mServerConnection.connectTcp(mOptions.serverHost, mOptions.serverPort)) {
+    } else if (!mServerConnection->connectTcp(mOptions.serverHost, mOptions.serverPort)) {
         restartServerTimer();
-    } else if (mServerConnection.client()->state() == SocketClient::Connected) {
+    } else if (mServerConnection->client()->state() == SocketClient::Connected) {
         sendHandshake();
     }
 }
@@ -208,7 +222,7 @@ void Daemon::sendHandshake()
 {
     if (!mSentHandshake) {
         mSentHandshake = true;
-        mServerConnection.send(HandshakeMessage(Rct::hostName(), mOptions.jobCount));
+        mServerConnection->send(HandshakeMessage(Rct::hostName(), mOptions.jobCount, mOptions.port));
     }
 }
 
@@ -221,14 +235,14 @@ void Daemon::onDiscoverySocketReadyRead(Buffer &&data, const String &ip)
     warning() << "Got discovery packet" << command;
     switch (command) {
     case 's':
-        if (!mExplicitServer && !mServerConnection.isConnected()) {
+        if (!mExplicitServer && !mServerConnection->isConnected()) {
             deserializer >> mOptions.serverHost >> mOptions.serverPort;
             warning() << "found server" << mOptions.serverHost << mOptions.serverPort;
             reconnectToServer();
         }
         break;
     case 'S':
-        if (!mExplicitServer && !mServerConnection.isConnected()) {
+        if (!mExplicitServer && !mServerConnection->isConnected()) {
             deserializer >> mOptions.serverPort;
             mOptions.serverHost = ip;
             warning() << "found server" << mOptions.serverHost << mOptions.serverPort;
@@ -236,13 +250,13 @@ void Daemon::onDiscoverySocketReadyRead(Buffer &&data, const String &ip)
         }
         break;
     case '?':
-        if (mServerConnection.isConnected()) {
+        if (mServerConnection->isConnected()) {
             String packet;
             {
                 Serializer serializer(packet);
-                serializer << 's' << mServerConnection.client()->peerName() << mOptions.serverPort;
+                serializer << 's' << mServerConnection->client()->peerName() << mOptions.serverPort;
             }
-            warning() << "telling" << ip << "about server" << mServerConnection.client()->peerName() << mOptions.serverPort;
+            warning() << "telling" << ip << "about server" << mServerConnection->client()->peerName() << mOptions.serverPort;
             mDiscoverySocket->writeTo(ip, mOptions.discoveryPort, packet);
         }
         break;
@@ -382,7 +396,7 @@ void Daemon::startJobs()
 
 void Daemon::announceJobs()
 {
-    if (mServerConnection.isConnected()) {
+    if (mServerConnection->isConnected()) {
         Hash<String, int> announcements;
         for (const auto &it : mPendingCompileJobs) {
             assert(it->compiler);
@@ -398,7 +412,7 @@ void Daemon::announceJobs()
             }
         }
         if (!announcements.isEmpty()) {
-            mServerConnection.send(DaemonJobAnnouncementMessage(announcements));
+            mServerConnection->send(DaemonJobAnnouncementMessage(announcements));
         }
     }
 }

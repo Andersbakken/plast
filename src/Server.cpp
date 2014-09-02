@@ -81,7 +81,7 @@ bool Server::init()
                 std::shared_ptr<Connection> conn = std::make_shared<Connection>(socket);
                 conn->disconnected().connect(std::bind(&Server::onConnectionDisconnected, this, std::placeholders::_1));
                 conn->newMessage().connect(std::bind(&Server::onNewMessage, this, std::placeholders::_1, std::placeholders::_2));
-                mConnections[conn] = new Host;
+                mNodes[conn] = new Node;
             }
         });
 
@@ -98,30 +98,38 @@ void Server::onNewMessage(Message *message, Connection *connection)
         // DaemonJobAnnouncementMessage *jobAnnouncement = static_cast<DaemonJobAnnouncementMessage*>(message);
         // const ServerJobAnnouncementMessage msg(jobAnnouncement->count(), jobAnnouncement->sha256(),
         //                                        jobAnnouncement->compiler(), connection->client()->peerName(), connection->client()->port());
-        // error() << "Got job announcement from" << mConnections.value(connection)->name
+        // error() << "Got job announcement from" << mNodes.value(connection)->name
         //         << jobAnnouncement->compiler() << jobAnnouncement->count();
         // static const bool returnToSender = Config::isEnabled("return-to-sender");
-        // for (auto it : mConnections) {
+        // for (auto it : mNodes) {
         //     if (it.first != connection || returnToSender) {
         //         it.first->send(msg);
         //     }
         // }
         break; }
     case HandshakeMessage::MessageId:
-        Host *&host = mConnections[connection->shared_from_this()];
-        delete host;
+        Node *&node = mNodes[connection->shared_from_this()];
+        delete node;
+        node = 0;
+        Set<Host> nodes;
+        for (const auto it : mNodes) {
+            if (it.second) {
+                nodes.insert(it.second->host);
+            }
+        }
         HandshakeMessage *handShake = static_cast<HandshakeMessage*>(message);
-        host = new Host({ handShake->hostName(), handShake->capacity() });
-        error() << "Got handshake from" << handShake->hostName();
+        node = new Node({ Host({connection->client()->peerName(), handShake->port()}), handShake->friendlyName(), handShake->capacity(), 0, 0 });
+        connection->send(DaemonListMessage(nodes));
+        error() << "Got handshake from" << handShake->friendlyName();
         break;
     }
 }
 
 void Server::onConnectionDisconnected(Connection *connection)
 {
-    Host *host = mConnections.take(connection->shared_from_this());
-    error() << "Lost connection to" << (host ? host->name : "someone");
-    delete host;
+    Node *node = mNodes.take(connection->shared_from_this());
+    error() << "Lost connection to" << (node ? node->friendyName : "someone");
+    delete node;
 }
 
 void Server::handleConsoleCommand(const String &string)
@@ -129,10 +137,10 @@ void Server::handleConsoleCommand(const String &string)
     String str = string;
     while (str.endsWith(' '))
         str.chop(1);
-    if (str == "hosts") {
-        for (const auto it : mConnections) {
-            printf("Host: %s Capacity: %d Jobs sent: %d Jobs received: %d\n",
-                   it.second->name.constData(), it.second->capacity,
+    if (str == "nodes") {
+        for (const auto &it : mNodes) {
+            printf("Node: %s Capacity: %d Jobs sent: %d Jobs received: %d\n",
+                   it.second->friendyName.constData(), it.second->capacity,
                    it.second->jobsSent, it.second->jobsReceived);
         }
     } else if (str == "quit") {
@@ -143,7 +151,7 @@ void Server::handleConsoleCommand(const String &string)
 void Server::handleConsoleCompletion(const String& string, int, int,
                                      String &common, List<String> &candidates)
 {
-    static const List<String> cands = List<String>() << "hosts" << "quit";
+    static const List<String> cands = List<String>() << "nodes" << "quit";
     auto res = Console::tryComplete(string, cands);
     // error() << res.text << res.candidates;
     common = res.text;

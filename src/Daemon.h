@@ -57,6 +57,7 @@ private:
     void handleCompilerMessage(CompilerMessage* message, const std::shared_ptr<Connection> &connection);
     void handleCompilerRequestMessage(CompilerRequestMessage *message, const std::shared_ptr<Connection> &connection);
     void handleDaemonJobRequestMessage(DaemonJobRequestMessage *message, const std::shared_ptr<Connection> &connection);
+    void handleDaemonListMessage(DaemonListMessage *message, const std::shared_ptr<Connection> &connection);
     void reconnectToServer();
     void onDiscoverySocketReadyRead(Buffer &&data, const String &ip);
 
@@ -155,6 +156,8 @@ private:
     Hash<std::shared_ptr<Connection>, std::shared_ptr<LocalJob> > mLocalJobsByLocalConnection, mLocalJobsByRemoteConnection;
     Hash<Process*, std::shared_ptr<LocalJob> > mLocalCompileJobsByProcess, mPreprocessJobsByProcess;
 
+    Map<Host, std::shared_ptr<Connection> > mHosts;
+
     Hash<String, int> mLastAnnouncements;
 
     struct RemoteJob {
@@ -172,9 +175,9 @@ private:
     bool mExplicitServer;
     Options mOptions;
     SocketServer mLocalServer, mRemoteServer;
-    Connection mServerConnection;
     bool mSentHandshake;
     std::shared_ptr<SocketClient> mDiscoverySocket;
+    std::shared_ptr<Connection> mServerConnection;
     Timer mServerTimer, mJobAnnouncementTimer;
 };
 
