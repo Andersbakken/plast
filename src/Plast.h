@@ -29,44 +29,6 @@ enum {
 };
 }
 
-struct Host
-{
-    String address;
-    uint16_t port;
-    String toString() const { return String::format<128>("%s:%d", address.constData(), port); }
-    bool operator==(const Host &other) const { return address == other.address && port == other.port; }
-    bool operator<(const Host &other) const
-    {
-        const int cmp = address.compare(other.address);
-        return cmp < 0 || (!cmp && port < other.port);
-    }
-};
-struct Output {
-    enum Type {
-        StdOut,
-        StdErr
-    };
-    Type type;
-    String text;
-};
-
-class HandshakeMessage : public Message
-{
-public:
-    enum { MessageId = 100 };
-    HandshakeMessage(const String &h = String(), int c = -1)
-        : Message(MessageId), mHostName(h), mCapacity(c)
-    {}
-
-    String hostName() const { return mHostName; }
-    int capacity() const { return mCapacity; }
-
-    virtual void encode(Serializer &serializer) const { serializer << mHostName << mCapacity; }
-    virtual void decode(Deserializer &deserializer) { deserializer >> mHostName >> mCapacity; }
-private:
-    String mHostName;
-    int mCapacity;
-};
 
 struct CompilerArgs
 {
@@ -93,10 +55,93 @@ struct CompilerArgs
     Path sourceFile(int idx = 0) const { return sourceFiles.value(idx); }
 };
 
+struct Host
+{
+    String address;
+    uint16_t port;
+    String toString() const { return String::format<128>("%s:%d", address.constData(), port); }
+    bool operator==(const Host &other) const { return address == other.address && port == other.port; }
+    bool operator<(const Host &other) const
+    {
+        const int cmp = address.compare(other.address);
+        return cmp < 0 || (!cmp && port < other.port);
+    }
+};
+
+
+inline Serializer &operator<<(Serializer &serializer, const Host &host)
+{
+    return serializer << host.address << host.port;
+    return serializer;
+}
+
+inline Deserializer &operator>>(Deserializer &deserializer, Host &host)
+{
+    deserializer >> host.address >> host.port;
+    return deserializer;
+}
+
+struct Output {
+    enum Type {
+        StdOut,
+        StdErr
+    };
+    Type type;
+    String text;
+};
+
+enum {
+    HandshakeMessageId = 100,
+    DaemonListMessageId,
+    ClientJobMessageId,
+    ClientJobResponseMessageId,
+    QuitMessageId,
+    DaemonJobAnnouncementMessageId,
+    ServerJobAnnouncementMessageId,
+    CompilerMessageId,
+    CompilerRequestMessageId,
+    DaemonJobRequestMessageId,
+    DaemonJobResponseMessageId
+};
+
+
+class HandshakeMessage : public Message
+{
+public:
+    enum { MessageId = HandshakeMessageId };
+    HandshakeMessage(const String &h = String(), int c = -1)
+        : Message(MessageId), mHostName(h), mCapacity(c)
+    {}
+
+    String hostName() const { return mHostName; }
+    int capacity() const { return mCapacity; }
+
+    virtual void encode(Serializer &serializer) const { serializer << mHostName << mCapacity; }
+    virtual void decode(Deserializer &deserializer) { deserializer >> mHostName >> mCapacity; }
+private:
+    String mHostName;
+    int mCapacity;
+};
+
+class DaemonListMessage : public Message
+{
+public:
+    enum { MessageId = DaemonListMessageId };
+    DaemonListMessage(const Set<Host> &hosts)
+        : Message(MessageId), mHosts(hosts)
+    {}
+
+    const Set<Host> &hosts() const { return mHosts; }
+    virtual void encode(Serializer &serializer) const { serializer << mHosts; }
+    virtual void decode(Deserializer &deserializer) { deserializer >> mHosts; }
+private:
+    Set<Host> mHosts;
+};
+
 class ClientJobMessage : public Message
 {
 public:
-    enum { MessageId = HandshakeMessage::MessageId + 1 };
+    enum { MessageId = ClientJobMessageId };
 
     ClientJobMessage(int argc = 0, char **argv = 0, const List<String> &environ = List<String>(), const Path &cwd = Path())
         : Message(MessageId), mEnviron(environ), mCwd(cwd)
@@ -120,7 +165,7 @@ private:
 class ClientJobResponseMessage : public Message
 {
 public:
-    enum { MessageId = ClientJobMessage::MessageId + 1 };
+    enum { MessageId = ClientJobResponseMessageId };
 
     ClientJobResponseMessage(int status = -1, const List<Output> &output = List<Output>())
         : Message(MessageId), mStatus(status), mOutput(output)
@@ -139,7 +184,7 @@ private:
 class QuitMessage : public Message
 {
 public:
-    enum { MessageId = ClientJobResponseMessage::MessageId + 1 };
+    enum { MessageId = QuitMessageId };
     QuitMessage()
         : Message(MessageId)
     {}
@@ -148,7 +193,7 @@ public:
 class DaemonJobAnnouncementMessage : public Message
 {
 public:
-    enum { MessageId = QuitMessage::MessageId + 1 };
+    enum { MessageId = DaemonJobAnnouncementMessageId };
     DaemonJobAnnouncementMessage(const Hash<String, int> &announcement = Hash<String, int>())
         : Message(MessageId), mAnnouncement(announcement)
     {}
@@ -164,7 +209,7 @@ private:
 class ServerJobAnnouncementMessage : public Message
 {
 public:
-    enum { MessageId = DaemonJobAnnouncementMessage::MessageId + 1 };
+    enum { MessageId = ServerJobAnnouncementMessageId };
     ServerJobAnnouncementMessage(int count = 0, const String &sha256 = String(), const Path &compiler = Path(),
                                  const String &host = String(), uint16_t port = 0)
         : Message(MessageId), mCount(0), mSha256(sha256), mCompiler(compiler), mHost(host), mPort(port)
@@ -192,7 +237,7 @@ class CompilerPackage;
 class CompilerMessage : public Message
 {
 public:
-    enum { MessageId = ServerJobAnnouncementMessage::MessageId + 1 };
+    enum { MessageId = CompilerMessageId };
     CompilerMessage(const String& sha256 = String()) : Message(MessageId), mPackage(0) { mSha256 = sha256; }
     CompilerMessage(const Path &compiler, const Set<Path> &paths, const String &sha256);
     ~CompilerMessage();
@@ -220,7 +265,7 @@ private:
 class CompilerRequestMessage : public Message
 {
 public:
-    enum { MessageId = CompilerMessage::MessageId + 1 };
+    enum { MessageId = CompilerRequestMessageId };
     CompilerRequestMessage(const String &sha256 = String())
         : Message(MessageId)
     {}
@@ -235,7 +280,7 @@ private:
 class DaemonJobRequestMessage : public Message
 {
 public:
-    enum { MessageId = CompilerRequestMessage::MessageId + 1 };
+    enum { MessageId = DaemonJobRequestMessageId };
     DaemonJobRequestMessage(uint64_t id = 0, const String &sha256 = String())
         : Message(MessageId), mId(id), mSha256(sha256)
     {}
@@ -252,7 +297,7 @@ private:
 class DaemonJobResponseMessage : public Message
 {
 public:
-    enum { MessageId = DaemonJobRequestMessage::MessageId + 1 };
+    enum { MessageId = DaemonJobResponseMessageId };
     DaemonJobResponseMessage(uint64_t id = 0,
                              const String &preprocessed = String(),
                              const List<String> &args = List<String>())
