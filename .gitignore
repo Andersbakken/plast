@@ -9,3 +9,6 @@
 /src/CMakeFiles/
 /src/cmake_install.cmake
 /src/libplast.a
+/.gdb_brestore
+/.gdb_brestore.txt
+/.gdb_history
