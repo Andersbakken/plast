@@ -178,6 +178,7 @@ private:
     Hash<Connection*, RemoteJob*> mRemoteJobsByConnection;
     Hash<Process*, RemoteJob*> mRemoteJobsByProcess;
 
+    Set<std::shared_ptr<Connection> > mConnections;
     bool mExplicitServer;
     Options mOptions;
     SocketServer mLocalServer, mRemoteServer;

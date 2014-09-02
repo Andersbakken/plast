@@ -22,22 +22,32 @@ Daemon::Daemon()
     Console::init("plastd> ",
                   std::bind(&Daemon::handleConsoleCommand, this, std::placeholders::_1),
                   std::bind(&Daemon::handleConsoleCompletion, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5));
-    const auto onNewConnection = [this](SocketServer *server) {
-        while (true) {
-            auto socket = server->nextConnection();
-            if (!socket)
-                break;
-            std::shared_ptr<Connection> conn = std::make_shared<Connection>(socket);
-            conn->disconnected().connect(std::bind(&Daemon::onConnectionDisconnected, this, std::placeholders::_1));
-            conn->newMessage().connect(std::bind(&Daemon::onNewMessage, this, std::placeholders::_1, std::placeholders::_2));
-        }
-    };
-    mLocalServer.newConnection().connect(onNewConnection);
-    mRemoteServer.newConnection().connect(onNewConnection);
+    mLocalServer.newConnection().connect([this](SocketServer *server) {
+            while (true) {
+                auto socket = server->nextConnection();
+                if (!socket)
+                    break;
+                std::shared_ptr<Connection> conn = std::make_shared<Connection>(socket);
+                mConnections.insert(conn);
+                conn->disconnected().connect(std::bind(&Daemon::onConnectionDisconnected, this, std::placeholders::_1));
+                conn->newMessage().connect(std::bind(&Daemon::onNewMessage, this, std::placeholders::_1, std::placeholders::_2));
+            }
+        });
+    mRemoteServer.newConnection().connect([this](SocketServer *server) {
+            while (true) {
+                auto socket = server->nextConnection();
+                if (!socket)
+                    break;
+                std::shared_ptr<Connection> conn = std::make_shared<Connection>(socket);
+                mConnections.insert(conn);
+                conn->disconnected().connect(std::bind(&Daemon::onConnectionDisconnected, this, std::placeholders::_1));
+                conn->newMessage().connect(std::bind(&Daemon::onNewMessage, this, std::placeholders::_1, std::placeholders::_2));
+            }
+        });
     mServerConnection->newMessage().connect(std::bind(&Daemon::onNewMessage, this, std::placeholders::_1, std::placeholders::_2));
     mServerConnection->disconnected().connect(std::bind(&Daemon::restartServerTimer, this));
     mServerConnection->connected().connect([this](Connection *conn) {
-            warning() << "Connected to" << conn->client()->peerString();
+            warning() << "Connected to" << conn->client()->peerString() << "Sending handshake";
             sendHandshake(mServerConnection);
         });
 
@@ -77,14 +87,15 @@ bool Daemon::init(const Options &options)
         Path::rm(options.socketFile);
     }
     if (!success) {
-        error() << "Can't seem to listen on" << mOptions.socketFile;
+        error() << "Can't seem to listen on" << options.socketFile;
         return false;
     }
 
-    if (!mRemoteServer.listen(mOptions.port)) {
-        error() << "Can't seem to listen on" << mOptions.port;
+    if (!mRemoteServer.listen(options.port)) {
+        error() << "Can't seem to listen on" << options.port;
         return false;
     }
+    error() << "Listening" << options.port;
 
     if (options.discoveryPort) {
         mDiscoverySocket.reset(new SocketClient);
@@ -190,14 +201,18 @@ void Daemon::handleDaemonJobRequestMessage(DaemonJobRequestMessage *message, con
 void Daemon::handleDaemonListMessage(DaemonListMessage *message, const std::shared_ptr<Connection> &connection)
 {
     for (const auto &host : message->hosts()) {
+        error() << "Handling daemon list" << host.toString();
         Peer *&peer = mPeersByHost[host];
         if (!peer) {
             auto conn = std::make_shared<Connection>();
+            error() << "Trying to connect to" << host.address << host.port;
             if (conn->connectTcp(host.address, host.port)) {
                 peer = new Peer({ conn, host });
                 mPeersByConnection[conn] = peer;
+                mConnections.insert(conn);
                 conn->disconnected().connect(std::bind(&Daemon::onConnectionDisconnected, this, std::placeholders::_1));
                 conn->newMessage().connect(std::bind(&Daemon::onNewMessage, this, std::placeholders::_1, std::placeholders::_2));
+                error() << "Sending handshake to" << host.toString();
                 sendHandshake(conn);
             } else {
                 error() << "Failed to connect to host" << host.toString();
@@ -209,12 +224,15 @@ void Daemon::handleDaemonListMessage(DaemonListMessage *message, const std::shar
 
 void Daemon::handleHandshakeMessage(HandshakeMessage *message, const std::shared_ptr<Connection> &connection)
 {
-    if (Peer *peer = mPeersByConnection.value(connection)) {
-        peer->host.friendlyName = message->friendlyName();
-        error() << "Got handshake from" << peer->host.friendlyName;
+    Peer *&peer = mPeersByConnection[connection];
+    Host host { connection->client()->peerName(), message->port(), message->friendlyName() };
+    if (!peer) {
+        peer = new Peer({ connection, host });
+        mPeersByHost[host] = peer;
     } else {
-        error() << "Got handshake from unknown peer" << message->friendlyName() << connection->client()->peerName();
+        peer->host = host;
     }
+    error() << "Got handshake from" << peer->host.friendlyName;
 }
 
 void Daemon::reconnectToServer()
@@ -440,7 +458,7 @@ void Daemon::announceJobs()
 
 void Daemon::onConnectionDisconnected(Connection *conn)
 {
-    debug() << "Lost connection" << conn;
+    error() << "Lost connection" << conn->client()->port();
     std::shared_ptr<Connection> c = conn->shared_from_this();
     if (std::shared_ptr<LocalJob> job = mLocalJobsByLocalConnection.take(c)) {
         if (job->flags & LocalJob::Preprocessing) {
@@ -460,6 +478,7 @@ void Daemon::onConnectionDisconnected(Connection *conn)
         mPeersByHost.remove(peer->host);
         delete peer;
     }
+    mConnections.remove(c);
 }
 
 Process *Daemon::startProcess(const List<String> &arguments, const List<String> &environ, const Path &cwd, String *err)
@@ -515,13 +534,17 @@ void Daemon::handleConsoleCommand(const String &string)
         }
     } else if (str == "quit") {
         EventLoop::eventLoop()->quit();
+    } else if (str == "peers") {
+        for (const auto &peer : mPeersByHost) {
+            printf("Peer: %s\n", peer.first.toString().constData());
+        }
     }
 }
 
 void Daemon::handleConsoleCompletion(const String& string, int, int,
                                      String &common, List<String> &candidates)
 {
-    static const List<String> cands = List<String>() << "jobs" << "quit";
+    static const List<String> cands = List<String>() << "jobs" << "quit" << "peers";
     auto res = Console::tryComplete(string, cands);
     // error() << res.text << res.candidates;
     common = res.text;

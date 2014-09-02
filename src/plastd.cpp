@@ -146,6 +146,7 @@ int main(int argc, char** argv)
     loop->init(EventLoop::MainEventLoop|EventLoop::EnableSigIntHandler);
 
     Daemon daemon;
+    error() << options.port;
     if (!daemon.init(options))
         return 1;
 

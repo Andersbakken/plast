@@ -118,9 +118,12 @@ void Server::onNewMessage(Message *message, Connection *connection)
             }
         }
         HandshakeMessage *handShake = static_cast<HandshakeMessage*>(message);
-        node = new Node({ Host({connection->client()->peerName(), handShake->port(), handShake->friendlyName()}), handShake->capacity(), 0, 0 });
+        String peerName = connection->client()->peerName();
+        if (peerName == "127.0.0.1")
+            peerName = handShake->friendlyName();
+        node = new Node({ Host({ peerName, handShake->port(), handShake->friendlyName()}), handShake->capacity(), 0, 0 });
         connection->send(DaemonListMessage(nodes));
-        error() << "Got handshake from" << handShake->friendlyName();
+        error() << "Got handshake from" << connection->client()->peerName() << handShake->friendlyName() << nodes.size();
         break;
     }
 }
@@ -137,7 +140,7 @@ void Server::handleConsoleCommand(const String &string)
     String str = string;
     while (str.endsWith(' '))
         str.chop(1);
-    if (str == "nodes") {
+    if (str == "hosts") {
         for (const auto &it : mNodes) {
             printf("Node: %s Capacity: %d Jobs sent: %d Jobs received: %d\n",
                    it.second->host.toString().constData(), it.second->capacity,
@@ -151,7 +154,7 @@ void Server::handleConsoleCommand(const String &string)
 void Server::handleConsoleCompletion(const String& string, int, int,
                                      String &common, List<String> &candidates)
 {
-    static const List<String> cands = List<String>() << "nodes" << "quit";
+    static const List<String> cands = List<String>() << "hosts" << "quit";
     auto res = Console::tryComplete(string, cands);
     // error() << res.text << res.candidates;
     common = res.text;
