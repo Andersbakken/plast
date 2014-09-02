@@ -58,6 +58,7 @@ private:
     void handleCompilerRequestMessage(CompilerRequestMessage *message, const std::shared_ptr<Connection> &connection);
     void handleDaemonJobRequestMessage(DaemonJobRequestMessage *message, const std::shared_ptr<Connection> &connection);
     void handleDaemonListMessage(DaemonListMessage *message, const std::shared_ptr<Connection> &connection);
+    void handleHandshakeMessage(HandshakeMessage *message, const std::shared_ptr<Connection> &connection);
     void reconnectToServer();
     void onDiscoverySocketReadyRead(Buffer &&data, const String &ip);
 
@@ -66,7 +67,7 @@ private:
     void onCompileProcessReadyReadStdErr(Process *process);
     void onCompileProcessFinished(Process *process);
     void startJobs();
-    void sendHandshake();
+    void sendHandshake(const std::shared_ptr<Connection> &conn);
     void announceJobs();
 
     Process *startProcess(const List<String> &arguments, const List<String> &environ,
@@ -156,7 +157,12 @@ private:
     Hash<std::shared_ptr<Connection>, std::shared_ptr<LocalJob> > mLocalJobsByLocalConnection, mLocalJobsByRemoteConnection;
     Hash<Process*, std::shared_ptr<LocalJob> > mLocalCompileJobsByProcess, mPreprocessJobsByProcess;
 
-    Map<Host, std::shared_ptr<Connection> > mHosts;
+    struct Peer {
+        std::shared_ptr<Connection> connection;
+        Host host;
+    };
+    Hash<Host, Peer*> mPeersByHost;
+    Hash<std::shared_ptr<Connection>, Peer*> mPeersByConnection;
 
     Hash<String, int> mLastAnnouncements;
 
@@ -175,7 +181,6 @@ private:
     bool mExplicitServer;
     Options mOptions;
     SocketServer mLocalServer, mRemoteServer;
-    bool mSentHandshake;
     std::shared_ptr<SocketClient> mDiscoverySocket;
     std::shared_ptr<Connection> mServerConnection;
     Timer mServerTimer, mJobAnnouncementTimer;

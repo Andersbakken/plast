@@ -118,7 +118,7 @@ void Server::onNewMessage(Message *message, Connection *connection)
             }
         }
         HandshakeMessage *handShake = static_cast<HandshakeMessage*>(message);
-        node = new Node({ Host({connection->client()->peerName(), handShake->port()}), handShake->friendlyName(), handShake->capacity(), 0, 0 });
+        node = new Node({ Host({connection->client()->peerName(), handShake->port(), handShake->friendlyName()}), handShake->capacity(), 0, 0 });
         connection->send(DaemonListMessage(nodes));
         error() << "Got handshake from" << handShake->friendlyName();
         break;
@@ -128,7 +128,7 @@ void Server::onNewMessage(Message *message, Connection *connection)
 void Server::onConnectionDisconnected(Connection *connection)
 {
     Node *node = mNodes.take(connection->shared_from_this());
-    error() << "Lost connection to" << (node ? node->friendyName : "someone");
+    error() << "Lost connection to" << (node ? node->host.toString().constData() : "someone");
     delete node;
 }
 
@@ -139,8 +139,8 @@ void Server::handleConsoleCommand(const String &string)
         str.chop(1);
     if (str == "nodes") {
         for (const auto &it : mNodes) {
-            printf("Node: %s (%s) Capacity: %d Jobs sent: %d Jobs received: %d\n",
-                   it.second->friendyName.constData(), it.second->host.toString().constData(), it.second->capacity,
+            printf("Node: %s Capacity: %d Jobs sent: %d Jobs received: %d\n",
+                   it.second->host.toString().constData(), it.second->capacity,
                    it.second->jobsSent, it.second->jobsReceived);
         }
     } else if (str == "quit") {

@@ -59,7 +59,8 @@ struct Host
 {
     String address;
     uint16_t port;
-    String toString() const { return String::format<128>("%s:%d", address.constData(), port); }
+    String friendlyName;
+    String toString() const { return String::format<128>("%s:%d", friendlyName.isEmpty() ? address.constData() : friendlyName.constData(), port); }
     bool operator==(const Host &other) const { return address == other.address && port == other.port; }
     bool operator<(const Host &other) const
     {
@@ -68,16 +69,28 @@ struct Host
     }
 };
 
+namespace std
+{
+template <> struct hash<Host> : public unary_function<Host, size_t>
+{
+    size_t operator()(const Host& value) const
+    {
+        std::hash<String> h1;
+        std::hash<uint16_t> h2;
+        return h1(value.address) | h2(value.port);
+    }
+};
+}
 
 inline Serializer &operator<<(Serializer &serializer, const Host &host)
 {
-    return serializer << host.address << host.port;
+    serializer << host.address << host.port << host.friendlyName;
     return serializer;
 }
 
 inline Deserializer &operator>>(Deserializer &deserializer, Host &host)
 {
-    deserializer >> host.address >> host.port;
+    deserializer >> host.address >> host.port >> host.friendlyName;
     return deserializer;
 }
 

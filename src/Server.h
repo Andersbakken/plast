@@ -40,7 +40,6 @@ private:
     SocketServer mServer;
     struct Node {
         Host host;
-        String friendyName;
         int capacity, jobsSent, jobsReceived;
     };
     Hash<std::shared_ptr<Connection>, Node*> mNodes;
