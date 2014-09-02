@@ -92,6 +92,19 @@ int main(int argc, char** argv)
 
     Plast::init();
 
+    // HandshakeMessage message("", 12);
+    // String out;
+    // Serializer s(out);
+    // message.encode(s);
+    // Deserializer d(out);
+    // HandshakeMessage msg2;
+    // msg2.decode(d);
+    // printf("%s:%d %s:%d\n", message.friendlyName().constData(), message.port(),
+    //        msg2.friendlyName().constData(), msg2.port());
+    // return 0;
+
+
+
     Daemon::Options options = {
         Config::value<String>("socket"),
         Plast::DefaultServerPort,

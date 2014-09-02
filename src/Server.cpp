@@ -139,8 +139,8 @@ void Server::handleConsoleCommand(const String &string)
         str.chop(1);
     if (str == "nodes") {
         for (const auto &it : mNodes) {
-            printf("Node: %s Capacity: %d Jobs sent: %d Jobs received: %d\n",
-                   it.second->friendyName.constData(), it.second->capacity,
+            printf("Node: %s (%s) Capacity: %d Jobs sent: %d Jobs received: %d\n",
+                   it.second->friendyName.constData(), it.second->host.toString().constData(), it.second->capacity,
                    it.second->jobsSent, it.second->jobsReceived);
         }
     } else if (str == "quit") {

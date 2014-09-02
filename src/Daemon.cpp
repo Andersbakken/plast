@@ -222,7 +222,7 @@ void Daemon::sendHandshake()
 {
     if (!mSentHandshake) {
         mSentHandshake = true;
-        mServerConnection->send(HandshakeMessage(Rct::hostName(), mOptions.jobCount, mOptions.port));
+        mServerConnection->send(HandshakeMessage(Rct::hostName(), mOptions.port, mOptions.jobCount));
     }
 }
 
