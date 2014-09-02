@@ -53,7 +53,7 @@ std::shared_ptr<Compiler> Compiler::compiler(const Path &compiler, const String 
     std::shared_ptr<Compiler> &c = sByPath[compiler];
     assert(!c);
     const Path resolved = compiler.resolved();
-    std::shared_ptr<Compiler> &resolvedCompiler = sByPath[compiler];
+    std::shared_ptr<Compiler> &resolvedCompiler = sByPath[resolved];
     if (resolvedCompiler) {
         c = resolvedCompiler;
         return c;
