@@ -356,7 +356,7 @@ void Daemon::startJobs()
     debug() << "startJobs" << mOptions.jobCount << mOptions.preprocessCount << mPreprocessJobsByProcess.size()
             << mLocalCompileJobsByProcess.size() << mRemoteJobsByProcess.size();
     while (mPreprocessJobsByProcess.size() < mOptions.preprocessCount && !mPendingPreprocessJobs.isEmpty()) {
-        auto job = mPendingPreprocessJobs.takeFirst();
+        auto job = mPendingPreprocessJobs.first();
         job->process = new Process;
         assert(job->flags & LocalJob::PendingPreprocessing);
         removeLocalJob(job);
