@@ -109,11 +109,11 @@ bool Daemon::init(const Options &options)
             });
     }
 
-    if (mOptions.flags & Options::NoLocalJobs) {
-        mSelfConnection = std::make_shared<Connection>();
-        mSelfConnection->connectUnix(options.socketFile);
-        mSelfConnection->newMessage().connect(std::bind(&Daemon::onNewMessage, this, std::placeholders::_1, std::placeholders::_2));
-    }
+    // if (mOptions.flags & Options::NoLocalJobs) {
+    //     mSelfConnection = std::make_shared<Connection>();
+    //     mSelfConnection->connectUnix(options.socketFile);
+    //     mSelfConnection->newMessage().connect(std::bind(&Daemon::onNewMessage, this, std::placeholders::_1, std::placeholders::_2));
+    // }
 
     mOptions = options;
     mExplicitServer = !mOptions.serverHost.isEmpty();
@@ -211,6 +211,7 @@ void Daemon::handleDaemonJobRequestMessage(const DaemonJobRequestMessage *messag
 
 void Daemon::handleDaemonListMessage(const DaemonListMessage *message, const std::shared_ptr<Connection> &connection)
 {
+    error() << "Got daemon-list" << message->hosts().size();
     for (const auto &host : message->hosts()) {
         error() << "Handling daemon list" << host.toString();
         Peer *&peer = mPeersByHost[host];
@@ -472,7 +473,7 @@ void Daemon::announceJobs()
 {
     assert(mAnnouncementPending);
     mAnnouncementPending = false;
-    if (!mPeersByConnection.isEmpty() || mOptions.flags & Options::NoLocalJobs) {
+    if (!mPeersByConnection.isEmpty() /* || mOptions.flags & Options::NoLocalJobs */) {
         Hash<String, int> announcements;
         for (const auto &it : mPendingCompileJobs) {
             assert(it->compiler);
@@ -499,9 +500,9 @@ void Daemon::announceJobs()
         for (const auto &connection : mPeersByConnection) {
             connection.first->send(msg);
         }
-        if (mOptions.flags & Options::NoLocalJobs && mSelfConnection && mSelfConnection->isConnected()) {
-            handleDaemonJobAnnouncementMessage(&msg, mSelfConnection);
-        }
+        // if (mOptions.flags & Options::NoLocalJobs && mSelfConnection && mSelfConnection->isConnected()) {
+        //     handleDaemonJobAnnouncementMessage(&msg, mSelfConnection);
+        // }
     }
 }
 
