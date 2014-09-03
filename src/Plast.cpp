@@ -72,11 +72,12 @@ public:
     CompilerPackage()
     {
     }
-    CompilerPackage(const Hash<Path, String> &files) : mFiles(files)
+    CompilerPackage(const Path &executable, const Hash<Path, String> &files)
+        : mExecutable(executable), mFiles(files)
     {
     }
 
-    static CompilerPackage *loadFromPaths(const Set<Path> &paths);
+    static CompilerPackage *loadFromPaths(const Path &executable, const Set<Path> &paths);
 
     bool isEmpty() const
     {
@@ -84,27 +85,27 @@ public:
     }
     bool loadFile(const Path &file);
 
-    const Hash<Path, String> &files() const
-    {
-        return mFiles;
-    }
-
+    const Path &executable() const { return mExecutable; }
+    const Hash<Path, String> &files() const { return mFiles; }
 private:
+    Path mExecutable;
     Hash<Path, String> mFiles;
 };
 
-CompilerPackage *CompilerPackage::loadFromPaths(const Set<Path> &paths)
+CompilerPackage *CompilerPackage::loadFromPaths(const Path &executable, const Set<Path> &paths)
 {
     CompilerPackage *package = new CompilerPackage;
-    Set<Path>::const_iterator path = paths.begin();
-    const Set<Path>::const_iterator end = paths.end();
-    while (path != end) {
-        if (!package->loadFile(*path)) {
-            error() << "Failed to load file" << *path;
+    if (!package->loadFile(executable)) {
+        delete package;
+        return 0;
+    }
+    package->mExecutable = executable;
+    for (const auto &it : paths) {
+        if (!package->loadFile(it)) {
+            error() << "Failed to load file" << it;
             delete package;
             return 0;
         }
-        ++path;
     }
     if (package->isEmpty()) {
         error() << "package is empty" << paths;
@@ -125,21 +126,23 @@ bool CompilerPackage::loadFile(const Path &file)
 
 Serializer &operator<<(Serializer &s, const CompilerPackage &p)
 {
-    s << p.files();
+    s << p.executable() << p.files();
     return s;
 }
 
 Deserializer &operator>>(Deserializer &s, CompilerPackage &p)
 {
+    Path compiler;
     Hash<Path, String> files;
-    s >> files;
-    p = CompilerPackage(files);
+    s >> compiler >> files;
+    p = CompilerPackage(compiler, files);
     return s;
 }
 
 Hash<String, CompilerPackage *> CompilerMessage::sPackages;
 
-CompilerMessage::CompilerMessage(const std::shared_ptr<Compiler> &compiler) : Message(MessageId, Compressed), mPackage(0)
+CompilerMessage::CompilerMessage(const std::shared_ptr<Compiler> &compiler)
+    : Message(MessageId, Compressed), mPackage(0)
 {
     if (compiler) {
         mSha256 = compiler->sha256();
@@ -159,9 +162,8 @@ CompilerMessage::CompilerMessage(const std::shared_ptr<Compiler> &compiler) : Me
           }
         */
 
-        mPackage = loadCompiler(compiler->files());
+        mPackage = loadCompiler(compiler->path(), compiler->files());
         if (mPackage) {
-            fflush(stdout);
             sPackages[mSha256] = mPackage;
         }
     }
@@ -171,10 +173,10 @@ CompilerMessage::~CompilerMessage()
 {
 }
 
-CompilerPackage *CompilerMessage::loadCompiler(const Set<Path> &paths)
+CompilerPackage *CompilerMessage::loadCompiler(const Path &compiler, const Set<Path> &paths)
 {
     error() << "loading" << paths;
-    return CompilerPackage::loadFromPaths(paths);
+    return CompilerPackage::loadFromPaths(compiler, paths);
 }
 
 void CompilerMessage::encode(Serializer &serializer) const
@@ -203,14 +205,19 @@ bool CompilerMessage::writeFiles(const Path &root) const
         return false;
 
     Path::mkdir(root);
+    const char *compilerFileName = mCompiler.fileName();
     for (const auto &file : mPackage->files()) {
         // const Path path = root + file.first;
         // Path::mkdir(path.parentDir(), Path::Recursive);
-        const Path path = root + file.first.fileName();
+        const char *fileName = file.first.fileName();
+        const Path path = root + fileName;
         // Path::mkdir(path.parentDir(), Path::Recursive);
         if (!Rct::writeFile(path, file.second)) {
             error() << "Couldn't write file" << path;
             return false;
+        }
+        if (!strcmp(fileName, compilerFileName) && symlink(path.constData(), (root + "COMPILER").constData())) {
+            error() << "Failed to create symlink" << errno << strerror(errno) << path << (root + "COMPILER");
         }
     }
     return true;

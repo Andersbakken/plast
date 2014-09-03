@@ -15,6 +15,7 @@
 
 #include "Daemon.h"
 #include "Compiler.h"
+#include <rct/SHA256.h>
 
 Daemon::Daemon()
     : mExplicitServer(false), mAnnouncementPending(false), mServerConnection(std::make_shared<Connection>())
@@ -116,6 +117,24 @@ bool Daemon::init(const Options &options)
     // }
 
     mOptions = options;
+
+    for (const Path &path : mOptions.cacheDir.files(Path::Directory)) {
+        error() << path;
+        SHA256 sha;
+        List<Path> files = path.files(Path::File);
+        files.sort();
+        for (const Path &file : files) {
+            sha.update(file.fileName());
+        }
+        const String sha256 = sha.hash(SHA256::Hex);
+        if (sha256 != path.fileName()) {
+            error() << "Invalid compiler" << path << sha256;
+            Path::rmdir(path);
+        } else {
+            // Compiler::insert(
+        }
+    }
+
     mExplicitServer = !mOptions.serverHost.isEmpty();
     reconnectToServer();
 
@@ -253,11 +272,8 @@ void Daemon::handleDaemonJobAnnouncementMessage(const DaemonJobAnnouncementMessa
 {
     error() << "Got announcement" << message->announcement() << "from" << connection->client()->peerString();
     for (const auto &announcement : message->announcement()) {
-        printf("[%s:%d]: for (const auto &announcement : message->announcement()) {\n", __FILE__, __LINE__); fflush(stdout);
         if (auto compiler = Compiler::compilerBySha256(announcement.first)) {
-            printf("[%s:%d]: if (auto compiler = Compiler::compilerBySha256(announcement.first)) {\n", __FILE__, __LINE__); fflush(stdout);
         } else {
-            printf("[%s:%d]: } else {\n", __FILE__, __LINE__); fflush(stdout);
             error() << "requesting compiler" << announcement.first;
             connection->send(CompilerRequestMessage(announcement.first));
         }

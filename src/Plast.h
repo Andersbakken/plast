@@ -249,7 +249,7 @@ public:
 
     bool writeFiles(const Path& path) const;
 private:
-    CompilerPackage* loadCompiler(const Set<Path> &paths);
+    CompilerPackage* loadCompiler(const Path &compiler, const Set<Path> &paths);
 
 private:
     static Hash<String, CompilerPackage*> sPackages; // keyed on sha256

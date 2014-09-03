@@ -1,3 +1,18 @@
+/* This file is part of Plast.
+
+   Plast is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+
+   Plast is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with Plast.  If not, see <http://www.gnu.org/licenses/>. */
+
 #include "Compiler.h"
 #include <rct/Log.h>
 #include <rct/Process.h>
@@ -107,6 +122,8 @@ std::shared_ptr<Compiler> Compiler::compiler(const Path &compiler, const String 
     }
     c.reset(new Compiler);
     const List<String> lines = process.readAllStdOut().split('\n');
+    List<String> shaList;
+    shaList.append(compiler);
     for (const String &line : lines) {
         const int idx = line.indexOf("=> /");
         if (idx == -1)
@@ -116,12 +133,17 @@ std::shared_ptr<Compiler> Compiler::compiler(const Path &compiler, const String 
             continue;
         const Path path = Path::resolved(line.mid(idx + 3, end - idx - 3));
         if (path.isFile()) {
-            sha.update(path.fileName());
+            shaList.append(path.fileName());
             c->mFiles.insert(path);
         } else {
             error() << "Couldn't resolve path" << line.mid(idx + 3, end - idx - 3);
         }
     }
+    shaList.sort();
+    for (const String &s : shaList) {
+        sha.update(s);
+    }
+
 #endif
     if (c) {
         c->mSha256 = sha.hash(SHA256::Hex);
@@ -147,4 +169,15 @@ String Compiler::dump()
         }
     }
     return ret;
+}
+void Compiler::insert(const Path &executable, const String &sha256, const Set<Path> &files)
+{
+    std::shared_ptr<Compiler> &c = sBySha[sha256];
+    assert(!c);
+    assert(!sByPath.contains(executable));
+    c.reset(new Compiler);
+    c->mPath = executable;
+    c->mSha256 = sha256;
+    c->mFiles = files;
+    sByPath[executable] = c;
 }
