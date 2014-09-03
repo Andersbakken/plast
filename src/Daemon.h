@@ -53,12 +53,12 @@ private:
     void restartServerTimer();
     void onNewMessage(Message *message, Connection *connection);
     void handleClientJobMessage(ClientJobMessage *msg, const std::shared_ptr<Connection> &conn);
-    void handleServerJobAnnouncementMessage(ServerJobAnnouncementMessage *message, const std::shared_ptr<Connection> &conn);
     void handleCompilerMessage(CompilerMessage* message, const std::shared_ptr<Connection> &connection);
     void handleCompilerRequestMessage(CompilerRequestMessage *message, const std::shared_ptr<Connection> &connection);
     void handleDaemonJobRequestMessage(DaemonJobRequestMessage *message, const std::shared_ptr<Connection> &connection);
     void handleDaemonListMessage(DaemonListMessage *message, const std::shared_ptr<Connection> &connection);
     void handleHandshakeMessage(HandshakeMessage *message, const std::shared_ptr<Connection> &connection);
+    void handleDaemonJobAnnouncementMessage(DaemonJobAnnouncementMessage *message, const std::shared_ptr<Connection> &connection);
     void reconnectToServer();
     void onDiscoverySocketReadyRead(Buffer &&data, const String &ip);
 
@@ -70,19 +70,20 @@ private:
     void sendHandshake(const std::shared_ptr<Connection> &conn);
     void announceJobs();
 
-    Process *startProcess(const List<String> &arguments, const List<String> &environ,
-                          const Path &cwd, String *error);
+    Process *startProcess(const Path &compiler, const List<String> &arguments,
+                          const List<String> &environ, const Path &cwd, String *error);
 
     struct LocalJob {
-        LocalJob(const List<String> &args, const List<String> &env, const Path &dir,
+        LocalJob(const List<String> &args, const Path &resolved, const List<String> &env, const Path &dir,
                  std::shared_ptr<Compiler> &c, const std::shared_ptr<Connection> &conn)
-            : received(time(0)), arguments(CompilerArgs::create(args)), environ(env), cwd(dir),
-              process(0), flags(0), compiler(c), localConnection(conn)
+            : received(time(0)), arguments(CompilerArgs::create(args)), resolvedCompiler(resolved),
+              environ(env), cwd(dir), process(0), flags(0), compiler(c), localConnection(conn)
         {
         }
 
         time_t received;
         CompilerArgs arguments;
+        Path resolvedCompiler;
         List<String> environ;
         Path cwd;
         List<Output> output;
@@ -94,7 +95,7 @@ private:
             Preprocessing = 0x04,
             PendingCompiling = 0x08,
             Compiling = 0x10,
-            StateMask = PendingPreprocessing|Preprocessing|PendingPreprocessing|PendingCompiling
+            StateMask = Preprocessing|PendingPreprocessing|PendingCompiling|Compiling
         };
 
         String preprocessed;
@@ -179,12 +180,12 @@ private:
     Hash<Process*, RemoteJob*> mRemoteJobsByProcess;
 
     Set<std::shared_ptr<Connection> > mConnections;
-    bool mExplicitServer;
+    bool mExplicitServer, mAnnouncementPending;
     Options mOptions;
     SocketServer mLocalServer, mRemoteServer;
     std::shared_ptr<SocketClient> mDiscoverySocket;
     std::shared_ptr<Connection> mServerConnection;
-    Timer mServerTimer, mJobAnnouncementTimer;
+    Timer mServerTimer;
 };
 
 #endif

@@ -13,6 +13,7 @@ class Compiler
 public:
     static std::shared_ptr<Compiler> compiler(const Path& executable, const String& path = String());
     static std::shared_ptr<Compiler> compilerBySha256(const String &sha256) { return sBySha.value(sha256); }
+    static String dump();
     static void cleanup();
 
     String sha256() const { return mSha256; }

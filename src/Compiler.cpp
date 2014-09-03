@@ -108,3 +108,14 @@ std::shared_ptr<Compiler> Compiler::compiler(const Path &compiler, const String 
     }
     return c;
 }
+
+String Compiler::dump()
+{
+    String ret;
+    for (const auto &compiler : sBySha) {
+        if (!ret.isEmpty())
+            ret << '\n';
+        ret << compiler.first << ": " << compiler.second->path();
+    }
+    return ret;
+}

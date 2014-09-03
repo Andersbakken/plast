@@ -17,6 +17,7 @@
 #define Plast_h
 
 #include <rct/Message.h>
+#include "Compiler.h"
 
 namespace Plast {
 Path resolveCompiler(const Path &path);
@@ -110,7 +111,6 @@ enum {
     ClientJobResponseMessageId,
     QuitMessageId,
     DaemonJobAnnouncementMessageId,
-    ServerJobAnnouncementMessageId,
     CompilerMessageId,
     CompilerRequestMessageId,
     DaemonJobRequestMessageId,
@@ -221,40 +221,13 @@ private:
     Hash<String, int> mAnnouncement;
 };
 
-class ServerJobAnnouncementMessage : public Message
-{
-public:
-    enum { MessageId = ServerJobAnnouncementMessageId };
-    ServerJobAnnouncementMessage(int count = 0, const String &sha256 = String(), const Path &compiler = Path(),
-                                 const String &host = String(), uint16_t port = 0)
-        : Message(MessageId), mCount(0), mSha256(sha256), mCompiler(compiler), mHost(host), mPort(port)
-    {}
-
-    int count() const { return mCount; }
-    const String &sha256() const { return mSha256; }
-    const Path &compiler() const { return mCompiler; }
-
-    const String &host() const { return mHost; }
-    uint16_t port() const { return mPort; }
-
-    virtual void encode(Serializer &serializer) const { serializer << mCount << mSha256 << mCompiler; }
-    virtual void decode(Deserializer &deserializer) { deserializer >> mCount >> mSha256 >> mCompiler; }
-private:
-    int mCount;
-    String mSha256;
-    Path mCompiler;
-    String mHost;
-    uint16_t mPort;
-};
-
 class CompilerPackage;
 
 class CompilerMessage : public Message
 {
 public:
     enum { MessageId = CompilerMessageId };
-    CompilerMessage(const String& sha256 = String()) : Message(MessageId), mPackage(0) { mSha256 = sha256; }
-    CompilerMessage(const Path &compiler, const Set<Path> &paths, const String &sha256);
+    CompilerMessage(const std::shared_ptr<Compiler> &compiler = std::shared_ptr<Compiler>());
     ~CompilerMessage();
 
     virtual void encode(Serializer &serializer) const;
@@ -270,7 +243,7 @@ private:
     CompilerPackage* loadCompiler(const Set<Path> &paths);
 
 private:
-    static Map<Path, CompilerPackage*> sPackages;
+    static Map<String, CompilerPackage*> sPackages; // keyed on sha256
 
     Path mCompiler;
     String mSha256;
@@ -282,8 +255,9 @@ class CompilerRequestMessage : public Message
 public:
     enum { MessageId = CompilerRequestMessageId };
     CompilerRequestMessage(const String &sha256 = String())
-        : Message(MessageId)
-    {}
+        : Message(MessageId), mSha256(sha256)
+    {
+    }
 
     const String &sha256() const { return mSha256; }
     virtual void encode(Serializer &serializer) const { serializer << mSha256; }
