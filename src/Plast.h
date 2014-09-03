@@ -237,7 +237,7 @@ public:
 
     bool isValid() const { return mPackage != 0; }
 
-    bool writeFiles(const Path& path);
+    bool writeFiles(const Path& path) const;
 
 private:
     CompilerPackage* loadCompiler(const Set<Path> &paths);
@@ -290,7 +290,7 @@ public:
     DaemonJobResponseMessage(uint64_t id = 0,
                              const String &preprocessed = String(),
                              const List<String> &args = List<String>())
-        : Message(MessageId), mId(id), mPreprocessed(preprocessed), mArgs(args)
+        : Message(MessageId, Compressed), mId(id), mPreprocessed(preprocessed), mArgs(args)
     {}
 
     uint64_t id() const { return mId; }

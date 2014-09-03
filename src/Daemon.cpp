@@ -109,6 +109,12 @@ bool Daemon::init(const Options &options)
             });
     }
 
+    if (mOptions.flags & Options::NoLocalJobs) {
+        mSelfConnection = std::make_shared<Connection>();
+        mSelfConnection->connectUnix(options.socketFile);
+        mSelfConnection->newMessage().connect(std::bind(&Daemon::onNewMessage, this, std::placeholders::_1, std::placeholders::_2));
+    }
+
     mOptions = options;
     mExplicitServer = !mOptions.serverHost.isEmpty();
     reconnectToServer();
@@ -151,7 +157,7 @@ void Daemon::onNewMessage(Message *message, Connection *conn)
     }
 }
 
-void Daemon::handleClientJobMessage(ClientJobMessage *msg, const std::shared_ptr<Connection> &conn)
+void Daemon::handleClientJobMessage(const ClientJobMessage *msg, const std::shared_ptr<Connection> &conn)
 {
     debug() << "Got localjob" << msg->arguments() << msg->environ() << msg->cwd();
 
@@ -176,9 +182,8 @@ void Daemon::handleClientJobMessage(ClientJobMessage *msg, const std::shared_ptr
     startJobs();
 }
 
-void Daemon::handleCompilerMessage(CompilerMessage *message, const std::shared_ptr<Connection> &connection)
+void Daemon::handleCompilerMessage(const CompilerMessage *message, const std::shared_ptr<Connection> &connection)
 {
-    printf("[%s:%d]: void Daemon::handleCompilerMessage(CompilerMessage *message, const std::shared_ptr<Connection> &connection)\n", __FILE__, __LINE__); fflush(stdout);
     assert(message->isValid());
     if (!message->writeFiles(mOptions.cacheDir)) {
         error() << "Couldn't write files to" << mOptions.cacheDir;
@@ -187,9 +192,8 @@ void Daemon::handleCompilerMessage(CompilerMessage *message, const std::shared_p
     }
 }
 
-void Daemon::handleCompilerRequestMessage(CompilerRequestMessage *message, const std::shared_ptr<Connection> &connection)
+void Daemon::handleCompilerRequestMessage(const CompilerRequestMessage *message, const std::shared_ptr<Connection> &connection)
 {
-    printf("[%s:%d]: void Daemon::handleCompilerRequestMessage(CompilerRequestMessage *message, const std::shared_ptr<Connection> &connection)\n", __FILE__, __LINE__); fflush(stdout);
     std::shared_ptr<Compiler> compiler = Compiler::compilerBySha256(message->sha256());
     if (compiler) {
         error() << "Sending compiler" << message->sha256();
@@ -200,12 +204,12 @@ void Daemon::handleCompilerRequestMessage(CompilerRequestMessage *message, const
     }
 }
 
-void Daemon::handleDaemonJobRequestMessage(DaemonJobRequestMessage *message, const std::shared_ptr<Connection> &connection)
+void Daemon::handleDaemonJobRequestMessage(const DaemonJobRequestMessage *message, const std::shared_ptr<Connection> &connection)
 {
 
 }
 
-void Daemon::handleDaemonListMessage(DaemonListMessage *message, const std::shared_ptr<Connection> &connection)
+void Daemon::handleDaemonListMessage(const DaemonListMessage *message, const std::shared_ptr<Connection> &connection)
 {
     for (const auto &host : message->hosts()) {
         error() << "Handling daemon list" << host.toString();
@@ -229,7 +233,7 @@ void Daemon::handleDaemonListMessage(DaemonListMessage *message, const std::shar
     }
 }
 
-void Daemon::handleHandshakeMessage(HandshakeMessage *message, const std::shared_ptr<Connection> &connection)
+void Daemon::handleHandshakeMessage(const HandshakeMessage *message, const std::shared_ptr<Connection> &connection)
 {
     Peer *&peer = mPeersByConnection[connection];
     Host host { connection->client()->peerName(), message->port(), message->friendlyName() };
@@ -242,13 +246,15 @@ void Daemon::handleHandshakeMessage(HandshakeMessage *message, const std::shared
     error() << "Got handshake from" << peer->host.friendlyName;
 }
 
-void Daemon::handleDaemonJobAnnouncementMessage(DaemonJobAnnouncementMessage *message, const std::shared_ptr<Connection> &connection)
+void Daemon::handleDaemonJobAnnouncementMessage(const DaemonJobAnnouncementMessage *message, const std::shared_ptr<Connection> &connection)
 {
     error() << "Got announcement" << message->announcement() << "from" << connection->client()->peerString();
     for (const auto &announcement : message->announcement()) {
+        printf("[%s:%d]: for (const auto &announcement : message->announcement()) {\n", __FILE__, __LINE__); fflush(stdout);
         if (auto compiler = Compiler::compilerBySha256(announcement.first)) {
-
+            printf("[%s:%d]: if (auto compiler = Compiler::compilerBySha256(announcement.first)) {\n", __FILE__, __LINE__); fflush(stdout);
         } else {
+            printf("[%s:%d]: } else {\n", __FILE__, __LINE__); fflush(stdout);
             error() << "requesting compiler" << announcement.first;
             connection->send(CompilerRequestMessage(announcement.first));
         }
@@ -466,7 +472,7 @@ void Daemon::announceJobs()
 {
     assert(mAnnouncementPending);
     mAnnouncementPending = false;
-    if (!mPeersByConnection.isEmpty()) {
+    if (!mPeersByConnection.isEmpty() || mOptions.flags & Options::NoLocalJobs) {
         Hash<String, int> announcements;
         for (const auto &it : mPendingCompileJobs) {
             assert(it->compiler);
@@ -492,6 +498,9 @@ void Daemon::announceJobs()
         const DaemonJobAnnouncementMessage msg(announcements);
         for (const auto &connection : mPeersByConnection) {
             connection.first->send(msg);
+        }
+        if (mOptions.flags & Options::NoLocalJobs && mSelfConnection && mSelfConnection->isConnected()) {
+            handleDaemonJobAnnouncementMessage(&msg, mSelfConnection);
         }
     }
 }

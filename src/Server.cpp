@@ -94,19 +94,6 @@ void Server::onNewMessage(Message *message, Connection *connection)
     case QuitMessage::MessageId:
         EventLoop::eventLoop()->quit();
         break;
-    case DaemonJobAnnouncementMessage::MessageId: {
-        // DaemonJobAnnouncementMessage *jobAnnouncement = static_cast<DaemonJobAnnouncementMessage*>(message);
-        // const ServerJobAnnouncementMessage msg(jobAnnouncement->count(), jobAnnouncement->sha256(),
-        //                                        jobAnnouncement->compiler(), connection->client()->peerName(), connection->client()->port());
-        // error() << "Got job announcement from" << mNodes.value(connection)->name
-        //         << jobAnnouncement->compiler() << jobAnnouncement->count();
-        // static const bool returnToSender = Config::isEnabled("return-to-sender");
-        // for (auto it : mNodes) {
-        //     if (it.first != connection || returnToSender) {
-        //         it.first->send(msg);
-        //     }
-        // }
-        break; }
     case HandshakeMessage::MessageId:
         Node *&node = mNodes[connection->shared_from_this()];
         delete node;

@@ -44,7 +44,6 @@ int main(int argc, char** argv)
     Config::registerOption<String>("log-file", "Log to this file.", 'l');
     Config::registerOption<bool>("verbose", "Be more verbose.", 'v');
     Config::registerOption<bool>("silent", "Be silent.", 'S');
-    Config::registerOption<bool>("return-to-sender", "Return job requests to sender. Only useful for debugging.", 'r');
     Config::registerOption<int>("port", String::format<129>("Use this port, (default %d)", Plast::DefaultServerPort),'p', Plast::DefaultServerPort,
                                 [](const int &count, String &err) {
                                     if (count <= 0) {

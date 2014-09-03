@@ -52,13 +52,13 @@ private:
 
     void restartServerTimer();
     void onNewMessage(Message *message, Connection *connection);
-    void handleClientJobMessage(ClientJobMessage *msg, const std::shared_ptr<Connection> &conn);
-    void handleCompilerMessage(CompilerMessage* message, const std::shared_ptr<Connection> &connection);
-    void handleCompilerRequestMessage(CompilerRequestMessage *message, const std::shared_ptr<Connection> &connection);
-    void handleDaemonJobRequestMessage(DaemonJobRequestMessage *message, const std::shared_ptr<Connection> &connection);
-    void handleDaemonListMessage(DaemonListMessage *message, const std::shared_ptr<Connection> &connection);
-    void handleHandshakeMessage(HandshakeMessage *message, const std::shared_ptr<Connection> &connection);
-    void handleDaemonJobAnnouncementMessage(DaemonJobAnnouncementMessage *message, const std::shared_ptr<Connection> &connection);
+    void handleClientJobMessage(const ClientJobMessage *msg, const std::shared_ptr<Connection> &conn);
+    void handleCompilerMessage(const CompilerMessage* message, const std::shared_ptr<Connection> &connection);
+    void handleCompilerRequestMessage(const CompilerRequestMessage *message, const std::shared_ptr<Connection> &connection);
+    void handleDaemonJobRequestMessage(const DaemonJobRequestMessage *message, const std::shared_ptr<Connection> &connection);
+    void handleDaemonListMessage(const DaemonListMessage *message, const std::shared_ptr<Connection> &connection);
+    void handleHandshakeMessage(const HandshakeMessage *message, const std::shared_ptr<Connection> &connection);
+    void handleDaemonJobAnnouncementMessage(const DaemonJobAnnouncementMessage *message, const std::shared_ptr<Connection> &connection);
     void reconnectToServer();
     void onDiscoverySocketReadyRead(Buffer &&data, const String &ip);
 
@@ -184,7 +184,7 @@ private:
     Options mOptions;
     SocketServer mLocalServer, mRemoteServer;
     std::shared_ptr<SocketClient> mDiscoverySocket;
-    std::shared_ptr<Connection> mServerConnection;
+    std::shared_ptr<Connection> mServerConnection, mSelfConnection;
     Timer mServerTimer;
 };
 

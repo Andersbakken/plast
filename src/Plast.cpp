@@ -1,5 +1,4 @@
 #include "Plast.h"
-#include <rct/Messages.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -8,16 +7,16 @@
 namespace Plast {
 bool init()
 {
-    Messages::registerMessage<ClientJobMessage>();
-    Messages::registerMessage<ClientJobResponseMessage>();
-    Messages::registerMessage<CompilerMessage>();
-    Messages::registerMessage<CompilerRequestMessage>();
-    Messages::registerMessage<DaemonJobAnnouncementMessage>();
-    Messages::registerMessage<DaemonJobRequestMessage>();
-    Messages::registerMessage<DaemonJobResponseMessage>();
-    Messages::registerMessage<DaemonListMessage>();
-    Messages::registerMessage<HandshakeMessage>();
-    Messages::registerMessage<QuitMessage>();
+    Message::registerMessage<ClientJobMessage>();
+    Message::registerMessage<ClientJobResponseMessage>();
+    Message::registerMessage<CompilerMessage>();
+    Message::registerMessage<CompilerRequestMessage>();
+    Message::registerMessage<DaemonJobAnnouncementMessage>();
+    Message::registerMessage<DaemonJobRequestMessage>();
+    Message::registerMessage<DaemonJobResponseMessage>();
+    Message::registerMessage<DaemonListMessage>();
+    Message::registerMessage<HandshakeMessage>();
+    Message::registerMessage<QuitMessage>();
     return true;
 }
 
@@ -134,7 +133,7 @@ Deserializer& operator>>(Deserializer& s, CompilerPackage& p)
 Map<String, CompilerPackage*> CompilerMessage::sPackages;
 
 CompilerMessage::CompilerMessage(const std::shared_ptr<Compiler> &compiler)
-    : Message(MessageId), mPackage(0)
+    : Message(MessageId, Compressed), mPackage(0)
 {
     if (compiler) {
         mSha256 = compiler->sha256();
@@ -195,51 +194,20 @@ void CompilerMessage::decode(Deserializer &deserializer)
     }
 }
 
-bool CompilerMessage::writeFiles(const Path& path)
+bool CompilerMessage::writeFiles(const Path &root) const
 {
     if (!mPackage)
         return false;
 
-    const pid_t pid = fork();
-    if (pid == -1) {
-        printf("[%s:%d]: if (pid == -1) {\n", __FILE__, __LINE__); fflush(stdout);
-        return false;
-    }
-    if (pid) {
-        printf("[%s:%d]: if (pid) {\n", __FILE__, __LINE__); fflush(stdout);
-        int status;
-        waitpid(pid, &status, 0);
-        printf("%d: %d\n", status, WEXITSTATUS(status));
-        return (WEXITSTATUS(status) == 0);
-    } else {
-        if (chroot(path.nullTerminated()) == -1) {
-            FILE *f = fopen("log", "a");
-            fprintf(f, "Couldn't chroot %d %s\n", errno, path.constData());
-            fclose(f);
-            _exit(1);
+    for (const auto &file : mPackage->files()) {
+        const Path path = root + file.first;
+        Path::mkdir(path.parentDir(), Path::Recursive);
+        if (!Rct::writeFile(path, file.second)) {
+            error() << "Couldn't write file" << path;
+            return false;
         }
-        int ret = 0;
-        const Map<Path, String>& files = mPackage->files();
-        Map<Path, String>::const_iterator file = files.begin();
-        const Map<Path, String>::const_iterator end = files.end();
-        while (file != end) {
-            Path::mkdir(file->first.parentDir(), Path::Recursive);
-            if (!Rct::writeFile(file->first, file->second)) {
-                FILE *f = fopen("log", "a");
-                fprintf(f, "Couldn't write %s/%s\n", path.constData(), file->first.constData());
-                fclose(f);
-                ret = 1;
-                break;
-            }
-            ++file;
-        }
-        FILE *f = fopen("log", "a");
-        fprintf(f, "exiting %d\n", ret);
-        fclose(f);
-        _exit(ret);
     }
-    printf("[%s:%d]: return false;\n", __FILE__, __LINE__); fflush(stdout);
-    return false;
+    return true;
 }
 
 static const char *argOptions[] = {
