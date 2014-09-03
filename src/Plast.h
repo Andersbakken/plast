@@ -43,6 +43,16 @@ struct CompilerArgs
         Link
     } mode;
 
+    const char *modeName() const
+    {
+        switch (mode) {
+        case Compile: return "compile";
+        case Preprocess: return "preprocess";
+        case Link: return "link";
+        }
+        return "";
+    }
+
     enum Flag {
         None = 0x0,
         NoAssemble = 0x1,
@@ -238,12 +248,11 @@ public:
     bool isValid() const { return mPackage != 0; }
 
     bool writeFiles(const Path& path) const;
-
 private:
     CompilerPackage* loadCompiler(const Set<Path> &paths);
 
 private:
-    static Map<String, CompilerPackage*> sPackages; // keyed on sha256
+    static Hash<String, CompilerPackage*> sPackages; // keyed on sha256
 
     Path mCompiler;
     String mSha256;

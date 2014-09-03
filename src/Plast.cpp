@@ -43,8 +43,7 @@ Path resolveCompiler(const Path &path)
 }
 }
 
-template <>
-inline Deserializer &operator>>(Deserializer &s, Output &output)
+template <> inline Deserializer &operator>>(Deserializer &s, Output &output)
 {
     uint8_t type;
     s >> type >> output.text;
@@ -52,8 +51,7 @@ inline Deserializer &operator>>(Deserializer &s, Output &output)
     return s;
 }
 
-template <>
-inline Serializer &operator<<(Serializer &s, const Output &output)
+template <> inline Serializer &operator<<(Serializer &s, const Output &output)
 {
     s << static_cast<uint8_t>(output.type) << output.text;
     return s;
@@ -69,26 +67,35 @@ void ClientJobResponseMessage::decode(Deserializer &deserializer)
     deserializer >> mStatus >> mOutput;
 }
 
-class CompilerPackage
-{
+class CompilerPackage {
 public:
-    CompilerPackage() {}
-    CompilerPackage(const Map<Path, String>& files) : mFiles(files) {}
+    CompilerPackage()
+    {
+    }
+    CompilerPackage(const Hash<Path, String> &files) : mFiles(files)
+    {
+    }
 
-    static CompilerPackage* loadFromPaths(const Set<Path>& paths);
+    static CompilerPackage *loadFromPaths(const Set<Path> &paths);
 
-    bool isEmpty() const { return mFiles.isEmpty(); }
-    bool loadFile(const Path& file);
+    bool isEmpty() const
+    {
+        return mFiles.isEmpty();
+    }
+    bool loadFile(const Path &file);
 
-    const Map<Path, String>& files() const { return mFiles; }
+    const Hash<Path, String> &files() const
+    {
+        return mFiles;
+    }
 
 private:
-    Map<Path, String> mFiles;
+    Hash<Path, String> mFiles;
 };
 
-CompilerPackage* CompilerPackage::loadFromPaths(const Set<Path>& paths)
+CompilerPackage *CompilerPackage::loadFromPaths(const Set<Path> &paths)
 {
-    CompilerPackage* package = new CompilerPackage;
+    CompilerPackage *package = new CompilerPackage;
     Set<Path>::const_iterator path = paths.begin();
     const Set<Path>::const_iterator end = paths.end();
     while (path != end) {
@@ -107,7 +114,7 @@ CompilerPackage* CompilerPackage::loadFromPaths(const Set<Path>& paths)
     return package;
 }
 
-bool CompilerPackage::loadFile(const Path& file)
+bool CompilerPackage::loadFile(const Path &file)
 {
     String data;
     if (!Rct::readFile(file, data))
@@ -116,29 +123,28 @@ bool CompilerPackage::loadFile(const Path& file)
     return true;
 }
 
-Serializer& operator<<(Serializer& s, const CompilerPackage& p)
+Serializer &operator<<(Serializer &s, const CompilerPackage &p)
 {
     s << p.files();
     return s;
 }
 
-Deserializer& operator>>(Deserializer& s, CompilerPackage& p)
+Deserializer &operator>>(Deserializer &s, CompilerPackage &p)
 {
-    Map<Path, String> files;
+    Hash<Path, String> files;
     s >> files;
     p = CompilerPackage(files);
     return s;
 }
 
-Map<String, CompilerPackage*> CompilerMessage::sPackages;
+Hash<String, CompilerPackage *> CompilerMessage::sPackages;
 
-CompilerMessage::CompilerMessage(const std::shared_ptr<Compiler> &compiler)
-    : Message(MessageId, Compressed), mPackage(0)
+CompilerMessage::CompilerMessage(const std::shared_ptr<Compiler> &compiler) : Message(MessageId, Compressed), mPackage(0)
 {
     if (compiler) {
         mSha256 = compiler->sha256();
         mCompiler = compiler->path();
-        const Map<String, CompilerPackage*>::const_iterator package = sPackages.find(compiler->sha256());
+        const Hash<String, CompilerPackage *>::const_iterator package = sPackages.find(compiler->sha256());
         if (package != sPackages.end()) {
             mPackage = package->second;
             return;
@@ -155,20 +161,17 @@ CompilerMessage::CompilerMessage(const std::shared_ptr<Compiler> &compiler)
 
         mPackage = loadCompiler(compiler->files());
         if (mPackage) {
-            printf("[%s:%d]: if (mPackage) {\n", __FILE__, __LINE__); fflush(stdout);
+            fflush(stdout);
             sPackages[mSha256] = mPackage;
-        } else {
-            printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
         }
     }
 }
 
 CompilerMessage::~CompilerMessage()
 {
-    delete mPackage;
 }
 
-CompilerPackage* CompilerMessage::loadCompiler(const Set<Path>& paths)
+CompilerPackage *CompilerMessage::loadCompiler(const Set<Path> &paths)
 {
     error() << "loading" << paths;
     return CompilerPackage::loadFromPaths(paths);
@@ -199,9 +202,12 @@ bool CompilerMessage::writeFiles(const Path &root) const
     if (!mPackage)
         return false;
 
+    Path::mkdir(root);
     for (const auto &file : mPackage->files()) {
-        const Path path = root + file.first;
-        Path::mkdir(path.parentDir(), Path::Recursive);
+        // const Path path = root + file.first;
+        // Path::mkdir(path.parentDir(), Path::Recursive);
+        const Path path = root + file.first.fileName();
+        // Path::mkdir(path.parentDir(), Path::Recursive);
         if (!Rct::writeFile(path, file.second)) {
             error() << "Couldn't write file" << path;
             return false;

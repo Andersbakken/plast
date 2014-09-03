@@ -58,6 +58,8 @@ std::shared_ptr<Compiler> Compiler::compiler(const Path &compiler, const String 
         c = resolvedCompiler;
         return c;
     }
+    SHA256 sha;
+#if 0
     Process process;
     List<String> environment;
     if (!path.isEmpty()) {
@@ -69,10 +71,9 @@ std::shared_ptr<Compiler> Compiler::compiler(const Path &compiler, const String 
         return std::shared_ptr<Compiler>();
     }
 
-    SHA256 sha;
+    Set<String> compilerPaths;
     const List<String> lines = process.readAllStdErr().split('\n');
     String version;
-    Set<String> compilerPaths;
     for (int i=0; i<lines.size(); ++i) {
         const String &line = lines.at(i);
         sha.update(line);
@@ -97,7 +98,32 @@ std::shared_ptr<Compiler> Compiler::compiler(const Path &compiler, const String 
                 p.visit(visitor, &c->mFiles);
             }
         }
-
+    }
+#else
+    Process process;
+    if (!process.exec("ldd", List<String>() << resolved)) {
+        error() << "Couldn't ldd compiler" << resolved;
+        return std::shared_ptr<Compiler>();
+    }
+    c.reset(new Compiler);
+    const List<String> lines = process.readAllStdOut().split('\n');
+    for (const String &line : lines) {
+        const int idx = line.indexOf("=> /");
+        if (idx == -1)
+            continue;
+        const int end = line.indexOf(' ', idx + 5);
+        if (end == -1)
+            continue;
+        const Path path = Path::resolved(line.mid(idx + 3, end - idx - 3));
+        if (path.isFile()) {
+            sha.update(path.fileName());
+            c->mFiles.insert(path);
+        } else {
+            error() << "Couldn't resolve path" << line.mid(idx + 3, end - idx - 3);
+        }
+    }
+#endif
+    if (c) {
         c->mSha256 = sha.hash(SHA256::Hex);
         c->mPath = compiler;
         sBySha[c->mSha256] = c;
@@ -115,7 +141,10 @@ String Compiler::dump()
     for (const auto &compiler : sBySha) {
         if (!ret.isEmpty())
             ret << '\n';
-        ret << compiler.first << ": " << compiler.second->path();
+        ret << (compiler.first + ":") << compiler.second->path();
+        for (const auto &path : compiler.second->mFiles) {
+            ret << "\n    " << path;
+        }
     }
     return ret;
 }

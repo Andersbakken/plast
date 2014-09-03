@@ -20,6 +20,7 @@
 int buildLocal(int argc, char **argv)
 {
     const Path path = Plast::resolveCompiler(argv[0]);
+    debug() << "Building local" << path;
     if (!path.isEmpty()) {
         argv[0] = strdup(path.constData());
         execv(path.constData(), argv); // execute without resolving symlink
@@ -55,7 +56,7 @@ int main(int argc, char** argv)
 
     // printf("[%s]\n", argv[0]);
     // return 0;
-    initLogging(argv[0], LogStderr, Error, 0, 0);
+    initLogging(argv[0], LogStderr, getenv("PLASTC_VERBOSE") ? Debug : Error, 0, 0);
 
     Plast::init();
     EventLoop::SharedPtr loop(new EventLoop);
@@ -64,6 +65,7 @@ int main(int argc, char** argv)
     Path socket = getenv("PLAST_SOCKET_FILE");
     if (socket.isEmpty())
         socket = Plast::defaultSocketFile();
+    debug() << "Using socketfile" << socket;
 
     const int connectTimeout = conf("PLAST_DAEMON_CONNECT_TIMEOUT", 2000);
     const int jobTimeout = conf("PLAST_JOB_TIMEOUT", -1);
@@ -85,6 +87,7 @@ int main(int argc, char** argv)
                     }
                 }
                 returnValue = msg->status();
+                debug() << "Got ClientJobResponseMessage" << msg->status();
                 loop->quit();
                 break; }
             default:
@@ -97,6 +100,7 @@ int main(int argc, char** argv)
     connection.finished().connect(std::bind([](){ EventLoop::eventLoop()->quit(); }));
     connection.disconnected().connect(std::bind([](){ EventLoop::eventLoop()->quit(); }));
     if (!connection.connectUnix(socket, connectTimeout)) {
+        debug() << "Couldn't connect to daemon";
         return buildLocal(argc, argv);
     }
 
@@ -106,7 +110,8 @@ int main(int argc, char** argv)
         env.append(*e);
     connection.send(ClientJobMessage(argc, argv, env, Path::pwd()));
     loop->exec(jobTimeout);
-    if (returnValue == -1)
+    if (returnValue == -1) {
         return buildLocal(argc, argv);
+    }
     return returnValue;
 }

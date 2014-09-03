@@ -159,7 +159,7 @@ void Daemon::onNewMessage(Message *message, Connection *conn)
 
 void Daemon::handleClientJobMessage(const ClientJobMessage *msg, const std::shared_ptr<Connection> &conn)
 {
-    debug() << "Got localjob" << msg->arguments() << msg->environ() << msg->cwd();
+    debug() << "Got localjob" << msg->arguments() << msg->cwd();
 
     List<String> env = msg->environ();
     assert(!env.contains("PLAST=1"));
@@ -168,12 +168,14 @@ void Daemon::handleClientJobMessage(const ClientJobMessage *msg, const std::shar
     const Path resolvedCompiler = Plast::resolveCompiler(msg->arguments().first());
     std::shared_ptr<Compiler> compiler = Compiler::compiler(resolvedCompiler);
     if (!compiler) {
+        warning() << "Can't find compiler for" << resolvedCompiler;
         conn->send(ClientJobResponseMessage());
         conn->close();
         return;
     }
     std::shared_ptr<LocalJob> localJob = std::make_shared<LocalJob>(msg->arguments(), resolvedCompiler, env, msg->cwd(), compiler, conn);
     if (localJob->arguments.mode != CompilerArgs::Compile) {
+        warning() << "Not a compile job" << localJob->arguments.modeName();
         conn->send(ClientJobResponseMessage());
         return;
     }
@@ -185,10 +187,10 @@ void Daemon::handleClientJobMessage(const ClientJobMessage *msg, const std::shar
 void Daemon::handleCompilerMessage(const CompilerMessage *message, const std::shared_ptr<Connection> &connection)
 {
     assert(message->isValid());
-    if (!message->writeFiles(mOptions.cacheDir)) {
-        error() << "Couldn't write files to" << mOptions.cacheDir;
+    if (!message->writeFiles(mOptions.cacheDir + message->sha256() + '/')) {
+        error() << "Couldn't write files to" << mOptions.cacheDir + message->sha256() + '/';
     } else {
-        error() << "Wrote compiler" << message->sha256() << "to" << mOptions.cacheDir;
+        warning() << "Wrote compiler" << message->sha256() << "to" << mOptions.cacheDir;
     }
 }
 
@@ -387,7 +389,7 @@ void Daemon::startJobs()
         auto job = mPendingPreprocessJobs.first();
         assert(job->flags & LocalJob::PendingPreprocessing);
         removeLocalJob(job);
-        List<String> args = job->arguments.arguments;
+        List<String> args = job->arguments.arguments.mid(1);
         if (job->arguments.flags & CompilerArgs::HasOutput) {
             for (int i=0; i<args.size(); ++i) {
                 if (args.at(i) == "-o") {
@@ -405,9 +407,8 @@ void Daemon::startJobs()
         if (!job)
             continue;
         args.append("-E");
-        // debug() << "Starting process" << arguments;
         // assert(!arguments.isEmpty());
-        const Path compiler = Plast::resolveCompiler(args.first());
+        const Path compiler = Plast::resolveCompiler(job->arguments.arguments.first());
         if (compiler.isEmpty()) {
             job->localConnection->send(ClientJobResponseMessage());
             mLocalJobsByLocalConnection.remove(job->localConnection);
@@ -423,11 +424,14 @@ void Daemon::startJobs()
         addLocalJob(LocalJob::Preprocessing, job);
         job->process->finished().connect([this, args, compiler](Process *proc) {
                 auto job = mPreprocessJobsByProcess.take(proc);
+                debug() << "Preprocessjob finished" << job << proc->returnCode();
                 if (job) {
                     removeLocalJob(job);
                     const String err = proc->readAllStdErr();
-                    if (!err.isEmpty())
+                    if (!err.isEmpty()) {
+                        error() << err;
                         job->output.append(Output({ Output::StdErr, err }));
+                    }
                     if (proc->returnCode() != 0) {
                         job->localConnection->send(ClientJobResponseMessage());
                         mLocalJobsByLocalConnection.remove(job->localConnection);
@@ -441,6 +445,7 @@ void Daemon::startJobs()
             });
 
         job->process->start(compiler, args, job->environ);
+        debug() << "Starting preprocessing in" << job->cwd << String::format<256>("%s %s", compiler.constData(), String::join(args.mid(1), ' ').constData());
     }
 
     if (!mOptions.flags & Options::NoLocalJobs) {
@@ -508,7 +513,7 @@ void Daemon::announceJobs()
 
 void Daemon::onConnectionDisconnected(Connection *conn)
 {
-    warning() << "Lost connection" << conn->client()->port();
+    // warning() << "Lost connection" << conn->client()->port();
     std::shared_ptr<Connection> c = conn->shared_from_this();
     mConnections.remove(c);
     if (std::shared_ptr<LocalJob> job = mLocalJobsByLocalConnection.take(c)) {
