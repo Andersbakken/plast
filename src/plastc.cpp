@@ -17,9 +17,8 @@
 #include <rct/EventLoop.h>
 #include <rct/Connection.h>
 
-int buildLocal(int argc, char **argv)
+static inline int buildLocal(const Path &path, int argc, char **argv)
 {
-    const Path path = Compiler::resolve(argv[0]);
     debug() << "Building local" << path;
     if (!path.isEmpty()) {
         argv[0] = strdup(path.constData());
@@ -45,6 +44,24 @@ static inline int conf(const char *env, int defaultValue)
     return defaultValue;
 }
 
+static inline bool checkFlags(unsigned int flags)
+{
+    if (flags & (CompilerArgs::StdinInput|CompilerArgs::MultiSource)) {
+        return false;
+    }
+    switch (flags & CompilerArgs::LanguageMask) {
+    case CompilerArgs::C:
+    case CompilerArgs::CPlusPlus:
+    case CompilerArgs::CPreprocessed:
+    case CompilerArgs::CPlusPlusPreprocessed:
+        return true;
+    default:
+        break;
+    }
+    return false;
+}
+
+
 int main(int argc, char** argv)
 {
     Rct::findExecutablePath(*argv);
@@ -57,6 +74,18 @@ int main(int argc, char** argv)
     // printf("[%s]\n", argv[0]);
     // return 0;
     initLogging(argv[0], LogStderr, getenv("PLASTC_VERBOSE") ? Debug : Error, 0, 0);
+
+    List<String> commandLine(argc);
+    for (int i=0; i<argc; ++i) {
+        commandLine[i].assign(argv[i]);
+    }
+
+    const Path resolvedCompiler = Compiler::resolve(argv[0]);
+
+    std::shared_ptr<CompilerArgs> args = CompilerArgs::create(commandLine);
+    if (!args || args->mode != CompilerArgs::Compile || !checkFlags(args->flags)) {
+        return buildLocal(resolvedCompiler, argc, argv);
+    }
 
     Plast::init();
     EventLoop::SharedPtr loop(new EventLoop);
@@ -101,17 +130,17 @@ int main(int argc, char** argv)
     connection.disconnected().connect(std::bind([](){ EventLoop::eventLoop()->quit(); }));
     if (!connection.connectUnix(socket, connectTimeout)) {
         debug() << "Couldn't connect to daemon";
-        return buildLocal(argc, argv);
+        return buildLocal(resolvedCompiler, argc, argv);
     }
 
     List<String> env;
     extern char **environ;
     for (char **e = environ; *e; ++e)
         env.append(*e);
-    connection.send(ClientJobMessage(argc, argv, env, Path::pwd()));
+    connection.send(ClientJobMessage(args, resolvedCompiler, env, Path::pwd()));
     loop->exec(jobTimeout);
     if (returnValue == -1) {
-        return buildLocal(argc, argv);
+        return buildLocal(resolvedCompiler, argc, argv);
     }
     return returnValue;
 }

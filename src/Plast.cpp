@@ -459,7 +459,10 @@ static inline bool hasArg(const String &arg)
 
 std::shared_ptr<CompilerArgs> CompilerArgs::create(const List<String> &args)
 {
-    std::shared_ptr<CompilerArgs> ret(new CompilerArgs({ args, List<int>(), Path(), args.value(0), Link, None }));
+    std::shared_ptr<CompilerArgs> ret(new CompilerArgs);
+    ret->commandLine = args;
+    ret->mode = Link;
+    ret->flags = None;
     for (int i=1; i<args.size(); ++i) {
         const String &arg = args[i];
         if (arg == "-c") {

@@ -188,23 +188,6 @@ void Daemon::onNewMessage(Message *message, Connection *conn)
     }
 }
 
-static inline bool checkFlags(unsigned int flags)
-{
-    if (flags & (CompilerArgs::StdinInput|CompilerArgs::MultiSource)) {
-        return false;
-    }
-    switch (flags & CompilerArgs::LanguageMask) {
-    case CompilerArgs::C:
-    case CompilerArgs::CPlusPlus:
-    case CompilerArgs::CPreprocessed:
-    case CompilerArgs::CPlusPlusPreprocessed:
-        return true;
-    default:
-        break;
-    }
-    return false;
-}
-
 void Daemon::handleClientJobMessage(const ClientJobMessage *msg, const std::shared_ptr<Connection> &conn)
 {
     debug() << "Got local job" << msg->arguments() << msg->cwd();
@@ -213,7 +196,7 @@ void Daemon::handleClientJobMessage(const ClientJobMessage *msg, const std::shar
     assert(!env.contains("PLAST=1"));
     env.append("PLAST=1");
 
-    const Path resolvedCompiler = Compiler::resolve(msg->arguments().first());
+    const Path resolvedCompiler = msg->resolvedCompiler();
     std::shared_ptr<Compiler> compiler = Compiler::compiler(resolvedCompiler);
     if (!compiler) {
         warning() << "Can't find compiler for" << resolvedCompiler;
@@ -222,14 +205,14 @@ void Daemon::handleClientJobMessage(const ClientJobMessage *msg, const std::shar
         return;
     }
     std::shared_ptr<Job> job = std::make_shared<Job>(msg->arguments(), resolvedCompiler, env, msg->cwd(), compiler, conn);
-    if (!job->arguments || job->arguments->mode != CompilerArgs::Compile || !checkFlags(job->arguments->flags)) {
-        warning() << "Not a job for us"
-                  << msg->arguments()
-                  << (job->arguments ? job->arguments->modeName() : "")
-                  << (job->arguments ? job->arguments->flags : 0);
-        conn->send(ClientJobResponseMessage());
-        return;
-    }
+    // if (!job->arguments || job->arguments->mode != CompilerArgs::Compile || !checkFlags(job->arguments->flags)) {
+    //     warning() << "Not a job for us"
+    //               << msg->arguments()
+    //               << (job->arguments ? job->arguments->modeName() : "")
+    //               << (job->arguments ? job->arguments->flags : 0);
+    //     conn->send(ClientJobResponseMessage());
+    //     return;
+    // }
     mJobsByLocalConnection[conn] = job;
     addJob(Job::PendingPreprocessing, job);
     startJobs();
@@ -439,7 +422,7 @@ void Daemon::startJobs()
         auto job = mPendingPreprocessJobs.first();
         assert(job->flags & Job::PendingPreprocessing);
         removeJob(job);
-        List<String> args = job->arguments->arguments.mid(1);
+        List<String> args = job->arguments->commandLine.mid(1);
         if (job->arguments->flags & CompilerArgs::HasOutput) {
             for (int i=0; i<args.size(); ++i) {
                 if (args.at(i) == "-o") {
@@ -460,7 +443,7 @@ void Daemon::startJobs()
             continue;
         args.append("-E");
         // assert(!arguments.isEmpty());
-        const Path compiler = Compiler::resolve(job->arguments->arguments.first());
+        const Path compiler = Compiler::resolve(job->arguments->commandLine.first());
         if (compiler.isEmpty()) {
             job->localConnection->send(ClientJobResponseMessage());
             mJobsByLocalConnection.remove(job->localConnection);
@@ -505,7 +488,7 @@ void Daemon::startJobs()
             removeJob(job);
             addJob(Job::Compiling, job);
 
-            List<String> args = job->arguments->arguments.mid(1);
+            List<String> args = job->arguments->commandLine.mid(1);
             error() << job->arguments->sourceFiles();
             assert(job->arguments->sourceFileIndexes.size() == 1);
             args.removeAt(job->arguments->sourceFileIndexes.first() - 1);

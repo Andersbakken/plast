@@ -57,19 +57,18 @@ private:
 
 struct CompilerArgs
 {
-    List<String> arguments;
+    List<String> commandLine;
     List<int> sourceFileIndexes;
     List<Path> sourceFiles() const
     {
         List<Path> ret;
         ret.reserve(sourceFileIndexes.size());
         for (int idx : sourceFileIndexes) {
-            ret.append(arguments.at(idx));
+            ret.append(commandLine.at(idx));
         }
         return ret;
     }
 
-    Path output, compiler;
     enum Mode {
         Compile,
         Preprocess,
@@ -107,8 +106,22 @@ struct CompilerArgs
 
     static std::shared_ptr<CompilerArgs> create(const List<String> &args);
 
-    Path sourceFile(int idx = 0) const { return arguments.value(sourceFileIndexes.value(idx, -1)); }
+    Path sourceFile(int idx = 0) const { return commandLine.value(sourceFileIndexes.value(idx, -1)); }
 };
+
+inline Serializer &operator<<(Serializer &serializer, const CompilerArgs &args)
+{
+    serializer << args.commandLine << args.sourceFileIndexes << static_cast<uint8_t>(args.mode) << static_cast<uint32_t>(args.flags);
+    return serializer;
+}
+
+inline Deserializer &operator>>(Deserializer &deserializer, CompilerArgs &args)
+{
+    uint8_t mode;
+    deserializer >> args.commandLine >> args.sourceFileIndexes >> mode >> args.flags;
+    args.mode = static_cast<CompilerArgs::Mode>(mode);
+    return deserializer;
+}
 
 struct Host
 {
@@ -212,22 +225,32 @@ class ClientJobMessage : public Message
 public:
     enum { MessageId = ClientJobMessageId };
 
-    ClientJobMessage(int argc = 0, char **argv = 0, const List<String> &environ = List<String>(), const Path &cwd = Path())
-        : Message(MessageId), mEnviron(environ), mCwd(cwd)
+    ClientJobMessage(const std::shared_ptr<CompilerArgs> &args = std::shared_ptr<CompilerArgs>(),
+                     const Path &resolvedCompiler = Path(),
+                     const List<String> &environ = List<String>(),
+                     const Path &cwd = Path())
+        : Message(MessageId), mArguments(args), mResolvedCompiler(resolvedCompiler), mEnviron(environ), mCwd(cwd)
     {
-        mArguments.resize(argc);
-        for (int i=0; i<argc; ++i)
-            mArguments[i] = argv[i];
     }
 
-    const List<String> &arguments() const { return mArguments; }
+    const std::shared_ptr<CompilerArgs> &arguments() const { return mArguments; }
+    const Path &resolvedCompiler() const { return mResolvedCompiler; }
     const List<String> &environ() const { return mEnviron; }
     const Path &cwd() const { return mCwd; }
 
-    virtual void encode(Serializer &serializer) const { serializer << mArguments << mEnviron << mCwd;; }
-    virtual void decode(Deserializer &deserializer) { deserializer >> mArguments >> mEnviron >> mCwd; }
+    virtual void encode(Serializer &serializer) const
+    {
+        serializer << *mArguments << mResolvedCompiler << mEnviron << mCwd;;
+    }
+    virtual void decode(Deserializer &deserializer)
+    {
+        mArguments.reset(new CompilerArgs);
+        deserializer >> *mArguments >> mResolvedCompiler >> mEnviron >> mCwd;
+    }
 private:
-    List<String> mArguments, mEnviron;
+    std::shared_ptr<CompilerArgs> mArguments;
+    Path mResolvedCompiler;
+    List<String> mEnviron;
     Path mCwd;
 };
 

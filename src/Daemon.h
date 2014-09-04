@@ -71,9 +71,9 @@ private:
     void checkJobRequstTimeout();
 
     struct Job {
-        Job(const List<String> &args, const Path &resolved, const List<String> &env, const Path &dir,
+        Job(const std::shared_ptr<CompilerArgs> &args, const Path &resolved, const List<String> &env, const Path &dir,
             std::shared_ptr<Compiler> &c, const std::shared_ptr<Connection> &conn)
-            : received(time(0)), arguments(CompilerArgs::create(args)), resolvedCompiler(resolved),
+            : received(time(0)), arguments(args), resolvedCompiler(resolved),
               environ(env), cwd(dir), process(0), flags(None), compiler(c), localConnection(conn)
         {
         }
