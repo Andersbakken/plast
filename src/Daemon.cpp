@@ -124,10 +124,14 @@ bool Daemon::init(const Options &options)
         List<Path> files = path.files(Path::File);
         files.sort();
         for (const Path &file : files) {
-            sha.update(file.fileName());
+            if (!file.isSymLink()) {
+                sha.update(file.fileName());
+                error() << file.fileName();
+            }
         }
         const String sha256 = sha.hash(SHA256::Hex);
-        if (sha256 != path.fileName()) {
+        error() << "Got compiler" << sha256 << path.fileName();
+        if (sha256 != path.name()) {
             error() << "Invalid compiler" << path << sha256;
             Path::rmdir(path);
         } else {

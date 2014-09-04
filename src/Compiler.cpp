@@ -115,15 +115,45 @@ std::shared_ptr<Compiler> Compiler::compiler(const Path &compiler, const String 
         }
     }
 #else
+    c.reset(new Compiler);
+    List<String> shaList;
+    {
+        Process process;
+        if (!process.exec(resolved, List<String>() << "-print-prog-name=cc1")) {
+            error() << "Couldn't invoke compiler" << resolved;
+            c.reset();
+            return std::shared_ptr<Compiler>();
+        }
+        const List<String> lines = process.readAllStdOut().split('\n');
+        for (const Path &path : lines) {
+            if (path.isFile()) {
+                shaList.append(path.fileName());
+                c->mFiles.insert(path);
+            }
+        }
+    }
+    {
+        Process process;
+        if (!process.exec(resolved, List<String>() << "-print-prog-name=cc1plus")) {
+            error() << "Couldn't invoke compiler" << resolved;
+            c.reset();
+            return std::shared_ptr<Compiler>();
+        }
+        const List<String> lines = process.readAllStdOut().split('\n');
+        for (const Path &path : lines) {
+            if (path.isFile()) {
+                shaList.append(path.fileName());
+                c->mFiles.insert(path);
+            }
+        }
+    }
     Process process;
     if (!process.exec("ldd", List<String>() << resolved)) {
         error() << "Couldn't ldd compiler" << resolved;
         return std::shared_ptr<Compiler>();
     }
-    c.reset(new Compiler);
     const List<String> lines = process.readAllStdOut().split('\n');
-    List<String> shaList;
-    shaList.append(compiler);
+    shaList.append(compiler.fileName());
     for (const String &line : lines) {
         const int idx = line.indexOf("=> /");
         if (idx == -1)
@@ -131,22 +161,25 @@ std::shared_ptr<Compiler> Compiler::compiler(const Path &compiler, const String 
         const int end = line.indexOf(' ', idx + 5);
         if (end == -1)
             continue;
-        const Path path = Path::resolved(line.mid(idx + 3, end - idx - 3));
+        const Path unresolved = line.mid(idx + 3, end - idx - 3);
+        const Path path = Path::resolved(unresolved);
         if (path.isFile()) {
-            shaList.append(path.fileName());
-            c->mFiles.insert(path);
+            shaList.append(unresolved.fileName());
+            c->mFiles.insert(unresolved);
         } else {
-            error() << "Couldn't resolve path" << line.mid(idx + 3, end - idx - 3);
+            error() << "Couldn't resolve path" << unresolved;
         }
     }
     shaList.sort();
     for (const String &s : shaList) {
         sha.update(s);
+        error() << s;
     }
 
 #endif
     if (c) {
         c->mSha256 = sha.hash(SHA256::Hex);
+        error() << "GOT SHA" << c->mSha256;
         c->mPath = compiler;
         sBySha[c->mSha256] = c;
         sByPath[compiler] = c;

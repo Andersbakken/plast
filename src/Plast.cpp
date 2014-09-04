@@ -30,13 +30,15 @@ Path resolveCompiler(const Path &path)
     const String fileName = path.fileName();
     const List<String> paths = String(getenv("PATH")).split(':');
     // error() << fileName;
-    const bool hasRTags = getenv("RTAGS_GCC_WRAPPER");
     for (const auto &p : paths) {
         const Path orig = p + "/" + fileName;
         Path exec = orig;
         // error() << "Trying" << exec;
-        if (exec.resolve() && strcmp(exec.fileName(), "plastc") && (hasRTags || strcmp(exec.fileName(), "gcc-rtags-wrapper.sh"))) {
-            return orig;
+        if (exec.resolve()) {
+            const char *fileName = exec.fileName();
+            if (strcmp(fileName, "plastc") && strcmp(fileName, "gcc-rtags-wrapper.sh") && strcmp(fileName, "icecc")) {
+                return orig;
+            }
         }
     }
     return Path();
@@ -69,10 +71,11 @@ void ClientJobResponseMessage::decode(Deserializer &deserializer)
 
 class CompilerPackage {
 public:
+    struct File;
     CompilerPackage()
     {
     }
-    CompilerPackage(const Path &executable, const Hash<Path, String> &files)
+    CompilerPackage(const Path &executable, const Hash<Path, File> &files)
         : mExecutable(executable), mFiles(files)
     {
     }
@@ -86,10 +89,15 @@ public:
     bool loadFile(const Path &file);
 
     const Path &executable() const { return mExecutable; }
-    const Hash<Path, String> &files() const { return mFiles; }
+    struct File {
+        String contents;
+        mode_t perm;
+    };
+
+    const Hash<Path, File> &files() const { return mFiles; }
 private:
     Path mExecutable;
-    Hash<Path, String> mFiles;
+    Hash<Path, File> mFiles;
 };
 
 CompilerPackage *CompilerPackage::loadFromPaths(const Path &executable, const Set<Path> &paths)
@@ -118,9 +126,10 @@ CompilerPackage *CompilerPackage::loadFromPaths(const Path &executable, const Se
 bool CompilerPackage::loadFile(const Path &file)
 {
     String data;
-    if (!Rct::readFile(file, data))
+    mode_t perm;
+    if (!Rct::readFile(file, data, &perm))
         return false;
-    mFiles[file] = data;
+    mFiles[file] = { data, perm };
     return true;
 }
 
@@ -133,7 +142,7 @@ Serializer &operator<<(Serializer &s, const CompilerPackage &p)
 Deserializer &operator>>(Deserializer &s, CompilerPackage &p)
 {
     Path compiler;
-    Hash<Path, String> files;
+    Hash<Path, File> files;
     s >> compiler >> files;
     p = CompilerPackage(compiler, files);
     return s;
@@ -205,7 +214,6 @@ bool CompilerMessage::writeFiles(const Path &root) const
         return false;
 
     Path::mkdir(root);
-    const char *compilerFileName = mCompiler.fileName();
     for (const auto &file : mPackage->files()) {
         // const Path path = root + file.first;
         // Path::mkdir(path.parentDir(), Path::Recursive);
@@ -216,10 +224,16 @@ bool CompilerMessage::writeFiles(const Path &root) const
             error() << "Couldn't write file" << path;
             return false;
         }
-        if (!strcmp(fileName, compilerFileName) && symlink(path.constData(), (root + "COMPILER").constData())) {
-            error() << "Failed to create symlink" << errno << strerror(errno) << path << (root + "COMPILER");
-        }
     }
+    const char *compilerFileName = mCompiler.fileName();
+    if (symlink(compilerFileName, (root + "COMPILER").constData())) {
+        error() << "Failed to create symlink" << errno << strerror(errno) << (root + "COMPILER");
+    }
+    error() << "chmoding" << root + compilerFileName;
+    if (chmod((root + compilerFileName).constData(), S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH)) {
+        error() << "Failed to chmod compiler" << errno << strerror(errno) << (root + "COMPILER");
+    }
+
     return true;
 }
 

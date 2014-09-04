@@ -47,6 +47,16 @@ static inline bool validate(int c, const char *name, String &err)
     }
     return true;
 }
+
+static Path::VisitResult visitor(const Path &path, void *)
+{
+    for (const Path &file : path.files(Path::File)) {
+        Path::rm(file);
+    }
+    rmdir(path.constData());
+    return Path::Continue;
+}
+
 int main(int argc, char** argv)
 {
     Rct::findExecutablePath(*argv);
@@ -106,7 +116,7 @@ int main(int argc, char** argv)
     };
 
     if (Config::isEnabled("clear-cache") && !options.cacheDir.isSameFile(Path::home())) {
-        Path::rmdir(options.cacheDir);
+        options.cacheDir.visit(::visitor, 0);
         warning() << "Cleared cache dir" << options.cacheDir;
     }
 
