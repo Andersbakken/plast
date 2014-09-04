@@ -2,7 +2,6 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include "Compiler.h"
 #include <rct/Process.h>
 #include <rct/SHA256.h>
 

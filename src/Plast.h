@@ -17,7 +17,6 @@
 #define Plast_h
 
 #include <rct/Message.h>
-#include "Compiler.h"
 
 namespace Plast {
 bool init();
@@ -42,7 +41,7 @@ public:
     String sha256() const { return mSha256; }
     Path path() const { return mPath; }
     Set<Path> files() const { return mFiles; }
-
+    bool isValid() const { return !mPath.isEmpty(); }
 private:
     static void ensureEnviron();
 

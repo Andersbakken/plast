@@ -22,7 +22,6 @@
 #include <rct/Timer.h>
 #include <rct/Hash.h>
 #include <rct/Process.h>
-#include "Compiler.h"
 #include "Plast.h"
 #include "Console.h"
 
@@ -48,7 +47,7 @@ public:
 
 private:
     void handleConsoleCommand(const String &string);
-    void handleConsoleCompletion(const String& string, int start, int end, String& common, List<String>& candidates);
+    void handleConsoleCompletion(const String &string, int start, int end, String &common, List<String> &candidates);
 
     void restartServerTimer();
     void onNewMessage(Message *message, Connection *connection);

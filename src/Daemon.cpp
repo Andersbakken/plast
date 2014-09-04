@@ -14,7 +14,6 @@
    along with Plast.  If not, see <http://www.gnu.org/licenses/>. */
 
 #include "Daemon.h"
-#include "Compiler.h"
 #include <rct/SHA256.h>
 
 Daemon::Daemon()
@@ -114,6 +113,10 @@ bool Daemon::init(const Options &options)
 
     for (const Path &path : mOptions.cacheDir.files(Path::Directory)) {
         // error() << path;
+        if (Path(path + "BAD").isFile()) {
+            Compiler::insert(Path(), path.name(), Set<Path>());
+            continue;
+        }
         List<String> shaList;
         Set<Path> files;
         for (const Path &file : path.files(Path::File)) {
@@ -280,9 +283,9 @@ void Daemon::handleDaemonJobAnnouncementMessage(const DaemonJobAnnouncementMessa
     warning() << "Got announcement" << message->announcement() << "from" << connection->client()->peerString();
     for (const auto &announcement : message->announcement()) {
         if (auto compiler = Compiler::compilerBySha256(announcement.first)) {
-            // if (compiler->isValid()) {
-            //     error() << "I have the compiler. Lets go";
-            // }
+            if (compiler->isValid()) {
+                error() << "I have the compiler. Lets go";
+            }
         } else {
             error() << "requesting compiler" << announcement.first;
             connection->send(CompilerRequestMessage(announcement.first));
@@ -620,7 +623,7 @@ void Daemon::handleConsoleCommand(const String &string)
     }
 }
 
-void Daemon::handleConsoleCompletion(const String& string, int, int,
+void Daemon::handleConsoleCompletion(const String &string, int, int,
                                      String &common, List<String> &candidates)
 {
     static const List<String> cands = List<String>() << "jobs" << "quit" << "peers" << "compilers";
