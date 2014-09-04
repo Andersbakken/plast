@@ -192,7 +192,7 @@ void Daemon::handleClientJobMessage(const ClientJobMessage *msg, const std::shar
     assert(!env.contains("PLAST=1"));
     env.append("PLAST=1");
 
-    const Path resolvedCompiler = Plast::resolveCompiler(msg->arguments().first());
+    const Path resolvedCompiler = Compiler::resolve(msg->arguments().first());
     std::shared_ptr<Compiler> compiler = Compiler::compiler(resolvedCompiler);
     if (!compiler) {
         warning() << "Can't find compiler for" << resolvedCompiler;
@@ -280,7 +280,9 @@ void Daemon::handleDaemonJobAnnouncementMessage(const DaemonJobAnnouncementMessa
     warning() << "Got announcement" << message->announcement() << "from" << connection->client()->peerString();
     for (const auto &announcement : message->announcement()) {
         if (auto compiler = Compiler::compilerBySha256(announcement.first)) {
-            error() << "I have the compiler. Lets go";
+            // if (compiler->isValid()) {
+            //     error() << "I have the compiler. Lets go";
+            // }
         } else {
             error() << "requesting compiler" << announcement.first;
             connection->send(CompilerRequestMessage(announcement.first));
@@ -432,7 +434,7 @@ void Daemon::startJobs()
             continue;
         args.append("-E");
         // assert(!arguments.isEmpty());
-        const Path compiler = Plast::resolveCompiler(job->arguments.arguments.first());
+        const Path compiler = Compiler::resolve(job->arguments.arguments.first());
         if (compiler.isEmpty()) {
             job->localConnection->send(ClientJobResponseMessage());
             mLocalJobsByLocalConnection.remove(job->localConnection);

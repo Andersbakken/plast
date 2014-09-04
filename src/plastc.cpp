@@ -19,7 +19,7 @@
 
 int buildLocal(int argc, char **argv)
 {
-    const Path path = Plast::resolveCompiler(argv[0]);
+    const Path path = Compiler::resolve(argv[0]);
     debug() << "Building local" << path;
     if (!path.isEmpty()) {
         argv[0] = strdup(path.constData());
