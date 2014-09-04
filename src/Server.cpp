@@ -105,12 +105,12 @@ void Server::onNewMessage(Message *message, Connection *connection)
             }
         }
         HandshakeMessage *handShake = static_cast<HandshakeMessage*>(message);
-        String peerName = connection->client()->peerName();
-        if (peerName == "127.0.0.1")
-            peerName = handShake->friendlyName();
-        node = new Node({ Host({ peerName, handShake->port(), handShake->friendlyName()}), handShake->capacity(), 0, 0 });
+        node = new Node({ Host({ connection->client()->peerName(), handShake->port(), handShake->friendlyName() }), handShake->capacity(), 0, 0 });
         connection->send(DaemonListMessage(nodes));
-        error() << "Got handshake from" << connection->client()->peerName() << handShake->friendlyName() << nodes.size();
+        error() << "Got handshake from"
+                << String::format<128>("%s:%d", connection->client()->peerName().constData(),
+                                       handShake->port())
+                << handShake->friendlyName() << nodes.size();
         break;
     }
 }
