@@ -60,7 +60,7 @@ int main(int argc, char** argv)
 
     Plast::init();
     EventLoop::SharedPtr loop(new EventLoop);
-    loop->init(EventLoop::MainEventLoop|EventLoop::EnableSigIntHandler);
+    loop->init(EventLoop::MainEventLoop);
 
     Path socket = getenv("PLAST_SOCKET_FILE");
     if (socket.isEmpty())

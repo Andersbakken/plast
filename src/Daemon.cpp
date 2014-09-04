@@ -53,7 +53,8 @@ Daemon::Daemon()
 
     mServerConnection->error().connect(std::bind(&Daemon::restartServerTimer, this));
 
-    mServerTimer.timeout().connect([this](Timer *) { reconnectToServer(); });
+    mServerTimer.timeout().connect(std::bind(&Daemon::reconnectToServer, this));
+    mOutstandingJobRequestsTimer.timeout().connect(std::bind(&Daemon::checkJobRequstTimeout, this));
 }
 
 Daemon::~Daemon()
@@ -187,6 +188,23 @@ void Daemon::onNewMessage(Message *message, Connection *conn)
     }
 }
 
+static inline bool checkFlags(unsigned int flags)
+{
+    if (flags & (CompilerArgs::StdinInput|CompilerArgs::MultiSource)) {
+        return false;
+    }
+    switch (flags & CompilerArgs::LanguageMask) {
+    case CompilerArgs::C:
+    case CompilerArgs::CPlusPlus:
+    case CompilerArgs::CPreprocessed:
+    case CompilerArgs::CPlusPlusPreprocessed:
+        return true;
+    default:
+        break;
+    }
+    return false;
+}
+
 void Daemon::handleClientJobMessage(const ClientJobMessage *msg, const std::shared_ptr<Connection> &conn)
 {
     debug() << "Got local job" << msg->arguments() << msg->cwd();
@@ -203,14 +221,17 @@ void Daemon::handleClientJobMessage(const ClientJobMessage *msg, const std::shar
         conn->close();
         return;
     }
-    std::shared_ptr<Job> localJob = std::make_shared<Job>(msg->arguments(), resolvedCompiler, env, msg->cwd(), compiler, conn);
-    if (localJob->arguments.mode != CompilerArgs::Compile) {
-        warning() << "Not a compile job" << localJob->arguments.modeName();
+    std::shared_ptr<Job> job = std::make_shared<Job>(msg->arguments(), resolvedCompiler, env, msg->cwd(), compiler, conn);
+    if (!job->arguments || job->arguments->mode != CompilerArgs::Compile || !checkFlags(job->arguments->flags)) {
+        warning() << "Not a job for us"
+                  << msg->arguments()
+                  << (job->arguments ? job->arguments->modeName() : "")
+                  << (job->arguments ? job->arguments->flags : 0);
         conn->send(ClientJobResponseMessage());
         return;
     }
-    mJobsByLocalConnection[conn] = localJob;
-    addJob(Job::PendingPreprocessing, localJob);
+    mJobsByLocalConnection[conn] = job;
+    addJob(Job::PendingPreprocessing, job);
     startJobs();
 }
 
@@ -281,6 +302,7 @@ void Daemon::handleHandshakeMessage(const HandshakeMessage *message, const std::
 void Daemon::handleDaemonJobAnnouncementMessage(const DaemonJobAnnouncementMessage *message, const std::shared_ptr<Connection> &connection)
 {
     warning() << "Got announcement" << message->announcement() << "from" << connection->client()->peerString();
+    int available = mOutstandingJobRequests.size() + mCompileJobsByProcess.size();
     for (const auto &announcement : message->announcement()) {
         if (auto compiler = Compiler::compilerBySha256(announcement.first)) {
             if (compiler->isValid()) {
@@ -401,13 +423,12 @@ void Daemon::onCompileProcessFinished(Process *process)
         assert(job->flags & Job::Compiling);
         mCompilingJobs.erase(job->position);
         job->localConnection->send(ClientJobResponseMessage(process->returnCode(), job->output));
-        error() << "Foobar" << process->returnCode() << job->output.size();
         mJobsByLocalConnection.remove(job->localConnection);
         job->process = 0;
         assert(job.use_count() == 1);
     }
     EventLoop::deleteLater(process);
-    EventLoop::eventLoop()->callLater(std::bind(&Daemon::startJobs, this));
+    startJobs();
 }
 
 void Daemon::startJobs()
@@ -418,8 +439,8 @@ void Daemon::startJobs()
         auto job = mPendingPreprocessJobs.first();
         assert(job->flags & Job::PendingPreprocessing);
         removeJob(job);
-        List<String> args = job->arguments.arguments.mid(1);
-        if (job->arguments.flags & CompilerArgs::HasOutput) {
+        List<String> args = job->arguments->arguments.mid(1);
+        if (job->arguments->flags & CompilerArgs::HasOutput) {
             for (int i=0; i<args.size(); ++i) {
                 if (args.at(i) == "-o") {
                     if (++i == args.size()) {
@@ -432,12 +453,14 @@ void Daemon::startJobs()
                     break;
                 }
             }
+        } else {
+            args << "-o" << "-";
         }
         if (!job)
             continue;
         args.append("-E");
         // assert(!arguments.isEmpty());
-        const Path compiler = Compiler::resolve(job->arguments.arguments.first());
+        const Path compiler = Compiler::resolve(job->arguments->arguments.first());
         if (compiler.isEmpty()) {
             job->localConnection->send(ClientJobResponseMessage());
             mJobsByLocalConnection.remove(job->localConnection);
@@ -447,7 +470,6 @@ void Daemon::startJobs()
         assert(!job->process);
         job->process = new Process;
         mPreprocessJobsByProcess[job->process] = job;
-        EventLoop::eventLoop()->callLater(std::bind(&Daemon::startJobs, this));
 
         job->process->setCwd(job->cwd);
         addJob(Job::Preprocessing, job);
@@ -468,7 +490,7 @@ void Daemon::startJobs()
                         job->preprocessed = proc->readAllStdOut();
                         error() << "Preprocessing finished" << compiler << args << job->preprocessed.size();
                         addJob(Job::PendingCompiling, job);
-                        EventLoop::eventLoop()->callLater(std::bind(&Daemon::startJobs, this));
+                        startJobs();
                     }
                 }
             });
@@ -481,16 +503,90 @@ void Daemon::startJobs()
         while (mCompileJobsByProcess.size() < mOptions.jobCount && !mPendingCompileJobs.isEmpty()) {
             auto job = mPendingCompileJobs.first();
             removeJob(job);
-            String err;
             addJob(Job::Compiling, job);
-            job->process = startProcess(job->resolvedCompiler, job->arguments.arguments, job->environ, job->cwd, &err);
-            error() << "Starting" << job->resolvedCompiler << job->arguments.arguments;
-            if (!job->process) {
+
+            List<String> args = job->arguments->arguments.mid(1);
+            error() << job->arguments->sourceFiles();
+            assert(job->arguments->sourceFileIndexes.size() == 1);
+            args.removeAt(job->arguments->sourceFileIndexes.first() - 1);
+            CompilerArgs::Flag lang = static_cast<CompilerArgs::Flag>(job->arguments->flags & CompilerArgs::LanguageMask);
+            switch (lang) {
+            case CompilerArgs::CPlusPlus: lang = CompilerArgs::CPlusPlusPreprocessed; break;
+            case CompilerArgs::C: lang = CompilerArgs::CPreprocessed; break;
+            default: break; // ### what about the other languages?
+            }
+            if (!(job->arguments->flags & CompilerArgs::HasDashX)) {
+                args << "-x";
+                args << CompilerArgs::languageName(lang);
+            } else {
+                const int idx = args.indexOf("-x");
+                assert(idx != -1);
+                assert(idx + 1 < args.size());
+                args[idx + 1] = CompilerArgs::languageName(lang);
+            }
+            args << "-";
+            if (job->flags & Job::FromRemote) {
+                assert(job->tempOutput.isEmpty());
+                const Path dir = mOptions.cacheDir + "output/";
+                Path::mkdir(dir, Path::Recursive);
+                job->tempOutput = dir + job->arguments->sourceFile().fileName() + ".XXXXXX";
+                const int fd = mkstemp(&job->tempOutput[0]);
+                // error() << errno << strerror(errno) << job->tempOutput;
+                assert(fd != -1);
+                close(fd);
+            }
+            if (!(job->arguments->flags & CompilerArgs::HasOutput)) {
+                args << "-o";
+                if (!(job->flags & Job::FromRemote)) {
+                    Path sourceFile = job->arguments->sourceFile();
+                    const int lastDot = sourceFile.lastIndexOf('.');
+                    if (lastDot != -1 && lastDot > sourceFile.lastIndexOf('/')) {
+                        sourceFile.chop(sourceFile.size() - lastDot - 1);
+                        sourceFile.append('o');
+                    }
+                    args << sourceFile;
+                } else {
+                    args << job->tempOutput;
+                }
+            } else if (job->flags & Job::FromRemote) {
+                const int idx = args.indexOf("-o");
+                assert(idx != -1);
+                args[idx + 1] = job->tempOutput;
+            }
+            debug() << "Starting process" << args;
+            assert(!args.isEmpty());
+            job->process = new Process;
+            job->process->setCwd(job->cwd);
+            job->process->finished().connect(std::bind(&Daemon::onCompileProcessFinished, this, std::placeholders::_1));
+            job->process->readyReadStdOut().connect(std::bind(&Daemon::onCompileProcessReadyReadStdOut, this, std::placeholders::_1));
+            job->process->readyReadStdErr().connect(std::bind(&Daemon::onCompileProcessReadyReadStdErr, this, std::placeholders::_1));
+            // if (job->flags & Job::FromRemote) {
+            // ### need to make up a temp file
+            // if (job->arguments.flags & CompilerArgs::HasOutput) {
+            //     for (int i=0; i<args.size(); ++i) {
+            //         if (args.at(i) == "-o") {
+            //             if (++i == args.size()) {
+            //                 job->localConnection->send(ClientJobResponseMessage());
+            //                 mJobsByLocalConnection.remove(job->localConnection);
+            //                 job.reset();
+            //             } else {
+            //                 args[i] = "-";
+            //             }
+            //             break;
+            //         }
+            //     }
+            // }
+
+            if (!job->process->start(job->resolvedCompiler, args, job->environ)) {
+                delete job->process;
                 removeJob(job);
                 job->localConnection->send(ClientJobResponseMessage());
                 mJobsByLocalConnection.remove(job->localConnection);
                 assert(job.use_count() == 1);
+                error() << "Failed to start compiler" << job->resolvedCompiler;
             } else {
+                job->process->write(job->preprocessed);
+                job->process->closeStdIn();
                 mCompileJobsByProcess[job->process] = job;
             }
         }
@@ -538,7 +634,22 @@ void Daemon::announceJobs()
 
 void Daemon::checkJobRequstTimeout()
 {
-
+    const uint64_t now = Rct::monoMs();
+    auto it = mOutstandingJobRequests.begin();
+    uint64_t timer = 0;
+    while (it != mOutstandingJobRequests.end()) {
+        if (now - it->second > 10000) { // people need to get back to us in 10 seconds
+            it = mOutstandingJobRequests.erase(it);
+        } else {
+            const uint64_t elapseTime = it->second + 10000;
+            if (!timer || elapseTime < timer)
+                timer = elapseTime;
+            ++it;
+        }
+    }
+    if (timer) {
+        mOutstandingJobRequestsTimer.restart(timer, Timer::SingleShot);
+    }
 }
 
 void Daemon::onConnectionDisconnected(Connection *conn)
@@ -566,30 +677,6 @@ void Daemon::onConnectionDisconnected(Connection *conn)
     }
 }
 
-Process *Daemon::startProcess(const Path &compiler, const List<String> &arguments, const List<String> &environ, const Path &cwd, String *err)
-{
-    debug() << "Starting process" << arguments;
-    assert(!arguments.isEmpty());
-    if (compiler.isEmpty()) {
-        error() << "Can't resolve compiler for" << arguments.first();
-        return 0;
-    }
-    Process *process = new Process;
-    process->setCwd(cwd);
-    process->finished().connect(std::bind(&Daemon::onCompileProcessFinished, this, std::placeholders::_1));
-    process->readyReadStdOut().connect(std::bind(&Daemon::onCompileProcessReadyReadStdOut, this, std::placeholders::_1));
-    process->readyReadStdErr().connect(std::bind(&Daemon::onCompileProcessReadyReadStdErr, this, std::placeholders::_1));
-    if (!process->start(compiler, arguments.mid(1), environ)) {
-        error() << "Failed to start compiler" << compiler;
-        if (err)
-            *err = "Failed to start compiler: " + compiler;
-        delete process;
-        return 0;
-    }
-    debug() << "Started process" << compiler << arguments.mid(1) << process;
-    return process;
-}
-
 void Daemon::handleConsoleCommand(const String &string)
 {
     String str = string;
@@ -611,7 +698,7 @@ void Daemon::handleConsoleCommand(const String &string)
                 printf("%s: %d\n", lists[i].name, lists[i].list->size());
                 for (const auto &job : *lists[i].list) {
                     printf("Job: %s Received: %s\n",
-                           String::join(job->arguments.sourceFiles, ", ").constData(),
+                           String::join(job->arguments->sourceFiles(), ", ").constData(),
                            String::formatTime(job->received).constData());
                 }
             }

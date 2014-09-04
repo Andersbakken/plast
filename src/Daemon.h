@@ -70,19 +70,16 @@ private:
     void announceJobs();
     void checkJobRequstTimeout();
 
-    Process *startProcess(const Path &compiler, const List<String> &arguments,
-                          const List<String> &environ, const Path &cwd, String *error);
-
     struct Job {
         Job(const List<String> &args, const Path &resolved, const List<String> &env, const Path &dir,
-                 std::shared_ptr<Compiler> &c, const std::shared_ptr<Connection> &conn)
+            std::shared_ptr<Compiler> &c, const std::shared_ptr<Connection> &conn)
             : received(time(0)), arguments(CompilerArgs::create(args)), resolvedCompiler(resolved),
-              environ(env), cwd(dir), process(0), flags(0), compiler(c), localConnection(conn)
+              environ(env), cwd(dir), process(0), flags(None), compiler(c), localConnection(conn)
         {
         }
 
         time_t received;
-        CompilerArgs arguments;
+        std::shared_ptr<CompilerArgs> arguments;
         Path resolvedCompiler;
         List<String> environ;
         Path cwd;
@@ -95,9 +92,11 @@ private:
             Preprocessing = 0x04,
             PendingCompiling = 0x08,
             Compiling = 0x10,
+            FromRemote = 0x20,
             StateMask = Preprocessing|PendingPreprocessing|PendingCompiling|Compiling
         };
 
+        Path tempOutput;
         String preprocessed;
         uint32_t flags;
         LinkedList<std::shared_ptr<Job> >::iterator position;
@@ -157,7 +156,8 @@ private:
 
     Hash<std::shared_ptr<Connection>, std::shared_ptr<Job> > mJobsByLocalConnection, mJobsByRemoteConnection;
     Hash<Process*, std::shared_ptr<Job> > mCompileJobsByProcess, mPreprocessJobsByProcess;
-    Hash<uint64_t, time_t> mOutstandingJobRequests;
+    Hash<uint64_t, uint64_t> mOutstandingJobRequests; // jobid: Rct::monoMs
+    Timer mOutstandingJobRequestsTimer;
     uint64_t mNextJobId;
 
     struct Peer {

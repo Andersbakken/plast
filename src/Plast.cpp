@@ -442,8 +442,7 @@ static const char *argOptions[] = {
     "-isysroot",
     "-iwithprefix",
     "-iwithprefixbefore",
-    "-wrapper",
-    "-x"
+    "-wrapper"
 };
 
 static int compare(const void *s1, const void *s2) {
@@ -458,25 +457,85 @@ static inline bool hasArg(const String &arg)
                    sizeof(const char*), ::compare);
 }
 
-CompilerArgs CompilerArgs::create(const List<String> &args)
+std::shared_ptr<CompilerArgs> CompilerArgs::create(const List<String> &args)
 {
-    CompilerArgs ret = { args, List<Path>(), Path(), args.value(0), Link, None };
+    std::shared_ptr<CompilerArgs> ret(new CompilerArgs({ args, List<int>(), Path(), args.value(0), Link, None }));
     for (int i=1; i<args.size(); ++i) {
         const String &arg = args[i];
         if (arg == "-c") {
-            if (ret.mode == Link)
-                ret.mode = Compile;
+            if (ret->mode == Link)
+                ret->mode = Compile;
         } else if (arg == "-S") {
-            ret.flags |= NoAssemble;
+            ret->flags |= NoAssemble;
         } else if (arg == "-E") {
-            ret.mode = Preprocess;
+            ret->mode = Preprocess;
         } else if (arg == "-o") {
-            ret.flags |= HasOutput;
+            ret->flags |= HasOutput;
+            ++i;
+        } else if (arg == "-x") {
+            ret->flags |= HasDashX;
+            if (++i == args.size())
+                return std::shared_ptr<CompilerArgs>();
+            const String lang = args.value(i);
+            const CompilerArgs::Flag languages[] = { CPlusPlus, C, CPreprocessed, CPlusPlusPreprocessed, ObjectiveC, AssemblerWithCpp, Assembler };
+            for (size_t j=0; j<sizeof(languages) / sizeof(languages[0]); ++j) {
+                if (lang == CompilerArgs::languageName(languages[j])) {
+                    ret->flags &= ~LanguageMask;
+                    ret->flags |= languages[j];
+                    // -x takes precedence
+                    break;
+                }
+            }
         } else if (hasArg(arg)) {
             ++i;
         } else if (!arg.startsWith("-")) {
-            ret.sourceFiles.append(arg);
+            ret->sourceFileIndexes.append(i);
+            if (!(ret->flags & LanguageMask)) {
+                const int lastDot = arg.lastIndexOf('.');
+                if (lastDot != -1) {
+                    const char *ext = arg.constData() + lastDot + 1;
+                    struct {
+                        const char *suffix;
+                        const Flag flag;
+                    } static const suffixes[] = {
+                        { "C", CPlusPlus },
+                        { "cxx", CPlusPlus },
+                        { "cpp", CPlusPlus },
+                        { "c", C },
+                        { "i", CPreprocessed },
+                        { "ii", CPlusPlusPreprocessed },
+                        { "m", ObjectiveC },
+                        { "S", Assembler },
+                        { "s", AssemblerWithCpp },
+                        { 0, None }
+                    };
+                    for (int i=0; suffixes[i].suffix; ++i) {
+                        if (!strcmp(ext, suffixes[i].suffix)) {
+                            ret->flags |= suffixes[i].flag;
+                            break;
+                        }
+                    }
+                }
+            }
+        } else if (arg == "-") {
+            ret->flags |= StdinInput;
         }
+        // ### what if arg == "-"
     }
     return ret;
+}
+
+const char *CompilerArgs::languageName(Flag flag)
+{
+    switch (flag) {
+    case CPlusPlus: return "c++";
+    case C: return "c";
+    case CPreprocessed: return "cpp-output";
+    case CPlusPlusPreprocessed: return "c++-cpp-output";
+    case ObjectiveC: return "objective-c"; // ### what about ObjectiveC++?
+    case AssemblerWithCpp: return "assembler-with-cpp";
+    case Assembler: return "assembler";
+    default: break;
+    }
+    return "";
 }

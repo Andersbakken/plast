@@ -58,7 +58,16 @@ private:
 struct CompilerArgs
 {
     List<String> arguments;
-    List<Path> sourceFiles;
+    List<int> sourceFileIndexes;
+    List<Path> sourceFiles() const
+    {
+        List<Path> ret;
+        ret.reserve(sourceFileIndexes.size());
+        for (int idx : sourceFileIndexes) {
+            ret.append(arguments.at(idx));
+        }
+        return ret;
+    }
 
     Path output, compiler;
     enum Mode {
@@ -78,16 +87,27 @@ struct CompilerArgs
     }
 
     enum Flag {
-        None = 0x0,
-        NoAssemble = 0x1,
-        MultiSource = 0x2,
-        HasOutput = 0x4
+        None = 0x0000,
+        NoAssemble = 0x0001,
+        MultiSource = 0x0002,
+        HasOutput = 0x0004,
+        HasDashX = 0x0008,
+        StdinInput = 0x0010,
+        CPlusPlus = 0x0020,
+        C = 0x0040,
+        CPreprocessed = 0x0080,
+        CPlusPlusPreprocessed = 0x0100,
+        ObjectiveC = 0x0200,
+        AssemblerWithCpp = 0x0400,
+        Assembler = 0x0800,
+        LanguageMask = CPlusPlus|C|CPreprocessed|CPlusPlusPreprocessed|ObjectiveC|AssemblerWithCpp|Assembler
     };
+    static const char *languageName(Flag flag);
     unsigned int flags;
 
-    static CompilerArgs create(const List<String> &args);
+    static std::shared_ptr<CompilerArgs> create(const List<String> &args);
 
-    Path sourceFile(int idx = 0) const { return sourceFiles.value(idx); }
+    Path sourceFile(int idx = 0) const { return arguments.value(sourceFileIndexes.value(idx, -1)); }
 };
 
 struct Host
