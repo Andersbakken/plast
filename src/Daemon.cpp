@@ -120,14 +120,19 @@ bool Daemon::init(const Options &options)
 
     for (const Path &path : mOptions.cacheDir.files(Path::Directory)) {
         error() << path;
-        SHA256 sha;
-        List<Path> files = path.files(Path::File);
-        files.sort();
-        for (const Path &file : files) {
+        List<String> shaList;
+        Set<Path> files;
+        for (const Path &file : path.files(Path::File)) {
             if (!file.isSymLink()) {
-                sha.update(file.fileName());
+                shaList.append(file.fileName());
+                files.insert(file);
                 error() << file.fileName();
             }
+        }
+        SHA256 sha;
+        shaList.sort();
+        for (const String &fn : shaList) {
+            sha.update(fn);
         }
         const String sha256 = sha.hash(SHA256::Hex);
         error() << "Got compiler" << sha256 << path.fileName();
@@ -135,7 +140,13 @@ bool Daemon::init(const Options &options)
             error() << "Invalid compiler" << path << sha256;
             Path::rmdir(path);
         } else {
-            // Compiler::insert(
+            bool ok;
+            const Path exec = Path(path + "/COMPILER").followLink(&ok);
+            if (!ok) {
+                error() << "Can't find COMPILER symlink";
+            } else {
+                Compiler::insert(exec, sha256, files);
+            }
         }
     }
 

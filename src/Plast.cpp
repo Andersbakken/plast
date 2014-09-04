@@ -133,6 +133,20 @@ bool CompilerPackage::loadFile(const Path &file)
     return true;
 }
 
+Serializer &operator<<(Serializer &s, const CompilerPackage::File &p)
+{
+    s << p.contents << static_cast<uint32_t>(p.perm);
+    return s;
+}
+
+Deserializer &operator>>(Deserializer &s, CompilerPackage::File &p)
+{
+    uint32_t perm;
+    s >> p.contents >> perm;
+    p.perm = static_cast<mode_t>(perm);
+    return s;
+}
+
 Serializer &operator<<(Serializer &s, const CompilerPackage &p)
 {
     s << p.executable() << p.files();
@@ -142,7 +156,7 @@ Serializer &operator<<(Serializer &s, const CompilerPackage &p)
 Deserializer &operator>>(Deserializer &s, CompilerPackage &p)
 {
     Path compiler;
-    Hash<Path, File> files;
+    Hash<Path, CompilerPackage::File> files;
     s >> compiler >> files;
     p = CompilerPackage(compiler, files);
     return s;
@@ -220,7 +234,7 @@ bool CompilerMessage::writeFiles(const Path &root) const
         const char *fileName = file.first.fileName();
         const Path path = root + fileName;
         // Path::mkdir(path.parentDir(), Path::Recursive);
-        if (!Rct::writeFile(path, file.second)) {
+        if (!Rct::writeFile(path, file.second.contents, file.second.perm)) {
             error() << "Couldn't write file" << path;
             return false;
         }
