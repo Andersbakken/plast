@@ -88,7 +88,7 @@ std::shared_ptr<Compiler> Compiler::compiler(const Path &compiler, const String 
     Process process;
     if (!process.exec(
 #ifdef OS_Darwin
-            "otool", List<String>() << "-L" << resolved
+            "otool", List<String>() << "-L" << "-X" << resolved
 #else
             "ldd", List<String>() << resolved
 #endif
@@ -99,12 +99,13 @@ std::shared_ptr<Compiler> Compiler::compiler(const Path &compiler, const String 
     const List<String> lines = process.readAllStdOut().split('\n');
     shaList.append(compiler.fileName());
     for (const String &line : lines) {
+        error() << line;
 #ifdef OS_Darwin
-        if (!line.startsWith(" "))
-            continue;
         const int idx = line.indexOf('/');
-        if (idx == -1)
+        if (idx == -1) {
+            printf("[%s:%d]: if (idx == -1) {\n", __FILE__, __LINE__); fflush(stdout);
             continue;
+        }
 #else
         int idx = line.indexOf("=> /");
         if (idx == -1)
@@ -112,8 +113,10 @@ std::shared_ptr<Compiler> Compiler::compiler(const Path &compiler, const String 
         idx += 3;
 #endif
         const int end = line.indexOf(' ', idx + 2);
-        if (end == -1)
+        if (end == -1) {
+            printf("[%s:%d]: if (end == -1) {\n", __FILE__, __LINE__); fflush(stdout);
             continue;
+        }
         const Path unresolved = line.mid(idx, end - idx);
         const Path path = Path::resolved(unresolved);
         if (path.isFile()) {

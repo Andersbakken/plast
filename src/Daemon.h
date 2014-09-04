@@ -184,7 +184,7 @@ private:
     Options mOptions;
     SocketServer mLocalServer, mRemoteServer;
     std::shared_ptr<SocketClient> mDiscoverySocket;
-    std::shared_ptr<Connection> mServerConnection, mSelfConnection;
+    std::shared_ptr<Connection> mServerConnection;
     Timer mServerTimer;
 };
 

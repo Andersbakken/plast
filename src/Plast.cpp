@@ -205,7 +205,6 @@ CompilerPackage *CompilerMessage::loadCompiler(const Path &compiler, const Set<P
 void CompilerMessage::encode(Serializer &serializer) const
 {
     serializer << mCompiler << mSha256 << (mPackage != 0);
-    error() << "Encoding" << mCompiler << mSha256 << (mPackage != 0);
     if (mPackage)
         serializer << *mPackage;
 }

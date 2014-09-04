@@ -99,7 +99,7 @@ bool Daemon::init(const Options &options)
         error() << "Can't seem to listen on" << options.port;
         return false;
     }
-    error() << "Listening" << options.port;
+    warning() << "Listening" << options.port;
 
     if (options.discoveryPort) {
         mDiscoverySocket.reset(new SocketClient);
@@ -110,23 +110,17 @@ bool Daemon::init(const Options &options)
             });
     }
 
-    // if (mOptions.flags & Options::NoLocalJobs) {
-    //     mSelfConnection = std::make_shared<Connection>();
-    //     mSelfConnection->connectUnix(options.socketFile);
-    //     mSelfConnection->newMessage().connect(std::bind(&Daemon::onNewMessage, this, std::placeholders::_1, std::placeholders::_2));
-    // }
-
     mOptions = options;
 
     for (const Path &path : mOptions.cacheDir.files(Path::Directory)) {
-        error() << path;
+        // error() << path;
         List<String> shaList;
         Set<Path> files;
         for (const Path &file : path.files(Path::File)) {
             if (!file.isSymLink()) {
                 shaList.append(file.fileName());
                 files.insert(file);
-                error() << file.fileName();
+                // error() << file.fileName();
             }
         }
         SHA256 sha;
@@ -135,16 +129,15 @@ bool Daemon::init(const Options &options)
             sha.update(fn);
         }
         const String sha256 = sha.hash(SHA256::Hex);
-        error() << "Got compiler" << sha256 << path.fileName();
         if (sha256 != path.name()) {
             error() << "Invalid compiler" << path << sha256;
             Path::rmdir(path);
         } else {
-            bool ok;
-            const Path exec = Path(path + "/COMPILER").followLink(&ok);
-            if (!ok) {
+            const Path exec = Path::resolved(path + "/COMPILER");
+            if (!exec.isFile()) {
                 error() << "Can't find COMPILER symlink";
             } else {
+                warning() << "Got compiler" << sha256 << path.fileName();
                 Compiler::insert(exec, sha256, files);
             }
         }
@@ -234,7 +227,6 @@ void Daemon::handleCompilerRequestMessage(const CompilerRequestMessage *message,
     if (compiler) {
         error() << "Sending compiler" << message->sha256();
         connection->send(CompilerMessage(compiler));
-        printf("[%s:%d]: connection->send(CompilerMessage(compiler));\n", __FILE__, __LINE__); fflush(stdout);
     } else {
         error() << "I don't know nothing about no" << message->sha256() << "Fisk" << Compiler::dump();
     }
@@ -247,20 +239,20 @@ void Daemon::handleDaemonJobRequestMessage(const DaemonJobRequestMessage *messag
 
 void Daemon::handleDaemonListMessage(const DaemonListMessage *message, const std::shared_ptr<Connection> &connection)
 {
-    error() << "Got daemon-list" << message->hosts().size();
+    warning() << "Got daemon-list" << message->hosts().size();
     for (const auto &host : message->hosts()) {
-        error() << "Handling daemon list" << host.toString();
+        warning() << "Handling daemon list" << host.toString();
         Peer *&peer = mPeersByHost[host];
         if (!peer) {
             auto conn = std::make_shared<Connection>();
-            error() << "Trying to connect to" << host.address << host.port << host.friendlyName;
+            warning() << "Trying to connect to" << host.address << host.port << host.friendlyName;
             if (conn->connectTcp(host.address, host.port) || conn->connectTcp(host.friendlyName, host.port)) {
                 peer = new Peer({ conn, host });
                 mPeersByConnection[conn] = peer;
                 mConnections.insert(conn);
                 conn->disconnected().connect(std::bind(&Daemon::onConnectionDisconnected, this, std::placeholders::_1));
                 conn->newMessage().connect(std::bind(&Daemon::onNewMessage, this, std::placeholders::_1, std::placeholders::_2));
-                error() << "Sending handshake to" << host.toString();
+                warning() << "Sending handshake to" << host.toString();
                 sendHandshake(conn);
             } else {
                 error() << "Failed to connect to host" << host.toString();
@@ -280,14 +272,15 @@ void Daemon::handleHandshakeMessage(const HandshakeMessage *message, const std::
     } else {
         peer->host = host;
     }
-    error() << "Got handshake from" << peer->host.friendlyName;
+    warning() << "Got handshake from" << peer->host.friendlyName;
 }
 
 void Daemon::handleDaemonJobAnnouncementMessage(const DaemonJobAnnouncementMessage *message, const std::shared_ptr<Connection> &connection)
 {
-    error() << "Got announcement" << message->announcement() << "from" << connection->client()->peerString();
+    warning() << "Got announcement" << message->announcement() << "from" << connection->client()->peerString();
     for (const auto &announcement : message->announcement()) {
         if (auto compiler = Compiler::compilerBySha256(announcement.first)) {
+            error() << "I have the compiler. Lets go";
         } else {
             error() << "requesting compiler" << announcement.first;
             connection->send(CompilerRequestMessage(announcement.first));
@@ -536,9 +529,6 @@ void Daemon::announceJobs()
         for (const auto &connection : mPeersByConnection) {
             connection.first->send(msg);
         }
-        // if (mOptions.flags & Options::NoLocalJobs && mSelfConnection && mSelfConnection->isConnected()) {
-        //     handleDaemonJobAnnouncementMessage(&msg, mSelfConnection);
-        // }
     }
 }
 
