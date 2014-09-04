@@ -51,9 +51,9 @@ std::shared_ptr<Compiler> Compiler::compiler(const Path &compiler, const String 
         return c;
     }
     SHA256 sha;
-#ifdef OS_Linux
     c.reset(new Compiler);
     List<String> shaList;
+#ifdef OS_Linux
     {
         Process process;
         if (!process.exec(resolved, List<String>() << "-print-prog-name=cc1")) {
@@ -84,21 +84,37 @@ std::shared_ptr<Compiler> Compiler::compiler(const Path &compiler, const String 
             }
         }
     }
+#endif
     Process process;
-    if (!process.exec("ldd", List<String>() << resolved)) {
+    if (!process.exec(
+#ifdef OS_Darwin
+            "otool", List<String>() << "-L" << resolved
+#else
+            "ldd", List<String>() << resolved
+#endif
+            )) {
         error() << "Couldn't ldd compiler" << resolved;
         return std::shared_ptr<Compiler>();
     }
     const List<String> lines = process.readAllStdOut().split('\n');
     shaList.append(compiler.fileName());
     for (const String &line : lines) {
-        const int idx = line.indexOf("=> /");
+#ifdef OS_Darwin
+        if (!line.startsWith(" "))
+            continue;
+        const int idx = line.indexOf('/');
         if (idx == -1)
             continue;
-        const int end = line.indexOf(' ', idx + 5);
+#else
+        int idx = line.indexOf("=> /");
+        if (idx == -1)
+            continue;
+        idx += 3;
+#endif
+        const int end = line.indexOf(' ', idx + 2);
         if (end == -1)
             continue;
-        const Path unresolved = line.mid(idx + 3, end - idx - 3);
+        const Path unresolved = line.mid(idx, end - idx);
         const Path path = Path::resolved(unresolved);
         if (path.isFile()) {
             shaList.append(unresolved.fileName());
@@ -112,9 +128,6 @@ std::shared_ptr<Compiler> Compiler::compiler(const Path &compiler, const String 
         sha.update(s);
         error() << s;
     }
-#elif defined(OS_Darwin)
-
-#endif
     if (c) {
         c->mSha256 = sha.hash(SHA256::Hex);
         error() << "GOT SHA" << c->mSha256;
