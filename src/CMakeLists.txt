@@ -51,7 +51,6 @@ include_directories(${CMAKE_CURRENT_LIST_DIR}
                     rct
                     ${CMAKE_CURRENT_BINARY_DIR}/rct/include/rct
                     ${Readline_INCLUDE_DIR})
-                    # ${LibMagic_INCLUDE_DIR})
 
 add_executable(plastc plastc.cpp)
 add_dependencies(plastc rct plast)
@@ -59,7 +58,7 @@ target_link_libraries(plastc plast rct ${SYSTEM_LIBS})
 
 add_executable(plastd plastd.cpp Daemon.cpp)
 add_dependencies(plastd rct plast)
-target_link_libraries(plastd plast rct ${SYSTEM_LIBS} ${Readline_LIBRARY}) # ${LibMagic_LIBRARY})
+target_link_libraries(plastd plast rct ${SYSTEM_LIBS} ${Readline_LIBRARY})
 
 add_executable(plasts plasts.cpp Server.cpp)
 add_dependencies(plasts rct plast)
