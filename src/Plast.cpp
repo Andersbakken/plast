@@ -12,9 +12,9 @@ bool init()
     Message::registerMessage<ClientJobResponseMessage>();
     Message::registerMessage<CompilerMessage>();
     Message::registerMessage<CompilerRequestMessage>();
-    Message::registerMessage<DaemonJobAnnouncementMessage>();
-    Message::registerMessage<DaemonJobRequestMessage>();
-    Message::registerMessage<DaemonJobResponseMessage>();
+    Message::registerMessage<JobAnnouncementMessage>();
+    Message::registerMessage<JobRequestMessage>();
+    Message::registerMessage<JobMessage>();
     Message::registerMessage<DaemonListMessage>();
     Message::registerMessage<HandshakeMessage>();
     Message::registerMessage<QuitMessage>();
@@ -322,7 +322,7 @@ Deserializer &operator>>(Deserializer &s, CompilerPackage &p)
 Hash<String, CompilerPackage *> CompilerMessage::sPackages;
 
 CompilerMessage::CompilerMessage(const std::shared_ptr<Compiler> &compiler)
-    : Message(MessageId, Compressed), mPackage(0)
+    : Message(MessageId, 0), mPackage(0)
 {
     if (compiler) {
         mSha256 = compiler->sha256();

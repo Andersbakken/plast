@@ -17,7 +17,7 @@
 #include <rct/SHA256.h>
 
 Daemon::Daemon()
-    : mExplicitServer(false), mAnnouncementPending(false), mServerConnection(std::make_shared<Connection>())
+    : mNextJobId(1), mExplicitServer(false), mServerConnection(std::make_shared<Connection>())
 {
     Console::init("plastd> ",
                   std::bind(&Daemon::handleConsoleCommand, this, std::placeholders::_1),
@@ -165,7 +165,7 @@ void Daemon::onNewMessage(Message *message, Connection *conn)
         EventLoop::eventLoop()->quit();
         break;
     case DaemonJobAnnouncementMessageId:
-        handleDaemonJobAnnouncementMessage(static_cast<DaemonJobAnnouncementMessage*>(message), connection);
+        handleJobAnnouncementMessage(static_cast<JobAnnouncementMessage*>(message), connection);
         break;
     case CompilerMessageId:
         handleCompilerMessage(static_cast<CompilerMessage*>(message), connection);
@@ -173,8 +173,14 @@ void Daemon::onNewMessage(Message *message, Connection *conn)
     case CompilerRequestMessageId:
         handleCompilerRequestMessage(static_cast<CompilerRequestMessage*>(message), connection);
         break;
-    case DaemonJobRequestMessageId:
-        handleDaemonJobRequestMessage(static_cast<DaemonJobRequestMessage*>(message), connection);
+    case JobRequestMessageId:
+        handleJobRequestMessage(static_cast<JobRequestMessage*>(message), connection);
+        break;
+    case JobMessageId:
+        handleJobMessage(static_cast<JobMessage*>(message), connection);
+        break;
+    case JobResponseMessageId:
+        handleJobResponseMessage(static_cast<JobResponseMessage*>(message), connection);
         break;
     case DaemonListMessageId:
         handleDaemonListMessage(static_cast<DaemonListMessage*>(message), connection);
@@ -239,9 +245,39 @@ void Daemon::handleCompilerRequestMessage(const CompilerRequestMessage *message,
     }
 }
 
-void Daemon::handleDaemonJobRequestMessage(const DaemonJobRequestMessage *message, const std::shared_ptr<Connection> &connection)
+void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std::shared_ptr<Connection> &connection)
 {
+    // error() << "Got job request" << message->id() << message->sha256();
+    // auto it = mPendingCompileJobs.begin();
+    // while (it != mPendingCompileJobs.end()) {
+    //     if ((*it)->compiler->sha256() == message->sha256()) {
+    //         break;
+    //     }
+    //     ++it;
+    // }
+    // if (it == mPendingCompileJobs.end()) { // no jobs available
+    //     connection->send(JobMessage(message->id()));
+    // } else {
+    //     List<String> args = job->args;
+    //     // if (connection->send(JobMessage(message->id(), ));
 
+    //     auto job = *it;
+    //     removeJob(job);
+    //     job->remoteConnection = connection;
+    //     mJobsByRemoteConnection[connection].insert(job);
+    //     job->flags |= Job::Remote;
+    //     addJob(Job::Compiling, job);
+    // }
+}
+
+void Daemon::handleJobMessage(const JobMessage *message, const std::shared_ptr<Connection> &connection)
+{
+    error() << "Got job message" << message->id() << message->preprocessed().size() << message->args();
+}
+
+void Daemon::handleJobResponseMessage(const JobResponseMessage *message, const std::shared_ptr<Connection> &connection)
+{
+    error() << "Got job response" << message->id() << message->files().keys();
 }
 
 void Daemon::handleDaemonListMessage(const DaemonListMessage *message, const std::shared_ptr<Connection> &connection)
@@ -254,7 +290,7 @@ void Daemon::handleDaemonListMessage(const DaemonListMessage *message, const std
             auto conn = std::make_shared<Connection>();
             warning() << "Trying to connect to" << host.address << host.port << host.friendlyName;
             if (conn->connectTcp(host.address, host.port) || conn->connectTcp(host.friendlyName, host.port)) {
-                peer = new Peer({ conn, host });
+                peer = new Peer({ conn, host, Set<String>() });
                 mPeersByConnection[conn] = peer;
                 mConnections.insert(conn);
                 conn->disconnected().connect(std::bind(&Daemon::onConnectionDisconnected, this, std::placeholders::_1));
@@ -282,22 +318,37 @@ void Daemon::handleHandshakeMessage(const HandshakeMessage *message, const std::
     warning() << "Got handshake from" << peer->host.friendlyName;
 }
 
-void Daemon::handleDaemonJobAnnouncementMessage(const DaemonJobAnnouncementMessage *message, const std::shared_ptr<Connection> &connection)
+void Daemon::handleJobAnnouncementMessage(const JobAnnouncementMessage *message, const std::shared_ptr<Connection> &connection)
 {
-    warning() << "Got announcement" << message->announcement() << "from" << connection->client()->peerString();
-    int available = mOutstandingJobRequests.size() + mCompileJobsByProcess.size();
-    for (const auto &announcement : message->announcement()) {
-        if (auto compiler = Compiler::compilerBySha256(announcement.first)) {
-            if (compiler->isValid()) {
-                error() << "I have the compiler. Lets go";
-            } else {
-                warning() << "We can't seem to run this compiler";
-            }
-        } else {
-            error() << "requesting compiler" << announcement.first;
-            connection->send(CompilerRequestMessage(announcement.first));
-        }
-    }
+    // warning() << "Got announcement" << message->announcement() << "from" << connection->client()->peerString();
+    // int available = mOptions.jobCount - mOutstandingJobRequests.size() + mCompileJobsByProcess.size();
+    // for (const auto &announcement : message->announcement()) {
+    //     if (!available)
+    //         break;
+    //     if (auto compiler = Compiler::compilerBySha256(announcement.first)) {
+    //         if (compiler->isValid()) {
+    //             error() << "I have the compiler. Lets go";
+    //             int jobs = announcement.second;
+    //             while (jobs > 0) {
+    //                 const uint64_t id = mNextJobId++;
+    //                 if (connection->send(JobRequestMessage(id, announcement.first))) {
+    //                     mOutstandingJobRequests[id] = Rct::monoMs();
+    //                     --available;
+    //                     --jobs;
+    //                 } else {
+    //                     error() << "Can't send job request to" << connection->client()->peerString();
+    //                     return;
+    //                 }
+    //             }
+    //         } else {
+    //             warning() << "We can't seem to run this compiler";
+    //         }
+    //     } else {
+    //         error() << "requesting compiler" << announcement.first;
+    //         connection->send(CompilerRequestMessage(announcement.first));
+    //     }
+    // }
+#warning foo
 }
 
 void Daemon::reconnectToServer()
@@ -400,7 +451,7 @@ void Daemon::onCompileProcessReadyReadStdErr(Process *process)
 void Daemon::onCompileProcessFinished(Process *process)
 {
     std::shared_ptr<Job> job = mCompileJobsByProcess.take(process);
-    error() << "process finished" << process << job;
+    warning() << "process finished" << process << job;
     if (job) {
         assert(job->process == process);
         assert(job->flags & Job::Compiling);
@@ -471,7 +522,7 @@ void Daemon::startJobs()
                         mJobsByLocalConnection.remove(job->localConnection);
                     } else {
                         job->preprocessed = proc->readAllStdOut();
-                        error() << "Preprocessing finished" << compiler << args << job->preprocessed.size();
+                        warning() << "Preprocessing finished" << compiler << args << job->preprocessed.size();
                         addJob(Job::PendingCompiling, job);
                         startJobs();
                     }
@@ -489,7 +540,6 @@ void Daemon::startJobs()
             addJob(Job::Compiling, job);
 
             List<String> args = job->arguments->commandLine.mid(1);
-            error() << job->arguments->sourceFiles();
             assert(job->arguments->sourceFileIndexes.size() == 1);
             args.removeAt(job->arguments->sourceFileIndexes.first() - 1);
             CompilerArgs::Flag lang = static_cast<CompilerArgs::Flag>(job->arguments->flags & CompilerArgs::LanguageMask);
@@ -575,134 +625,137 @@ void Daemon::startJobs()
         }
         // ### start compiling our jobs that are being handled by other daemons
     }
-    if (!mAnnouncementPending) {
-        mAnnouncementPending = true;
-        EventLoop::eventLoop()->callLater(std::bind(&Daemon::announceJobs, this));
-    }
+    announceJobs();
 }
 
-void Daemon::announceJobs()
+void Daemon::announceJobs(Peer *peer)
 {
-    assert(mAnnouncementPending);
-    mAnnouncementPending = false;
-    if (!mPeersByConnection.isEmpty() /* || mOptions.flags & Options::NoJobs */) {
-        Hash<String, int> announcements;
-        for (const auto &it : mPendingCompileJobs) {
-            assert(it->compiler);
-            ++announcements[it->compiler->sha256()];
+    Hash<String, bool> jobs;
+    for (const auto &it : mPendingCompileJobs) {
+        assert(it->compiler);
+        ++announcements[it->compiler->sha256()];
+    }
+
+    for (
+        // if (!mPeersByConnection.isEmpty() /* || mOptions.flags & Options::NoJobs */) {
+        //     Hash<String, int> announcements;
+        //     for (const auto &it : mPendingCompileJobs) {
+        //         assert(it->compiler);
+        //         ++announcements[it->compiler->sha256()];
+        //     }
+        //     auto it = announcements.begin();
+        //     while (it != announcements.end()) {
+        //         if (it->second == mLastAnnouncements.value(it->first)) {
+        //             it = announcements.erase(it);
+        //         } else {
+        //             mLastAnnouncements[it->first] = it->second;
+        //             ++it;
+        //         }
+        //     }
+        //     it = mLastAnnouncements.begin();
+        //     while (it != mLastAnnouncements.end()) {
+        //         if (!announcements.contains(it->first)) {
+        //             it = mLastAnnouncements.erase(it);
+        //         } else {
+        //             ++it;
+        //         }
+        //     }
+        //     const JobAnnouncementMessage msg(announcements);
+        //     for (const auto &connection : mPeersByConnection) {
+        //         connection.first->send(msg);
+        //     }
+        // }
         }
-        auto it = announcements.begin();
-        while (it != announcements.end()) {
-            if (it->second == mLastAnnouncements.value(it->first)) {
-                it = announcements.erase(it);
+
+    void Daemon::checkJobRequstTimeout()
+    {
+        const uint64_t now = Rct::monoMs();
+        auto it = mOutstandingJobRequests.begin();
+        uint64_t timer = 0;
+        while (it != mOutstandingJobRequests.end()) {
+            if (now - it->second > 10000) { // people need to get back to us in 10 seconds
+                it = mOutstandingJobRequests.erase(it);
             } else {
-                mLastAnnouncements[it->first] = it->second;
+                const uint64_t elapseTime = it->second + 10000;
+                if (!timer || elapseTime < timer)
+                    timer = elapseTime;
                 ++it;
             }
         }
-        it = mLastAnnouncements.begin();
-        while (it != mLastAnnouncements.end()) {
-            if (!announcements.contains(it->first)) {
-                it = mLastAnnouncements.erase(it);
-            } else {
-                ++it;
+        if (timer) {
+            mOutstandingJobRequestsTimer.restart(timer, Timer::SingleShot);
+        }
+    }
+
+    void Daemon::onConnectionDisconnected(Connection *conn)
+    {
+#warning need to handle all jobs we had sitting in mJobsByRemoteConnection. Return to pending compilation
+        // warning() << "Lost connection" << conn->client()->port();
+        std::shared_ptr<Connection> c = conn->shared_from_this();
+        mConnections.remove(c);
+        if (std::shared_ptr<Job> job = mJobsByLocalConnection.take(c)) {
+            if (job->flags & Job::Preprocessing) {
+                assert(job->process);
+                mPreprocessJobsByProcess.remove(job->process);
+                job->process->kill();
+            } else if (job->flags & Job::Compiling) {
+                assert(job->process);
+                mCompileJobsByProcess.remove(job->process);
+                job->process->kill();
             }
-        }
-        const DaemonJobAnnouncementMessage msg(announcements);
-        for (const auto &connection : mPeersByConnection) {
-            connection.first->send(msg);
+            removeJob(job);
+            assert(job.use_count() == 1);
+            // ### need to tell remote connection that we're no longer interested
+        } else if (Peer *peer = mPeersByConnection.take(c)) {
+            error() << "Lost peer" << peer->host.friendlyName;
+            mPeersByHost.remove(peer->host);
+            delete peer;
         }
     }
-}
 
-void Daemon::checkJobRequstTimeout()
-{
-    const uint64_t now = Rct::monoMs();
-    auto it = mOutstandingJobRequests.begin();
-    uint64_t timer = 0;
-    while (it != mOutstandingJobRequests.end()) {
-        if (now - it->second > 10000) { // people need to get back to us in 10 seconds
-            it = mOutstandingJobRequests.erase(it);
-        } else {
-            const uint64_t elapseTime = it->second + 10000;
-            if (!timer || elapseTime < timer)
-                timer = elapseTime;
-            ++it;
-        }
-    }
-    if (timer) {
-        mOutstandingJobRequestsTimer.restart(timer, Timer::SingleShot);
-    }
-}
-
-void Daemon::onConnectionDisconnected(Connection *conn)
-{
-    // warning() << "Lost connection" << conn->client()->port();
-    std::shared_ptr<Connection> c = conn->shared_from_this();
-    mConnections.remove(c);
-    if (std::shared_ptr<Job> job = mJobsByLocalConnection.take(c)) {
-        if (job->flags & Job::Preprocessing) {
-            assert(job->process);
-            mPreprocessJobsByProcess.remove(job->process);
-            job->process->kill();
-        } else if (job->flags & Job::Compiling) {
-            assert(job->process);
-            mCompileJobsByProcess.remove(job->process);
-            job->process->kill();
-        }
-        removeJob(job);
-        assert(job.use_count() == 1);
-        // ### need to tell remote connection that we're no longer interested
-    } else if (Peer *peer = mPeersByConnection.take(c)) {
-        error() << "Lost peer" << peer->host.friendlyName;
-        mPeersByHost.remove(peer->host);
-        delete peer;
-    }
-}
-
-void Daemon::handleConsoleCommand(const String &string)
-{
-    String str = string;
-    while (str.endsWith(' '))
-        str.chop(1);
-    if (str == "jobs") {
-        struct {
-            LinkedList<std::shared_ptr<Job> > *list;
-            const char *name;
-        } const lists[] = {
-            { &mPendingPreprocessJobs, "Pending preprocessing" },
-            { &mPreprocessingJobs, "Preprocessing" },
-            { &mPendingCompileJobs, "Pending compile" },
-            { &mPreprocessingJobs, "Compiling" },
-            { 0, 0 }
-        };
-        for (int i=0; lists[i].list; ++i) {
-            if (!lists[i].list->isEmpty()) {
-                printf("%s: %d\n", lists[i].name, lists[i].list->size());
-                for (const auto &job : *lists[i].list) {
-                    printf("Job: %s Received: %s\n",
-                           String::join(job->arguments->sourceFiles(), ", ").constData(),
-                           String::formatTime(job->received).constData());
+    void Daemon::handleConsoleCommand(const String &string)
+    {
+        String str = string;
+        while (str.endsWith(' '))
+            str.chop(1);
+        if (str == "jobs") {
+            struct {
+                LinkedList<std::shared_ptr<Job> > *list;
+                const char *name;
+            } const lists[] = {
+                { &mPendingPreprocessJobs, "Pending preprocessing" },
+                { &mPreprocessingJobs, "Preprocessing" },
+                { &mPendingCompileJobs, "Pending compile" },
+                { &mPreprocessingJobs, "Compiling" },
+                { 0, 0 }
+            };
+            for (int i=0; lists[i].list; ++i) {
+                if (!lists[i].list->isEmpty()) {
+                    printf("%s: %d\n", lists[i].name, lists[i].list->size());
+                    for (const auto &job : *lists[i].list) {
+                        printf("Job: %s Received: %s\n",
+                               String::join(job->arguments->sourceFiles(), ", ").constData(),
+                               String::formatTime(job->received).constData());
+                    }
                 }
             }
+        } else if (str == "quit") {
+            EventLoop::eventLoop()->quit();
+        } else if (str == "peers") {
+            for (const auto &peer : mPeersByHost) {
+                printf("Peer: %s\n", peer.first.toString().constData());
+            }
+        } else if (str == "compilers") {
+            printf("%s\n", Compiler::dump().constData());
         }
-    } else if (str == "quit") {
-        EventLoop::eventLoop()->quit();
-    } else if (str == "peers") {
-        for (const auto &peer : mPeersByHost) {
-            printf("Peer: %s\n", peer.first.toString().constData());
-        }
-    } else if (str == "compilers") {
-        printf("%s\n", Compiler::dump().constData());
     }
-}
 
-void Daemon::handleConsoleCompletion(const String &string, int, int,
-                                     String &common, List<String> &candidates)
-{
-    static const List<String> cands = List<String>() << "jobs" << "quit" << "peers" << "compilers";
-    auto res = Console::tryComplete(string, cands);
-    // error() << res.text << res.candidates;
-    common = res.text;
-    candidates = res.candidates;
-}
+    void Daemon::handleConsoleCompletion(const String &string, int, int,
+                                         String &common, List<String> &candidates)
+    {
+        static const List<String> cands = List<String>() << "jobs" << "quit" << "peers" << "compilers";
+        auto res = Console::tryComplete(string, cands);
+        // error() << res.text << res.candidates;
+        common = res.text;
+        candidates = res.candidates;
+    }

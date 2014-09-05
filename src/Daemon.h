@@ -54,10 +54,12 @@ private:
     void handleClientJobMessage(const ClientJobMessage *msg, const std::shared_ptr<Connection> &conn);
     void handleCompilerMessage(const CompilerMessage* message, const std::shared_ptr<Connection> &connection);
     void handleCompilerRequestMessage(const CompilerRequestMessage *message, const std::shared_ptr<Connection> &connection);
-    void handleDaemonJobRequestMessage(const DaemonJobRequestMessage *message, const std::shared_ptr<Connection> &connection);
+    void handleJobRequestMessage(const JobRequestMessage *message, const std::shared_ptr<Connection> &connection);
+    void handleJobMessage(const JobMessage *message, const std::shared_ptr<Connection> &connection);
+    void handleJobResponseMessage(const JobResponseMessage *message, const std::shared_ptr<Connection> &connection);
     void handleDaemonListMessage(const DaemonListMessage *message, const std::shared_ptr<Connection> &connection);
     void handleHandshakeMessage(const HandshakeMessage *message, const std::shared_ptr<Connection> &connection);
-    void handleDaemonJobAnnouncementMessage(const DaemonJobAnnouncementMessage *message, const std::shared_ptr<Connection> &connection);
+    void handleJobAnnouncementMessage(const JobAnnouncementMessage *message, const std::shared_ptr<Connection> &connection);
     void reconnectToServer();
     void onDiscoverySocketReadyRead(Buffer &&data, const String &ip);
 
@@ -67,7 +69,8 @@ private:
     void onCompileProcessFinished(Process *process);
     void startJobs();
     void sendHandshake(const std::shared_ptr<Connection> &conn);
-    void announceJobs();
+    struct Peer;
+    void announceJobs(Peer *peer = 0);
     void checkJobRequstTimeout();
 
     struct Job {
@@ -92,7 +95,8 @@ private:
             Preprocessing = 0x04,
             PendingCompiling = 0x08,
             Compiling = 0x10,
-            FromRemote = 0x20,
+            FromRemote = 0x20, // this job originated elsewhere
+            Remote = 0x40, // remote machine is handling it
             StateMask = Preprocessing|PendingPreprocessing|PendingCompiling|Compiling
         };
 
@@ -154,7 +158,8 @@ private:
 
     LinkedList<std::shared_ptr<Job> > mPendingPreprocessJobs, mPendingCompileJobs, mPreprocessingJobs, mCompilingJobs;
 
-    Hash<std::shared_ptr<Connection>, std::shared_ptr<Job> > mJobsByLocalConnection, mJobsByRemoteConnection;
+    Hash<std::shared_ptr<Connection>, std::shared_ptr<Job> > mJobsByLocalConnection;
+    Hash<std::shared_ptr<Connection>, Set<std::shared_ptr<Job> > > mJobsByRemoteConnection;
     Hash<Process*, std::shared_ptr<Job> > mCompileJobsByProcess, mPreprocessJobsByProcess;
     Hash<uint64_t, uint64_t> mOutstandingJobRequests; // jobid: Rct::monoMs
     Timer mOutstandingJobRequestsTimer;
@@ -163,14 +168,13 @@ private:
     struct Peer {
         std::shared_ptr<Connection> connection;
         Host host;
+        Set<String> announced;
     };
     Hash<Host, Peer*> mPeersByHost;
     Hash<std::shared_ptr<Connection>, Peer*> mPeersByConnection;
 
-    Hash<String, int> mLastAnnouncements;
-
     Set<std::shared_ptr<Connection> > mConnections;
-    bool mExplicitServer, mAnnouncementPending;
+    bool mExplicitServer;
     Options mOptions;
     SocketServer mLocalServer, mRemoteServer;
     std::shared_ptr<SocketClient> mDiscoverySocket;

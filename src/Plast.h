@@ -180,10 +180,10 @@ enum {
     DaemonJobAnnouncementMessageId,
     CompilerMessageId,
     CompilerRequestMessageId,
-    DaemonJobRequestMessageId,
-    DaemonJobResponseMessageId
+    JobRequestMessageId,
+    JobMessageId,
+    JobResponseMessageId
 };
-
 
 class HandshakeMessage : public Message
 {
@@ -282,20 +282,20 @@ public:
     {}
 };
 
-class DaemonJobAnnouncementMessage : public Message
+class JobAnnouncementMessage : public Message
 {
 public:
     enum { MessageId = DaemonJobAnnouncementMessageId };
-    DaemonJobAnnouncementMessage(const Hash<String, int> &announcement = Hash<String, int>())
+    JobAnnouncementMessage(const Set<String> &announcement = Set<String>())
         : Message(MessageId), mAnnouncement(announcement)
     {}
 
-    const Hash<String, int> &announcement() const { return mAnnouncement; }
+    const Set<String> &announcement() const { return mAnnouncement; }
 
     virtual void encode(Serializer &serializer) const { serializer << mAnnouncement; }
     virtual void decode(Deserializer &deserializer) { deserializer >> mAnnouncement; }
 private:
-    Hash<String, int> mAnnouncement;
+    Set<String> mAnnouncement;
 };
 
 class CompilerPackage;
@@ -342,11 +342,11 @@ private:
     String mSha256;
 };
 
-class DaemonJobRequestMessage : public Message
+class JobRequestMessage : public Message
 {
 public:
-    enum { MessageId = DaemonJobRequestMessageId };
-    DaemonJobRequestMessage(uint64_t id = 0, const String &sha256 = String())
+    enum { MessageId = JobRequestMessageId };
+    JobRequestMessage(uint64_t id = 0, const String &sha256 = String())
         : Message(MessageId), mId(id), mSha256(sha256)
     {}
 
@@ -359,13 +359,13 @@ private:
     String mSha256;
 };
 
-class DaemonJobResponseMessage : public Message
+class JobMessage : public Message
 {
 public:
-    enum { MessageId = DaemonJobResponseMessageId };
-    DaemonJobResponseMessage(uint64_t id = 0,
-                             const String &preprocessed = String(),
-                             const List<String> &args = List<String>())
+    enum { MessageId = JobMessageId };
+    JobMessage(uint64_t id = 0,
+               const String &preprocessed = String(),
+               const List<String> &args = List<String>())
         : Message(MessageId, Compressed), mId(id), mPreprocessed(preprocessed), mArgs(args)
     {}
 
@@ -378,6 +378,23 @@ private:
     uint64_t mId;
     String mPreprocessed;
     List<String> mArgs;
+};
+
+class JobResponseMessage : public Message
+{
+public:
+    enum { MessageId = JobResponseMessageId };
+    JobResponseMessage(uint64_t id = 0, const Hash<Path, String> &files = Hash<Path, String>())
+        : Message(MessageId, Compressed), mId(id), mFiles(files)
+    {}
+
+    uint64_t id() const { return mId; }
+    const Hash<Path, String> &files() const { return mFiles; }
+    virtual void encode(Serializer &serializer) const { serializer << mId << mFiles; }
+    virtual void decode(Deserializer &deserializer) { deserializer >> mId >> mFiles; }
+private:
+    uint64_t mId;
+    Hash<Path, String> mFiles;
 };
 
 #endif
