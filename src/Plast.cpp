@@ -309,7 +309,7 @@ Deserializer &operator>>(Deserializer &s, CompilerPackage &p)
 Hash<String, CompilerPackage *> CompilerMessage::sPackages;
 
 CompilerMessage::CompilerMessage(const std::shared_ptr<Compiler> &compiler)
-    : Message(MessageId, 0), mPackage(0)
+    : Message(MessageId, Compressed), mPackage(0)
 {
     if (compiler) {
         mSha256 = compiler->sha256();
