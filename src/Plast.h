@@ -37,6 +37,7 @@ public:
     static void insert(const Path &executable, const String &sha256, const Set<Path> &files);
     static String dump();
     static void cleanup();
+    static int count() { return sBySha.size(); }
 
     String sha256() const { return mSha256; }
     Path path() const { return mPath; }

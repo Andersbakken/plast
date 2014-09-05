@@ -71,6 +71,7 @@ private:
     void sendHandshake(const std::shared_ptr<Connection> &conn);
     struct Peer;
     void announceJobs(Peer *peer = 0);
+    void fetchJobs(Peer *peer = 0);
     void checkJobRequstTimeout();
 
     struct Job {
@@ -168,7 +169,7 @@ private:
     struct Peer {
         std::shared_ptr<Connection> connection;
         Host host;
-        Set<String> announced;
+        Set<String> announced, jobsAvailable;
     };
     Hash<Host, Peer*> mPeersByHost;
     Hash<std::shared_ptr<Connection>, Peer*> mPeersByConnection;
