@@ -265,6 +265,7 @@ void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std
 
 void Daemon::handleJobMessage(const JobMessage *message, const std::shared_ptr<Connection> &connection)
 {
+    warning() << "Got job message" << message->preprocessed().size();
     if (message->preprocessed().isEmpty()) {
         Peer *peer = mPeersByConnection.value(connection);
         assert(peer);
@@ -701,6 +702,7 @@ void Daemon::fetchJobs(Peer *peer)
         while (available-- > 0) {
             auto cand = candidates.at(idx++ % candidates.size());
             mOutstandingJobRequests[mNextJobId] = Rct::monoMs();
+            warning() << "Requesting a job" << mNextJobId + 1 << "from" << cand.first->host.toString();
             cand.first->connection->send(JobRequestMessage(mNextJobId++, cand.second));
         }
         checkJobRequestTimeout();
