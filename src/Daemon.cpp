@@ -588,10 +588,18 @@ void Daemon::startJobs()
                 // error() << errno << strerror(errno) << job->tempOutput;
                 assert(fd != -1);
                 close(fd);
-                if (job->arguments->flags & CompilerArgs::HasDashMF) {
-                    const int dashMF = args.indexOf("-MF");
-                    assert(dashMF != -1);
-                    args.remove(dashMF, 2);
+                int i=0;
+                while (i<args.size()) {
+                    const String &arg = args.at(i);
+                    if (arg == "-MF") {
+                        args.remove(i, 2);
+                    } else if (arg == "-MT") {
+                        args.remove(i, 2);
+                    } else if (arg == "-MMD") {
+                        args.removeAt(i);
+                    } else {
+                        ++i;
+                    }
                 }
             }
             if (!(job->arguments->flags & CompilerArgs::HasDashO)) {

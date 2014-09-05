@@ -468,6 +468,11 @@ std::shared_ptr<CompilerArgs> CompilerArgs::create(const List<String> &args)
         } else if (arg == "-MF") {
             ret->flags |= HasDashMF;
             ++i;
+        } else if (arg == "-MMD") {
+            ret->flags |= HasDashMMD;
+        } else if (arg == "-T") {
+            ret->flags |= HasDashMT;
+            ++i;
         } else if (arg == "-x") {
             ret->flags |= HasDashX;
             if (++i == args.size())
