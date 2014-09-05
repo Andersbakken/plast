@@ -659,10 +659,10 @@ void Daemon::announceJobs(Peer *peer)
 void Daemon::fetchJobs(Peer *peer)
 {
     int available = mOptions.jobCount - mOutstandingJobRequests.size() + mCompileJobsByProcess.size();
-    warning() << "About to fetch jobs" << (peer ? peer->host.toString() : String()) << available;
     if (available <= 0)
         return;
 
+    warning() << "About to fetch jobs" << (peer ? peer->host.toString() : String()) << available;
     List<std::pair<Peer *, String> > candidates;
     Set<String> compilerRequests;
     auto process = [&candidates, &compilerRequests, available](Peer *p) {
