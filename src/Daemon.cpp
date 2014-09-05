@@ -241,13 +241,11 @@ void Daemon::handleCompilerRequestMessage(const CompilerRequestMessage *message,
 void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std::shared_ptr<Connection> &connection)
 {
     error() << "Got job request" << message->id() << message->sha256();
-    auto it = mPendingCompileJobs.begin();
-    while (it != mPendingCompileJobs.end()) {
-        if ((*it)->compiler->sha256() == message->sha256()) {
-            debug() << "Sending job request to" << connection->client()->peerString();
-            if (connection->send(JobMessage(message->id(), message->sha256(), (*it)->preprocessed, (*it)->arguments))) {
+    for (const auto &job : mPendingCompileJobs) {
+        if (job->compiler->sha256() == message->sha256()) {
+            debug() << "Sending job request to" << connection->client()->peerString() << job->arguments->commandLine << job->arguments->sourceFiles();
+            if (connection->send(JobMessage(message->id(), message->sha256(), job->preprocessed, job->arguments))) {
                 warning() << "Sent job request to" << connection->client()->peerString();
-                auto job = *it;
                 removeJob(job);
                 job->remoteConnection = connection;
                 mJobsByRemoteConnection[connection].insert(job);
@@ -257,7 +255,6 @@ void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std
             }
             return;
         }
-        ++it;
     }
 
     assert(mPeersByConnection.contains(connection));

@@ -420,7 +420,6 @@ static const char *argOptions[] = {
     "-D",
     "-I",
     "-MQ",
-    "-MT"
     "-Xpreprocessor",
     "-aux-info",
     "-idirafter",
@@ -470,7 +469,7 @@ std::shared_ptr<CompilerArgs> CompilerArgs::create(const List<String> &args)
             ++i;
         } else if (arg == "-MMD") {
             ret->flags |= HasDashMMD;
-        } else if (arg == "-T") {
+        } else if (arg == "-MT") {
             ret->flags |= HasDashMT;
             ++i;
         } else if (arg == "-x") {
