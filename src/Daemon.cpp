@@ -471,6 +471,7 @@ void Daemon::onCompileProcessFinished(Process *process)
             String objectFile;
 #warning what to do if file fails to load? Try again locally? Also, what if the job produced other output (separate debug info)
             Rct::readFile(job->tempObjectFile, objectFile);
+            Path::rm(job->tempObjectFile);
             job->remoteConnection->send(JobResponseMessage(job->id, process->returnCode(), objectFile, job->output));
         } else {
             job->localConnection->send(ClientJobResponseMessage(process->returnCode(), job->output));
