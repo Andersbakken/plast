@@ -629,8 +629,10 @@ void Daemon::startJobs()
 
 void Daemon::announceJobs(Peer *peer)
 {
-    if (mPeersByConnection.isEmpty())
+    debug() << "Announcing" << mPeersByConnection.size();
+    if (mPeersByConnection.isEmpty()) {
         return;
+    }
 
     const int shaCount = Compiler::count();
     Set<String> jobs;
