@@ -244,7 +244,9 @@ void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std
     auto it = mPendingCompileJobs.begin();
     while (it != mPendingCompileJobs.end()) {
         if ((*it)->compiler->sha256() == message->sha256()) {
+            debug() << "Sending job request to" << connection->client()->peerString();
             if (connection->send(JobMessage(message->id(), message->sha256(), (*it)->preprocessed, (*it)->arguments))) {
+                warning() << "Sent job request to" << connection->client()->peerString();
                 auto job = *it;
                 removeJob(job);
                 job->remoteConnection = connection;
@@ -638,7 +640,7 @@ void Daemon::announceJobs(Peer *peer)
     Set<String> jobs;
     for (const auto &it : mPendingCompileJobs) {
         assert(it->compiler);
-        if (jobs.insert(it->compiler->sha256()) && jobs.size() == shaCount) {
+        if (!(it->flags & Job::FromRemote) && jobs.insert(it->compiler->sha256()) && jobs.size() == shaCount) {
             break;
         }
     }
