@@ -78,7 +78,8 @@ private:
         Job(const std::shared_ptr<CompilerArgs> &args, const Path &resolved, const List<String> &env, const Path &dir,
             std::shared_ptr<Compiler> &c, const std::shared_ptr<Connection> &conn)
             : received(time(0)), arguments(args), resolvedCompiler(resolved),
-              environ(env), cwd(dir), process(0), flags(None), compiler(c), localConnection(conn)
+              environ(env), cwd(dir), process(0), flags(None), compiler(c), localConnection(conn),
+              remoteId(0)
         {
         }
 
@@ -107,6 +108,7 @@ private:
         LinkedList<std::shared_ptr<Job> >::iterator position;
         std::shared_ptr<Compiler> compiler;
         std::shared_ptr<Connection> localConnection, remoteConnection;
+        uint64_t remoteId;
     };
 
     void addJob(Job::Flag flag, const std::shared_ptr<Job> &job)

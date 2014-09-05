@@ -211,14 +211,6 @@ void Daemon::handleClientJobMessage(const ClientJobMessage *msg, const std::shar
         return;
     }
     std::shared_ptr<Job> job = std::make_shared<Job>(msg->arguments(), resolvedCompiler, env, msg->cwd(), compiler, conn);
-    // if (!job->arguments || job->arguments->mode != CompilerArgs::Compile || !checkFlags(job->arguments->flags)) {
-    //     warning() << "Not a job for us"
-    //               << msg->arguments()
-    //               << (job->arguments ? job->arguments->modeName() : "")
-    //               << (job->arguments ? job->arguments->flags : 0);
-    //     conn->send(ClientJobResponseMessage());
-    //     return;
-    // }
     mJobsByLocalConnection[conn] = job;
     addJob(Job::PendingPreprocessing, job);
     startJobs();
@@ -251,38 +243,23 @@ void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std
     auto it = mPendingCompileJobs.begin();
     while (it != mPendingCompileJobs.end()) {
         if ((*it)->compiler->sha256() == message->sha256()) {
-            //     List<String> args = job->args;
-            //     // if (connection->send(JobMessage(message->id(), ));
-
-            //     auto job = *it;
-            //     removeJob(job);
-            //     job->remoteConnection = connection;
-            //     mJobsByRemoteConnection[connection].insert(job);
-            //     job->flags |= Job::Remote;
-            //     addJob(Job::Compiling, job);
-
-            // connection->send(JobMessage
-            // if (connection->send(JobMessage(message->id(),
-
-            //     }
-
+            List<String> args = job->args;
+            if (connection->send(JobMessage(message->id(), message->sha256(), args))) {
+                auto job = *it;
+                removeJob(job);
+                job->remoteConnection = connection;
+                mJobsByRemoteConnection[connection].insert(job);
+                job->flags |= Job::Remote;
+                addJob(Job::Compiling, job);
+                job->remoteId = message->id();
+            }
             return;
         }
         ++it;
     }
-    // if (it == mPendingCompileJobs.end()) { // no jobs available
-    //     connection->send(JobMessage(message->id()));
-    // } else {
-    //     List<String> args = job->args;
-    //     // if (connection->send(JobMessage(message->id(), ));
 
-    //     auto job = *it;
-    //     removeJob(job);
-    //     job->remoteConnection = connection;
-    //     mJobsByRemoteConnection[connection].insert(job);
-    //     job->flags |= Job::Remote;
-    //     addJob(Job::Compiling, job);
-    // }
+    assert(mPeersByConnection.contains(connection));
+    mPeersByConnection[connection]->announced.remove(message->sha256());
 }
 
 void Daemon::handleJobMessage(const JobMessage *message, const std::shared_ptr<Connection> &connection)
@@ -647,7 +624,7 @@ void Daemon::announceJobs(Peer *peer)
                 peer.first->send(*msg);
             }
         }
-     }
+    }
 }
 
 void Daemon::fetchJobs(Peer *peer)
