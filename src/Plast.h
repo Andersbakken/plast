@@ -60,6 +60,7 @@ struct CompilerArgs
 {
     List<String> commandLine;
     List<int> sourceFileIndexes;
+    int objectFileIndex;
     List<Path> sourceFiles() const
     {
         List<Path> ret;
@@ -108,18 +109,34 @@ struct CompilerArgs
     static std::shared_ptr<CompilerArgs> create(const List<String> &args);
 
     Path sourceFile(int idx = 0) const { return commandLine.value(sourceFileIndexes.value(idx, -1)); }
+    Path output() const
+    {
+        if (flags & HasOutput) {
+            assert(objectFileIndex);
+            return commandLine.value(objectFileIndex);
+        } else {
+            Path source = sourceFile();
+            const int lastDot = source.lastIndexOf('.');
+            if (lastDot != -1 && lastDot > source.lastIndexOf('/')) {
+                source.chop(source.size() - lastDot - 1);
+            }
+            source.append('o');
+            return source;
+        }
+    }
 };
 
 inline Serializer &operator<<(Serializer &serializer, const CompilerArgs &args)
 {
-    serializer << args.commandLine << args.sourceFileIndexes << static_cast<uint8_t>(args.mode) << static_cast<uint32_t>(args.flags);
+    serializer << args.commandLine << args.sourceFileIndexes << args.objectFileIndex
+               << static_cast<uint8_t>(args.mode) << static_cast<uint32_t>(args.flags);
     return serializer;
 }
 
 inline Deserializer &operator>>(Deserializer &deserializer, CompilerArgs &args)
 {
     uint8_t mode;
-    deserializer >> args.commandLine >> args.sourceFileIndexes >> mode >> args.flags;
+    deserializer >> args.commandLine >> args.sourceFileIndexes >> args.objectFileIndex >> mode >> args.flags;
     args.mode = static_cast<CompilerArgs::Mode>(mode);
     return deserializer;
 }
@@ -171,6 +188,27 @@ struct Output {
     Type type;
     String text;
 };
+
+inline Log operator<<(Log stream, const Output &output)
+{
+    stream << String::format<256>("%s: %s", output.type == Output::StdOut ? "stdout" : "stderr",
+                                  output.text.constData());
+    return stream;
+}
+
+template <> inline Deserializer &operator>>(Deserializer &s, Output &output)
+{
+    uint8_t type;
+    s >> type >> output.text;
+    output.type = static_cast<Output::Type>(type);
+    return s;
+}
+
+template <> inline Serializer &operator<<(Serializer &s, const Output &output)
+{
+    s << static_cast<uint8_t>(output.type) << output.text;
+    return s;
+}
 
 enum {
     HandshakeMessageId = 100,
@@ -365,37 +403,62 @@ class JobMessage : public Message
 public:
     enum { MessageId = JobMessageId };
     JobMessage(uint64_t id = 0,
+               const String &sha = String(),
                const String &preprocessed = String(),
-               const List<String> &args = List<String>())
-        : Message(MessageId, Compressed), mId(id), mPreprocessed(preprocessed), mArgs(args)
+               const std::shared_ptr<CompilerArgs> &args = std::shared_ptr<CompilerArgs>())
+        : Message(MessageId, Compressed), mId(id), mSha256(sha), mPreprocessed(preprocessed), mArgs(args)
     {}
-
+    // empty preprocessed means there's no compilerArgs and that we didn't have jobs
     uint64_t id() const { return mId; }
+    const String &sha256() const { return mSha256; }
     const String &preprocessed() const { return mPreprocessed; }
-    const List<String> &args() const { return mArgs; }
-    virtual void encode(Serializer &serializer) const { serializer << mId << mPreprocessed << mArgs; }
-    virtual void decode(Deserializer &deserializer) { deserializer >> mId >> mPreprocessed >> mArgs; }
+    const std::shared_ptr<CompilerArgs> &args() const { return mArgs; }
+    virtual void encode(Serializer &serializer) const
+    {
+        serializer << mId << mSha256 << mPreprocessed;
+        if (!mPreprocessed.isEmpty()) {
+            assert(mArgs);
+            serializer << *mArgs;
+        }
+    }
+    virtual void decode(Deserializer &deserializer)
+    {
+        deserializer >> mId >> mSha256 >> mPreprocessed;
+        if (!mPreprocessed.isEmpty()) {
+            mArgs.reset(new CompilerArgs);
+            deserializer >> *mArgs;
+        }
+    }
+
 private:
     uint64_t mId;
+    String mSha256;
     String mPreprocessed;
-    List<String> mArgs;
+    std::shared_ptr<CompilerArgs> mArgs;
 };
 
 class JobResponseMessage : public Message
 {
 public:
     enum { MessageId = JobResponseMessageId };
-    JobResponseMessage(uint64_t id = 0, const Hash<Path, String> &files = Hash<Path, String>())
-        : Message(MessageId, Compressed), mId(id), mFiles(files)
+    JobResponseMessage(uint64_t id = 0,
+                       int status = -1,
+                       const String &objectFileContents = String(),
+                       const List<Output> &output = List<Output>())
+        : Message(MessageId, Compressed), mId(id), mStatus(status), mObjectFileContents(objectFileContents), mOutput(output)
     {}
 
     uint64_t id() const { return mId; }
-    const Hash<Path, String> &files() const { return mFiles; }
-    virtual void encode(Serializer &serializer) const { serializer << mId << mFiles; }
-    virtual void decode(Deserializer &deserializer) { deserializer >> mId >> mFiles; }
+    int status() const { return mStatus; }
+    const String &objectFileContents() const { return mObjectFileContents; }
+    const List<Output> &output() const { return mOutput; }
+    virtual void encode(Serializer &serializer) const { serializer << mId << mStatus << mObjectFileContents << mOutput; }
+    virtual void decode(Deserializer &deserializer) { deserializer >> mId >> mStatus >> mObjectFileContents >> mOutput; }
 private:
     uint64_t mId;
-    Hash<Path, String> mFiles;
+    int mStatus;
+    String mObjectFileContents;
+    List<Output> mOutput;
 };
 
 #endif

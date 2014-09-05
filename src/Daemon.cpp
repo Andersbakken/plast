@@ -54,7 +54,7 @@ Daemon::Daemon()
     mServerConnection->error().connect(std::bind(&Daemon::restartServerTimer, this));
 
     mServerTimer.timeout().connect(std::bind(&Daemon::reconnectToServer, this));
-    mOutstandingJobRequestsTimer.timeout().connect(std::bind(&Daemon::checkJobRequstTimeout, this));
+    mOutstandingJobRequestsTimer.timeout().connect(std::bind(&Daemon::checkJobRequestTimeout, this));
 }
 
 Daemon::~Daemon()
@@ -112,7 +112,7 @@ bool Daemon::init(const Options &options)
 
     mOptions = options;
 
-    for (const Path &path : mOptions.cacheDir.files(Path::Directory)) {
+    for (const Path &path : compilerDir().files(Path::Directory)) {
         // error() << path;
         if (Path(path + "BAD").isFile()) {
             Compiler::insert(Path(), path.name(), Set<Path>());
@@ -134,7 +134,7 @@ bool Daemon::init(const Options &options)
         }
         const String sha256 = sha.hash(SHA256::Hex);
         if (sha256 != path.name()) {
-            error() << "Invalid compiler" << path << sha256;
+            error() << "Invalid compiler" << path << sha256 << shaList;
             Path::rmdir(path);
         } else {
             const Path exec = Path::resolved(path + "/COMPILER");
@@ -219,10 +219,11 @@ void Daemon::handleClientJobMessage(const ClientJobMessage *msg, const std::shar
 void Daemon::handleCompilerMessage(const CompilerMessage *message, const std::shared_ptr<Connection> &connection)
 {
     assert(message->isValid());
-    if (!message->writeFiles(mOptions.cacheDir + message->sha256() + '/')) {
+    if (!message->writeFiles(compilerDir() + message->sha256() + '/')) {
         error() << "Couldn't write files to" << mOptions.cacheDir + message->sha256() + '/';
     } else {
         warning() << "Wrote compiler" << message->sha256() << "to" << mOptions.cacheDir;
+        fetchJobs(mPeersByConnection.value(connection));
     }
 }
 
@@ -243,15 +244,14 @@ void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std
     auto it = mPendingCompileJobs.begin();
     while (it != mPendingCompileJobs.end()) {
         if ((*it)->compiler->sha256() == message->sha256()) {
-            List<String> args = job->args;
-            if (connection->send(JobMessage(message->id(), message->sha256(), args))) {
+            if (connection->send(JobMessage(message->id(), message->sha256(), (*it)->preprocessed, (*it)->arguments))) {
                 auto job = *it;
                 removeJob(job);
                 job->remoteConnection = connection;
                 mJobsByRemoteConnection[connection].insert(job);
                 job->flags |= Job::Remote;
                 addJob(Job::Compiling, job);
-                job->remoteId = message->id();
+                job->id = message->id();
             }
             return;
         }
@@ -260,16 +260,55 @@ void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std
 
     assert(mPeersByConnection.contains(connection));
     mPeersByConnection[connection]->announced.remove(message->sha256());
+    connection->send(JobMessage(message->id(), message->sha256())); // tell connection that we don't have jobs for this compiler
 }
 
 void Daemon::handleJobMessage(const JobMessage *message, const std::shared_ptr<Connection> &connection)
 {
-    error() << "Got job message" << message->id() << message->preprocessed().size() << message->args();
+    if (message->preprocessed().isEmpty()) {
+        Peer *peer = mPeersByConnection.value(connection);
+        assert(peer);
+        peer->jobsAvailable.remove(message->sha256());
+    } else {
+        auto compiler = Compiler::compilerBySha256(message->sha256());
+        assert(compiler);
+        List<String> env;
+        env << ("PATH=" + compiler->path().parentDir());
+        std::shared_ptr<Job> job(new Job(message->args(), compiler->path(), env, Path(), compiler));
+        job->preprocessed = message->preprocessed();
+        job->flags |= Job::FromRemote;
+        job->remoteConnection = connection;
+        job->id = message->id();
+        mJobsByRemoteConnection[connection].insert(job);
+        addJob(Job::PendingCompiling, job);
+        error() << "Got job message" << message->id() << message->preprocessed().size() << message->args();
+    }
+    mOutstandingJobRequests.remove(message->id());
+    checkJobRequestTimeout();
+    startJobs();
 }
 
 void Daemon::handleJobResponseMessage(const JobResponseMessage *message, const std::shared_ptr<Connection> &connection)
 {
-    error() << "Got job response" << message->id() << message->files().keys();
+    debug() << "Got job response" << message->id() << message->objectFileContents().size();
+#warning This is O(n)
+    for (auto job : mCompilingJobs) {
+        if (job->id == message->id()) {
+            Path output = job->arguments->output();
+            if (!output.startsWith('/'))
+                output.prepend(job->cwd);
+            Rct::writeFile(output, message->objectFileContents());
+            debug() << "Writing object file contents to" << job->arguments->output() << message->status()
+                    << message->output();
+#warning do we need to fflush this before notifying plastc?
+            mJobsByRemoteConnection[job->remoteConnection].remove(job);
+            removeJob(job);
+            job->localConnection->send(ClientJobResponseMessage(message->status(), message->output()));
+            mJobsByLocalConnection.remove(job->localConnection);
+            return;
+        }
+    }
+    error() << "Couldn't find job with this id" << message->id();
 }
 
 void Daemon::handleDaemonListMessage(const DaemonListMessage *message, const std::shared_ptr<Connection> &connection)
@@ -422,11 +461,21 @@ void Daemon::onCompileProcessFinished(Process *process)
     warning() << "process finished" << process << job;
     if (job) {
         assert(job->process == process);
-        assert(job->flags & Job::Compiling);
-        mCompilingJobs.erase(job->position);
-        job->localConnection->send(ClientJobResponseMessage(process->returnCode(), job->output));
-        mJobsByLocalConnection.remove(job->localConnection);
         job->process = 0;
+        assert(job->flags & Job::Compiling);
+        removeJob(job);
+        if (job->flags & Job::FromRemote) {
+            assert(job->remoteConnection);
+            mJobsByRemoteConnection[job->remoteConnection].remove(job);
+            assert(!job->tempObjectFile.isEmpty());
+            String objectFile;
+#warning what to do if file fails to load? Try again locally? Also, what if the job produced other output (separate debug info)
+            Rct::readFile(job->tempObjectFile, objectFile);
+            job->remoteConnection->send(JobResponseMessage(job->id, process->returnCode(), objectFile, job->output));
+        } else {
+            job->localConnection->send(ClientJobResponseMessage(process->returnCode(), job->output));
+            mJobsByLocalConnection.remove(job->localConnection);
+        }
         assert(job.use_count() == 1);
     }
     EventLoop::deleteLater(process);
@@ -527,11 +576,11 @@ void Daemon::startJobs()
             }
             args << "-";
             if (job->flags & Job::FromRemote) {
-                assert(job->tempOutput.isEmpty());
+                assert(job->tempObjectFile.isEmpty());
                 const Path dir = mOptions.cacheDir + "output/";
                 Path::mkdir(dir, Path::Recursive);
-                job->tempOutput = dir + job->arguments->sourceFile().fileName() + ".XXXXXX";
-                const int fd = mkstemp(&job->tempOutput[0]);
+                job->tempObjectFile = dir + job->arguments->sourceFile().fileName() + ".XXXXXX";
+                const int fd = mkstemp(&job->tempObjectFile[0]);
                 // error() << errno << strerror(errno) << job->tempOutput;
                 assert(fd != -1);
                 close(fd);
@@ -539,20 +588,14 @@ void Daemon::startJobs()
             if (!(job->arguments->flags & CompilerArgs::HasOutput)) {
                 args << "-o";
                 if (!(job->flags & Job::FromRemote)) {
-                    Path sourceFile = job->arguments->sourceFile();
-                    const int lastDot = sourceFile.lastIndexOf('.');
-                    if (lastDot != -1 && lastDot > sourceFile.lastIndexOf('/')) {
-                        sourceFile.chop(sourceFile.size() - lastDot - 1);
-                        sourceFile.append('o');
-                    }
-                    args << sourceFile;
+                    args << job->arguments->output();
                 } else {
-                    args << job->tempOutput;
+                    args << job->tempObjectFile;
                 }
             } else if (job->flags & Job::FromRemote) {
                 const int idx = args.indexOf("-o");
                 assert(idx != -1);
-                args[idx + 1] = job->tempOutput;
+                args[idx + 1] = job->tempObjectFile;
             }
             debug() << "Starting process" << args;
             assert(!args.isEmpty());
@@ -561,22 +604,6 @@ void Daemon::startJobs()
             job->process->finished().connect(std::bind(&Daemon::onCompileProcessFinished, this, std::placeholders::_1));
             job->process->readyReadStdOut().connect(std::bind(&Daemon::onCompileProcessReadyReadStdOut, this, std::placeholders::_1));
             job->process->readyReadStdErr().connect(std::bind(&Daemon::onCompileProcessReadyReadStdErr, this, std::placeholders::_1));
-            // if (job->flags & Job::FromRemote) {
-            // ### need to make up a temp file
-            // if (job->arguments.flags & CompilerArgs::HasOutput) {
-            //     for (int i=0; i<args.size(); ++i) {
-            //         if (args.at(i) == "-o") {
-            //             if (++i == args.size()) {
-            //                 job->localConnection->send(ClientJobResponseMessage());
-            //                 mJobsByLocalConnection.remove(job->localConnection);
-            //                 job.reset();
-            //             } else {
-            //                 args[i] = "-";
-            //             }
-            //             break;
-            //         }
-            //     }
-            // }
 
             if (!job->process->start(job->resolvedCompiler, args, job->environ)) {
                 delete job->process;
@@ -586,6 +613,7 @@ void Daemon::startJobs()
                 assert(job.use_count() == 1);
                 error() << "Failed to start compiler" << job->resolvedCompiler;
             } else {
+                debug() << "writing" << job->preprocessed.size() << "bytes to stdin of" << job->resolvedCompiler;
                 job->process->write(job->preprocessed);
                 job->process->closeStdIn();
                 mCompileJobsByProcess[job->process] = job;
@@ -594,6 +622,7 @@ void Daemon::startJobs()
         // ### start compiling our jobs that are being handled by other daemons
     }
     announceJobs();
+    fetchJobs();
 }
 
 void Daemon::announceJobs(Peer *peer)
@@ -630,6 +659,7 @@ void Daemon::announceJobs(Peer *peer)
 void Daemon::fetchJobs(Peer *peer)
 {
     int available = mOptions.jobCount - mOutstandingJobRequests.size() + mCompileJobsByProcess.size();
+    warning() << "About to fetch jobs" << (peer ? peer->host.toString() : String()) << available;
     if (available <= 0)
         return;
 
@@ -637,16 +667,20 @@ void Daemon::fetchJobs(Peer *peer)
     Set<String> compilerRequests;
     auto process = [&candidates, &compilerRequests, available](Peer *p) {
         for (const String &sha : p->jobsAvailable) {
+            warning() << p->host.toString() << "has jobs for" << sha;
             if (auto compiler = Compiler::compilerBySha256(sha)) {
-                if (!compiler) {
-                    if (compilerRequests.insert(sha)) {
-                        p->connection->send(CompilerRequestMessage(sha));
-                    }
-                } else if (compiler->isValid()) {
+                if (compiler->isValid()) {
+                    debug() << "Adding a candidate" << sha;
                     candidates.append(std::make_pair(p, sha));
                     if (candidates.size() == available)
                         return false;
                     assert(candidates.size() < available);
+                } else {
+                    debug() << "We want no part of that compiler. It's BAD for us";
+                }
+            } else {
+                if (compilerRequests.insert(sha)) {
+                    p->connection->send(CompilerRequestMessage(sha));
                 }
             }
         }
@@ -660,16 +694,19 @@ void Daemon::fetchJobs(Peer *peer)
                 break;
         }
     }
-    int idx = 0;
-    assert(candidates.size() <= available);
-    while (available-- > 0) {
-        auto cand = candidates.at(idx++ % candidates.size());
-        mOutstandingJobRequests[mNextJobId] = Rct::monoMs();
-        cand.first->connection->send(JobRequestMessage(mNextJobId++, cand.second));
+    if (!candidates.isEmpty()) {
+        int idx = 0;
+        assert(candidates.size() <= available);
+        while (available-- > 0) {
+            auto cand = candidates.at(idx++ % candidates.size());
+            mOutstandingJobRequests[mNextJobId] = Rct::monoMs();
+            cand.first->connection->send(JobRequestMessage(mNextJobId++, cand.second));
+        }
+        checkJobRequestTimeout();
     }
 }
 
-void Daemon::checkJobRequstTimeout()
+void Daemon::checkJobRequestTimeout()
 {
     const uint64_t now = Rct::monoMs();
     auto it = mOutstandingJobRequests.begin();
@@ -700,6 +737,9 @@ void Daemon::onConnectionDisconnected(Connection *conn)
             assert(job->process);
             mPreprocessJobsByProcess.remove(job->process);
             job->process->kill();
+        } else if (job->flags & Job::Remote) {
+            assert(job->remoteConnection);
+            mJobsByRemoteConnection[job->remoteConnection].remove(job);
         } else if (job->flags & Job::Compiling) {
             assert(job->process);
             mCompileJobsByProcess.remove(job->process);
@@ -760,4 +800,52 @@ void Daemon::handleConsoleCompletion(const String &string, int, int,
     // error() << res.text << res.candidates;
     common = res.text;
     candidates = res.candidates;
+}
+
+void Daemon::addJob(Job::Flag flag, const std::shared_ptr<Job> &job)
+{
+    assert(job);
+    assert(!(job->flags & Job::StateMask));
+    assert(flag & Job::StateMask);
+    job->flags |= flag;
+    switch (flag) {
+    case Job::PendingPreprocessing:
+        job->position = mPendingPreprocessJobs.insert(mPendingPreprocessJobs.end(), job);
+        break;
+    case Job::Preprocessing:
+        job->position = mPreprocessingJobs.insert(mPreprocessingJobs.end(), job);
+        break;
+    case Job::PendingCompiling:
+        job->position = mPendingCompileJobs.insert(mPendingCompileJobs.end(), job);
+        break;
+    case Job::Compiling:
+        job->position = mCompilingJobs.insert(mCompilingJobs.end(), job);
+        break;
+    default:
+        assert(0);
+    }
+}
+
+void Daemon::removeJob(const std::shared_ptr<Job> &job)
+{
+    assert(job);
+    const Job::Flag flag = static_cast<Job::Flag>(job->flags & Job::StateMask);
+    assert(flag);
+    job->flags &= ~flag;
+    switch (flag) {
+    case Job::PendingPreprocessing:
+        mPendingPreprocessJobs.erase(job->position);
+        break;
+    case Job::Preprocessing:
+        mPreprocessingJobs.erase(job->position);
+        break;
+    case Job::PendingCompiling:
+        mPendingCompileJobs.erase(job->position);
+        break;
+    case Job::Compiling:
+        mCompilingJobs.erase(job->position);
+        break;
+    default:
+        assert(0);
+    }
 }

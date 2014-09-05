@@ -12,11 +12,12 @@ bool init()
     Message::registerMessage<ClientJobResponseMessage>();
     Message::registerMessage<CompilerMessage>();
     Message::registerMessage<CompilerRequestMessage>();
-    Message::registerMessage<JobAnnouncementMessage>();
-    Message::registerMessage<JobRequestMessage>();
-    Message::registerMessage<JobMessage>();
     Message::registerMessage<DaemonListMessage>();
     Message::registerMessage<HandshakeMessage>();
+    Message::registerMessage<JobAnnouncementMessage>();
+    Message::registerMessage<JobMessage>();
+    Message::registerMessage<JobRequestMessage>();
+    Message::registerMessage<JobResponseMessage>();
     Message::registerMessage<QuitMessage>();
     return true;
 }
@@ -44,6 +45,29 @@ void Compiler::ensureEnviron()
     }
 }
 
+static inline bool printProgName(const Path &path, const String &prog, Set<Path> &files, List<String> &shaList)
+{
+    Process process;
+    if (!process.exec(path, List<String>() << "-print-prog-name=" + prog)) {
+        error() << "Couldn't invoke compiler" << path;
+        return false;
+    }
+    const List<String> lines = process.readAllStdOut().split('\n');
+    for (const Path &path : lines) {
+        if (path.isFile()) {
+            shaList.append(path.fileName());
+            files.insert(path);
+        } else if (!path.contains('/')) {
+            const Path usrBinFile = "/usr/bin/" + path;
+            if (usrBinFile.isFile()) {
+                shaList.append(path);
+                files.insert(usrBinFile);
+            }
+        }
+    }
+    return true;
+}
+
 std::shared_ptr<Compiler> Compiler::compiler(const Path &compiler, const String &path)
 {
     ensureEnviron();
@@ -62,38 +86,13 @@ std::shared_ptr<Compiler> Compiler::compiler(const Path &compiler, const String 
     SHA256 sha;
     c.reset(new Compiler);
     List<String> shaList;
-#ifdef OS_Linux
-    {
-        Process process;
-        if (!process.exec(resolved, List<String>() << "-print-prog-name=cc1")) {
-            error() << "Couldn't invoke compiler" << resolved;
+    const char *progNames[] = { "as", "cc1", "cc1plus" };
+    for (size_t i=0; i < sizeof(progNames) / sizeof(progNames[0]); ++i) {
+        if (!printProgName(resolved, progNames[i], c->mFiles, shaList)) {
             c.reset();
-            return std::shared_ptr<Compiler>();
-        }
-        const List<String> lines = process.readAllStdOut().split('\n');
-        for (const Path &path : lines) {
-            if (path.isFile()) {
-                shaList.append(path.fileName());
-                c->mFiles.insert(path);
-            }
+            return c;
         }
     }
-    {
-        Process process;
-        if (!process.exec(resolved, List<String>() << "-print-prog-name=cc1plus")) {
-            error() << "Couldn't invoke compiler" << resolved;
-            c.reset();
-            return std::shared_ptr<Compiler>();
-        }
-        const List<String> lines = process.readAllStdOut().split('\n');
-        for (const Path &path : lines) {
-            if (path.isFile()) {
-                shaList.append(path.fileName());
-                c->mFiles.insert(path);
-            }
-        }
-    }
-#endif
     Process process;
     if (!process.exec(
 #ifdef OS_Darwin
@@ -112,7 +111,6 @@ std::shared_ptr<Compiler> Compiler::compiler(const Path &compiler, const String 
 #ifdef OS_Darwin
         const int idx = line.indexOf('/');
         if (idx == -1) {
-            printf("[%s:%d]: if (idx == -1) {\n", __FILE__, __LINE__); fflush(stdout);
             continue;
         }
 #else
@@ -123,7 +121,6 @@ std::shared_ptr<Compiler> Compiler::compiler(const Path &compiler, const String 
 #endif
         const int end = line.indexOf(' ', idx + 2);
         if (end == -1) {
-            printf("[%s:%d]: if (end == -1) {\n", __FILE__, __LINE__); fflush(stdout);
             continue;
         }
         const Path unresolved = line.mid(idx, end - idx);
@@ -135,13 +132,16 @@ std::shared_ptr<Compiler> Compiler::compiler(const Path &compiler, const String 
             error() << "Couldn't resolve path" << unresolved;
         }
     }
-    shaList.sort();
-    for (const String &s : shaList) {
-        sha.update(s);
-        error() << s;
-    }
     if (c) {
+        shaList.sort();
+        for (const String &s : shaList) {
+            sha.update(s);
+            error() << s;
+        }
+
         c->mSha256 = sha.hash(SHA256::Hex);
+        debug() << "producing compiler" << c->mSha256 << shaList;
+
         error() << "GOT SHA" << c->mSha256;
         c->mPath = compiler;
         sBySha[c->mSha256] = c;
@@ -149,6 +149,7 @@ std::shared_ptr<Compiler> Compiler::compiler(const Path &compiler, const String 
         if (!resolvedCompiler)
             resolvedCompiler = c;
         warning() << "Created package" << compiler << c->mFiles << c->mSha256;
+#warning should write these files to local cache here
     }
     return c;
 }
@@ -200,20 +201,6 @@ Path Compiler::resolve(const Path &path)
         }
     }
     return Path();
-}
-
-template <> inline Deserializer &operator>>(Deserializer &s, Output &output)
-{
-    uint8_t type;
-    s >> type >> output.text;
-    output.type = static_cast<Output::Type>(type);
-    return s;
-}
-
-template <> inline Serializer &operator<<(Serializer &s, const Output &output)
-{
-    s << static_cast<uint8_t>(output.type) << output.text;
-    return s;
 }
 
 void ClientJobResponseMessage::encode(Serializer &serializer) const
@@ -463,6 +450,7 @@ std::shared_ptr<CompilerArgs> CompilerArgs::create(const List<String> &args)
     ret->commandLine = args;
     ret->mode = Link;
     ret->flags = None;
+    ret->objectFileIndex = -1;
     for (int i=1; i<args.size(); ++i) {
         const String &arg = args[i];
         if (arg == "-c") {
@@ -474,7 +462,7 @@ std::shared_ptr<CompilerArgs> CompilerArgs::create(const List<String> &args)
             ret->mode = Preprocess;
         } else if (arg == "-o") {
             ret->flags |= HasOutput;
-            ++i;
+            ret->objectFileIndex = ++i;
         } else if (arg == "-x") {
             ret->flags |= HasDashX;
             if (++i == args.size())
@@ -523,7 +511,6 @@ std::shared_ptr<CompilerArgs> CompilerArgs::create(const List<String> &args)
         } else if (arg == "-") {
             ret->flags |= StdinInput;
         }
-        // ### what if arg == "-"
     }
     return ret;
 }

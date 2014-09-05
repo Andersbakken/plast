@@ -72,14 +72,14 @@ private:
     struct Peer;
     void announceJobs(Peer *peer = 0);
     void fetchJobs(Peer *peer = 0);
-    void checkJobRequstTimeout();
+    void checkJobRequestTimeout();
 
     struct Job {
         Job(const std::shared_ptr<CompilerArgs> &args, const Path &resolved, const List<String> &env, const Path &dir,
-            std::shared_ptr<Compiler> &c, const std::shared_ptr<Connection> &conn)
+            std::shared_ptr<Compiler> &c, const std::shared_ptr<Connection> &localConn = std::shared_ptr<Connection>())
             : received(time(0)), arguments(args), resolvedCompiler(resolved),
-              environ(env), cwd(dir), process(0), flags(None), compiler(c), localConnection(conn),
-              remoteId(0)
+              environ(env), cwd(dir), process(0), flags(None), compiler(c), localConnection(localConn),
+              id(0)
         {
         }
 
@@ -102,62 +102,19 @@ private:
             StateMask = Preprocessing|PendingPreprocessing|PendingCompiling|Compiling
         };
 
-        Path tempOutput;
+        Path tempObjectFile;
         String preprocessed;
         uint32_t flags;
         LinkedList<std::shared_ptr<Job> >::iterator position;
         std::shared_ptr<Compiler> compiler;
         std::shared_ptr<Connection> localConnection, remoteConnection;
-        uint64_t remoteId;
+        uint64_t id;
     };
 
-    void addJob(Job::Flag flag, const std::shared_ptr<Job> &job)
-    {
-        assert(job);
-        assert(!(job->flags & Job::StateMask));
-        assert(flag & Job::StateMask);
-        job->flags |= flag;
-        switch (flag) {
-        case Job::PendingPreprocessing:
-            job->position = mPendingPreprocessJobs.insert(mPendingPreprocessJobs.end(), job);
-            break;
-        case Job::Preprocessing:
-            job->position = mPreprocessingJobs.insert(mPreprocessingJobs.end(), job);
-            break;
-        case Job::PendingCompiling:
-            job->position = mPendingCompileJobs.insert(mPendingCompileJobs.end(), job);
-            break;
-        case Job::Compiling:
-            job->position = mCompilingJobs.insert(mCompilingJobs.end(), job);
-            break;
-        default:
-            assert(0);
-        }
-    }
+    void addJob(Job::Flag flag, const std::shared_ptr<Job> &job);
+    void removeJob(const std::shared_ptr<Job> &job);
 
-    void removeJob(const std::shared_ptr<Job> &job)
-    {
-        assert(job);
-        const Job::Flag flag = static_cast<Job::Flag>(job->flags & Job::StateMask);
-        assert(flag);
-        job->flags &= ~flag;
-        switch (flag) {
-        case Job::PendingPreprocessing:
-            mPendingPreprocessJobs.erase(job->position);
-            break;
-        case Job::Preprocessing:
-            mPreprocessingJobs.erase(job->position);
-            break;
-        case Job::PendingCompiling:
-            mPendingCompileJobs.erase(job->position);
-            break;
-        case Job::Compiling:
-            mCompilingJobs.erase(job->position);
-            break;
-        default:
-            assert(0);
-        }
-    }
+    Path compilerDir() const { return mOptions.cacheDir + "compilers/"; }
 
     LinkedList<std::shared_ptr<Job> > mPendingPreprocessJobs, mPendingCompileJobs, mPreprocessingJobs, mCompilingJobs;
 
