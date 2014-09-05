@@ -495,7 +495,7 @@ void Daemon::startJobs()
         assert(job->flags & Job::PendingPreprocessing);
         removeJob(job);
         List<String> args = job->arguments->commandLine.mid(1);
-        if (job->arguments->flags & CompilerArgs::HasOutput) {
+        if (job->arguments->flags & CompilerArgs::HasDashO) {
             for (int i=0; i<args.size(); ++i) {
                 if (args.at(i) == "-o") {
                     if (++i == args.size()) {
@@ -588,8 +588,13 @@ void Daemon::startJobs()
                 // error() << errno << strerror(errno) << job->tempOutput;
                 assert(fd != -1);
                 close(fd);
+                if (job->arguments->flags & CompilerArgs::HasDashMF) {
+                    const int dashMF = args.indexOf("-MF");
+                    assert(dashMF != -1);
+                    args.remove(dashMF, 2);
+                }
             }
-            if (!(job->arguments->flags & CompilerArgs::HasOutput)) {
+            if (!(job->arguments->flags & CompilerArgs::HasDashO)) {
                 args << "-o";
                 if (!(job->flags & Job::FromRemote)) {
                     args << job->arguments->output();

@@ -88,19 +88,20 @@ struct CompilerArgs
     }
 
     enum Flag {
-        None = 0x0000,
-        NoAssemble = 0x0001,
-        MultiSource = 0x0002,
-        HasOutput = 0x0004,
-        HasDashX = 0x0008,
-        StdinInput = 0x0010,
-        CPlusPlus = 0x0020,
-        C = 0x0040,
-        CPreprocessed = 0x0080,
-        CPlusPlusPreprocessed = 0x0100,
-        ObjectiveC = 0x0200,
-        AssemblerWithCpp = 0x0400,
-        Assembler = 0x0800,
+        None = 0x00000,
+        NoAssemble = 0x00001,
+        MultiSource = 0x00002,
+        HasDashO = 0x00004,
+        HasDashX = 0x00008,
+        HasDashMF = 0x00010,
+        StdinInput = 0x00020,
+        CPlusPlus = 0x01000,
+        C = 0x02000,
+        CPreprocessed = 0x04000,
+        CPlusPlusPreprocessed = 0x08000,
+        ObjectiveC = 0x10000,
+        AssemblerWithCpp = 0x20000,
+        Assembler = 0x40000,
         LanguageMask = CPlusPlus|C|CPreprocessed|CPlusPlusPreprocessed|ObjectiveC|AssemblerWithCpp|Assembler
     };
     static const char *languageName(Flag flag);
@@ -111,7 +112,7 @@ struct CompilerArgs
     Path sourceFile(int idx = 0) const { return commandLine.value(sourceFileIndexes.value(idx, -1)); }
     Path output() const
     {
-        if (flags & HasOutput) {
+        if (flags & HasDashO) {
             assert(objectFileIndex);
             return commandLine.value(objectFileIndex);
         } else {

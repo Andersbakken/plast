@@ -419,6 +419,8 @@ bool CompilerMessage::writeFiles(const Path &root) const
 static const char *argOptions[] = {
     "-D",
     "-I",
+    "-MQ",
+    "-MT"
     "-Xpreprocessor",
     "-aux-info",
     "-idirafter",
@@ -461,8 +463,11 @@ std::shared_ptr<CompilerArgs> CompilerArgs::create(const List<String> &args)
         } else if (arg == "-E") {
             ret->mode = Preprocess;
         } else if (arg == "-o") {
-            ret->flags |= HasOutput;
+            ret->flags |= HasDashO;
             ret->objectFileIndex = ++i;
+        } else if (arg == "-MF") {
+            ret->flags |= HasDashMF;
+            ++i;
         } else if (arg == "-x") {
             ret->flags |= HasDashX;
             if (++i == args.size())
