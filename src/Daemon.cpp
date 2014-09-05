@@ -730,7 +730,7 @@ void Daemon::checkJobRequestTimeout()
         if (now - it->second > 10000) { // people need to get back to us in 10 seconds
             it = mOutstandingJobRequests.erase(it);
         } else {
-            const uint64_t elapseTime = it->second + 10000;
+            const uint64_t elapseTime = it->second + 10000 - now;
             if (!timer || elapseTime < timer)
                 timer = elapseTime;
             ++it;
