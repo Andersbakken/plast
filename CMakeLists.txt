@@ -6,9 +6,6 @@ endif()
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 
-include(cmake/FindReadline.cmake)
-include(cmake/FindLibMagic.cmake)
-
 add_subdirectory(src)
 
 if (EXISTS "rules.ninja")
