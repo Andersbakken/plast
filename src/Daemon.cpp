@@ -641,18 +641,26 @@ void Daemon::announceJobs(Peer *peer)
         }
     }
 
+    warning() << "Announcing jobs" << mPeersByConnection.size() << jobs;
+
     if (peer) {
         if (peer->announced != jobs) {
             const JobAnnouncementMessage msg(jobs);
+            peer->announced = jobs;
             peer->connection->send(msg);
+        } else {
+            warning() << peer->host.toString() << "already knows about these jobs";
         }
     } else {
         std::shared_ptr<JobAnnouncementMessage> msg;
         for (auto peer : mPeersByConnection) {
             if (peer.second->announced != jobs) {
+                peer.second->announced = jobs;
                 if (!msg)
                     msg.reset(new JobAnnouncementMessage(jobs));
                 peer.first->send(*msg);
+            } else {
+                warning() << peer.second->host.toString() << "already knows about these jobs";
             }
         }
     }
