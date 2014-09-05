@@ -320,9 +320,9 @@ void Daemon::handleDaemonListMessage(const DaemonListMessage *message, const std
         Peer *&peer = mPeersByHost[host];
         if (!peer) {
             auto conn = std::make_shared<Connection>();
-            warning() << "Trying to connect to" << host.address << host.port << host.friendlyName;
-            if (conn->connectTcp(host.address, host.port) || conn->connectTcp(host.friendlyName, host.port)) {
-                peer = new Peer({ conn, host, Set<String>() });
+            warning() << "Trying to connect to" << host.address << host.port;
+            if (conn->connectTcp(host.address, host.port)) {
+                peer = new Peer({ conn, host });
                 mPeersByConnection[conn] = peer;
                 mConnections.insert(conn);
                 conn->disconnected().connect(std::bind(&Daemon::onConnectionDisconnected, this, std::placeholders::_1));
