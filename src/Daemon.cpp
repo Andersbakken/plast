@@ -588,7 +588,7 @@ void Daemon::startJobs()
                 int i=0;
                 while (i<args.size()) {
                     const String &arg = args.at(i);
-                    error() << "considering" << i << arg;
+                    // error() << "considering" << i << arg;
                     if (arg == "-MF") {
                         args.remove(i, 2);
                     } else if (arg == "-MT") {
@@ -605,7 +605,7 @@ void Daemon::startJobs()
                         ++i;
                     }
                 }
-                error() << "Args are now" << args;
+                // error() << "Args are now" << args;
             }
             if (!(job->arguments->flags & CompilerArgs::HasDashO)) {
                 args << "-o";
