@@ -13,38 +13,27 @@
    You should have received a copy of the GNU General Public License
    along with Plast.  If not, see <http://www.gnu.org/licenses/>. */
 
-#ifndef Server_h
-#define Server_h
+#ifndef JobRequestMessage_h
+#define JobRequestMessage_h
 
-#include <rct/SocketServer.h>
-#include <rct/Hash.h>
-#include <rct/Connection.h>
 #include <rct/Message.h>
 #include "Plast.h"
-#include "Console.h"
-#include "Host.h"
 
-class Server
+class JobRequestMessage : public Message
 {
 public:
-    Server();
-    ~Server();
+    enum { MessageId = Plast::JobRequestMessageId };
+    JobRequestMessage(uint64_t id = 0, const String &sha256 = String())
+        : Message(MessageId), mId(id), mSha256(sha256)
+    {}
 
-    bool init();
+    uint64_t id() const { return mId; }
+    const String &sha256() const { return mSha256; }
+    virtual void encode(Serializer &serializer) const { serializer << mId << mSha256; }
+    virtual void decode(Deserializer &deserializer) { deserializer >> mId >> mSha256; }
 private:
-    void handleConsoleCommand(const String &string);
-    void handleConsoleCompletion(const String& string, int start, int end, String& common, List<String>& candidates);
-
-    void onNewMessage(Message *message, Connection *connection);
-    void onConnectionDisconnected(Connection *connection);
-
-    SocketServer mServer;
-    struct Node {
-        Host host;
-        int capacity, jobsSent, jobsReceived;
-    };
-    Hash<std::shared_ptr<Connection>, Node*> mNodes;
-    std::shared_ptr<SocketClient> mDiscoverySocket;
+    uint64_t mId;
+    String mSha256;
 };
 
 #endif

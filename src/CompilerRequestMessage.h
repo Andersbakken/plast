@@ -13,38 +13,26 @@
    You should have received a copy of the GNU General Public License
    along with Plast.  If not, see <http://www.gnu.org/licenses/>. */
 
-#ifndef Server_h
-#define Server_h
+#ifndef CompilerRequestMessage_h
+#define CompilerRequestMessage_h
 
-#include <rct/SocketServer.h>
-#include <rct/Hash.h>
-#include <rct/Connection.h>
 #include <rct/Message.h>
 #include "Plast.h"
-#include "Console.h"
-#include "Host.h"
 
-class Server
+class CompilerRequestMessage : public Message
 {
 public:
-    Server();
-    ~Server();
+    enum { MessageId = Plast::CompilerRequestMessageId };
+    CompilerRequestMessage(const String &sha256 = String())
+        : Message(MessageId), mSha256(sha256)
+    {
+    }
 
-    bool init();
+    const String &sha256() const { return mSha256; }
+    virtual void encode(Serializer &serializer) const { serializer << mSha256; }
+    virtual void decode(Deserializer &deserializer) { deserializer >> mSha256; }
 private:
-    void handleConsoleCommand(const String &string);
-    void handleConsoleCompletion(const String& string, int start, int end, String& common, List<String>& candidates);
-
-    void onNewMessage(Message *message, Connection *connection);
-    void onConnectionDisconnected(Connection *connection);
-
-    SocketServer mServer;
-    struct Node {
-        Host host;
-        int capacity, jobsSent, jobsReceived;
-    };
-    Hash<std::shared_ptr<Connection>, Node*> mNodes;
-    std::shared_ptr<SocketClient> mDiscoverySocket;
+    String mSha256;
 };
 
 #endif

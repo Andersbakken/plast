@@ -13,9 +13,13 @@
    You should have received a copy of the GNU General Public License
    along with Plast.  If not, see <http://www.gnu.org/licenses/>. */
 
-#include "Plast.h"
 #include <rct/EventLoop.h>
 #include <rct/Connection.h>
+#include "ClientJobResponseMessage.h"
+#include "ClientJobMessage.h"
+#include "Plast.h"
+#include "CompilerArgs.h"
+#include "Compiler.h"
 
 static inline int buildLocal(const Path &path, int argc, char **argv)
 {

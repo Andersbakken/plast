@@ -17,6 +17,9 @@
 #include <rct/Log.h>
 #include <rct/Config.h>
 #include "Plast.h"
+#include "QuitMessage.h"
+#include "HandshakeMessage.h"
+#include "DaemonListMessage.h"
 
 Server::Server()
 {

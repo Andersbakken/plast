@@ -157,35 +157,35 @@ void Daemon::onNewMessage(Message *message, Connection *conn)
 {
     auto connection = conn->shared_from_this();
     switch (message->messageId()) {
-    case ClientJobMessageId:
+    case Plast::ClientJobMessageId:
         handleClientJobMessage(static_cast<ClientJobMessage*>(message), connection);
         break;
-    case QuitMessageId:
+    case Plast::QuitMessageId:
         warning() << "Quitting by request";
         EventLoop::eventLoop()->quit();
         break;
-    case DaemonJobAnnouncementMessageId:
+    case Plast::JobAnnouncementMessageId:
         handleJobAnnouncementMessage(static_cast<JobAnnouncementMessage*>(message), connection);
         break;
-    case CompilerMessageId:
+    case Plast::CompilerMessageId:
         handleCompilerMessage(static_cast<CompilerMessage*>(message), connection);
         break;
-    case CompilerRequestMessageId:
+    case Plast::CompilerRequestMessageId:
         handleCompilerRequestMessage(static_cast<CompilerRequestMessage*>(message), connection);
         break;
-    case JobRequestMessageId:
+    case Plast::JobRequestMessageId:
         handleJobRequestMessage(static_cast<JobRequestMessage*>(message), connection);
         break;
-    case JobMessageId:
+    case Plast::JobMessageId:
         handleJobMessage(static_cast<JobMessage*>(message), connection);
         break;
-    case JobResponseMessageId:
+    case Plast::JobResponseMessageId:
         handleJobResponseMessage(static_cast<JobResponseMessage*>(message), connection);
         break;
-    case DaemonListMessageId:
+    case Plast::DaemonListMessageId:
         handleDaemonListMessage(static_cast<DaemonListMessage*>(message), connection);
         break;
-    case HandshakeMessageId:
+    case Plast::HandshakeMessageId:
         handleHandshakeMessage(static_cast<HandshakeMessage*>(message), connection);
         break;
     default:

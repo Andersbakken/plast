@@ -24,6 +24,17 @@
 #include <rct/Process.h>
 #include "Plast.h"
 #include "Console.h"
+#include "ClientJobMessage.h"
+#include "ClientJobResponseMessage.h"
+#include "CompilerMessage.h"
+#include "CompilerRequestMessage.h"
+#include "DaemonListMessage.h"
+#include "HandshakeMessage.h"
+#include "JobAnnouncementMessage.h"
+#include "JobMessage.h"
+#include "JobRequestMessage.h"
+#include "JobResponseMessage.h"
+#include "QuitMessage.h"
 
 class Daemon
 {

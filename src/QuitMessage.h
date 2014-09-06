@@ -13,33 +13,20 @@
    You should have received a copy of the GNU General Public License
    along with Plast.  If not, see <http://www.gnu.org/licenses/>. */
 
-#ifndef Plast_h
-#define Plast_h
+#ifndef QuitMessage_h
+#define QuitMessage_h
 
-#include <rct/Path.h>
+#include <rct/Message.h>
+#include "Plast.h"
 
-namespace Plast {
-bool init();
-Path defaultSocketFile();
-enum {
-    DefaultServerPort = 5160,
-    DefaultDaemonPort = 5161,
-    DefaultDiscoveryPort = 5162
+class QuitMessage : public Message
+{
+public:
+    enum { MessageId = Plast::QuitMessageId };
+    QuitMessage()
+        : Message(MessageId)
+    {}
 };
 
-enum {
-    HandshakeMessageId = 100,
-    DaemonListMessageId,
-    ClientJobMessageId,
-    ClientJobResponseMessageId,
-    QuitMessageId,
-    JobAnnouncementMessageId,
-    CompilerMessageId,
-    CompilerRequestMessageId,
-    JobRequestMessageId,
-    JobMessageId,
-    JobResponseMessageId
-};
-};
 
 #endif

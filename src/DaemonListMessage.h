@@ -13,38 +13,27 @@
    You should have received a copy of the GNU General Public License
    along with Plast.  If not, see <http://www.gnu.org/licenses/>. */
 
-#ifndef Server_h
-#define Server_h
+#ifndef DaemonListMessage_h
+#define DaemonListMessage_h
 
-#include <rct/SocketServer.h>
-#include <rct/Hash.h>
-#include <rct/Connection.h>
 #include <rct/Message.h>
+#include <rct/Set.h>
 #include "Plast.h"
-#include "Console.h"
 #include "Host.h"
 
-class Server
+class DaemonListMessage : public Message
 {
 public:
-    Server();
-    ~Server();
+    enum { MessageId = Plast::DaemonListMessageId };
+    DaemonListMessage(const Set<Host> &hosts = Set<Host>())
+        : Message(MessageId), mHosts(hosts)
+    {}
 
-    bool init();
+    const Set<Host> &hosts() const { return mHosts; }
+    virtual void encode(Serializer &serializer) const { serializer << mHosts; }
+    virtual void decode(Deserializer &deserializer) { deserializer >> mHosts; }
 private:
-    void handleConsoleCommand(const String &string);
-    void handleConsoleCompletion(const String& string, int start, int end, String& common, List<String>& candidates);
-
-    void onNewMessage(Message *message, Connection *connection);
-    void onConnectionDisconnected(Connection *connection);
-
-    SocketServer mServer;
-    struct Node {
-        Host host;
-        int capacity, jobsSent, jobsReceived;
-    };
-    Hash<std::shared_ptr<Connection>, Node*> mNodes;
-    std::shared_ptr<SocketClient> mDiscoverySocket;
+    Set<Host> mHosts;
 };
 
 #endif

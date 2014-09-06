@@ -13,38 +13,31 @@
    You should have received a copy of the GNU General Public License
    along with Plast.  If not, see <http://www.gnu.org/licenses/>. */
 
-#ifndef Server_h
-#define Server_h
+#ifndef ClientJobResponseMessage_h
+#define ClientJobResponseMessage_h
 
-#include <rct/SocketServer.h>
-#include <rct/Hash.h>
-#include <rct/Connection.h>
 #include <rct/Message.h>
 #include "Plast.h"
-#include "Console.h"
-#include "Host.h"
+#include "Output.h"
 
-class Server
+class ClientJobResponseMessage : public Message
 {
 public:
-    Server();
-    ~Server();
+    enum { MessageId = Plast::ClientJobResponseMessageId };
 
-    bool init();
+    ClientJobResponseMessage(int status = -1, const List<Output> &output = List<Output>())
+        : Message(MessageId), mStatus(status), mOutput(output)
+    {
+    }
+
+    int status() const { return mStatus; }
+    const List<Output> &output() const { return mOutput; }
+    void encode(Serializer &serializer) const { serializer << mStatus << mOutput; }
+    void decode(Deserializer &deserializer) { deserializer >> mStatus >> mOutput; }
 private:
-    void handleConsoleCommand(const String &string);
-    void handleConsoleCompletion(const String& string, int start, int end, String& common, List<String>& candidates);
-
-    void onNewMessage(Message *message, Connection *connection);
-    void onConnectionDisconnected(Connection *connection);
-
-    SocketServer mServer;
-    struct Node {
-        Host host;
-        int capacity, jobsSent, jobsReceived;
-    };
-    Hash<std::shared_ptr<Connection>, Node*> mNodes;
-    std::shared_ptr<SocketClient> mDiscoverySocket;
+    int mStatus;
+    List<Output> mOutput;
 };
 
 #endif
+

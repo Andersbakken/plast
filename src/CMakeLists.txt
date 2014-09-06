@@ -45,7 +45,7 @@ list(APPEND SYSTEM_LIBS ${LLVM_LDFLAGS})
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 
-add_library(plast Plast.cpp Console.cpp)
+add_library(plast Compiler.cpp CompilerArgs.cpp CompilerMessage.cpp Console.cpp Plast.cpp)
 target_link_libraries(plast rct)
 
 include_directories(${CMAKE_CURRENT_LIST_DIR}
