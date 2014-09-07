@@ -111,41 +111,7 @@ bool Daemon::init(const Options &options)
     }
 
     mOptions = options;
-
-    for (const Path &path : compilerDir().files(Path::Directory)) {
-        // error() << path;
-        if (Path(path + "BAD").isFile()) {
-            Compiler::insert(Path(), path.name(), Set<Path>());
-            continue;
-        }
-        List<String> shaList;
-        Set<Path> files;
-        for (const Path &file : path.files(Path::File)) {
-            if (!file.isSymLink()) {
-                shaList.append(file.fileName());
-                files.insert(file);
-                // error() << file.fileName();
-            }
-        }
-        SHA256 sha;
-        shaList.sort();
-        for (const String &fn : shaList) {
-            sha.update(fn);
-        }
-        const String sha256 = sha.hash(SHA256::Hex);
-        if (sha256 != path.name()) {
-            error() << "Invalid compiler" << path << sha256 << shaList;
-            Path::rmdir(path);
-        } else {
-            const Path exec = Path::resolved(path + "/COMPILER");
-            if (!exec.isFile()) {
-                error() << "Can't find COMPILER symlink";
-            } else {
-                warning() << "Got compiler" << sha256 << path.fileName();
-                Compiler::insert(exec, sha256, files);
-            }
-        }
-    }
+    mCompilerCache.reset(new CompilerCache(mOptions.cacheDir + "compilers/"));
 
     mExplicitServer = !mOptions.serverHost.isEmpty();
     reconnectToServer();
@@ -202,34 +168,41 @@ void Daemon::handleClientJobMessage(const ClientJobMessage *msg, const std::shar
     assert(!env.contains("PLAST=1"));
     env.append("PLAST=1");
 
-    const Path resolvedCompiler = msg->resolvedCompiler();
-    std::shared_ptr<Compiler> compiler = Compiler::compiler(resolvedCompiler);
-    if (!compiler) {
-        warning() << "Can't find compiler for" << resolvedCompiler;
-        conn->send(ClientJobResponseMessage());
-        conn->close();
-        return;
-    }
-    std::shared_ptr<Job> job = std::make_shared<Job>(msg->arguments(), resolvedCompiler, env, msg->cwd(), compiler, conn);
-    mJobsByLocalConnection[conn] = job;
-    addJob(Job::PendingPreprocessing, job);
-    startJobs();
+#warning not done
+    // const Path resolvedCompiler = msg->resolvedCompiler();
+    // bool created;
+    // std::shared_ptr<Compiler> compiler = Compiler::compilerByP
+    // std::shared_ptr<Compiler> compiler = Compiler::compiler(resolvedCompiler, &created);
+    // if (!compiler) {
+    //     warning() << "Can't find compiler for" << resolvedCompiler;
+    //     conn->send(ClientJobResponseMessage());
+    //     conn->close();
+    //     return;
+    // }
+    // if (created) {
+    //     const CompilerMessage msg(compiler);
+    //     assert(msg.isValid());
+    //     if (!msg.writeFiles(compilerDir() + msg.sha256() + '/')) {
+    //         error() << "Couldn't write files to" << mOptions.cacheDir + msg.sha256() + '/';
+    //     }
+    // }
+    // std::shared_ptr<Job> job = std::make_shared<Job>(msg->arguments(), resolvedCompiler, env, msg->cwd(), compiler, conn);
+    // mJobsByLocalConnection[conn] = job;
+    // addJob(Job::PendingPreprocessing, job);
+    // startJobs();
 }
 
 void Daemon::handleCompilerMessage(const CompilerMessage *message, const std::shared_ptr<Connection> &connection)
 {
     assert(message->isValid());
-    if (!message->writeFiles(compilerDir() + message->sha256() + '/')) {
-        error() << "Couldn't write files to" << mOptions.cacheDir + message->sha256() + '/';
-    } else {
-        warning() << "Wrote compiler" << message->sha256() << "to" << mOptions.cacheDir;
+    if (mCompilerCache->create(message->compiler().fileName(), message->sha256(), message->contents())) {
         fetchJobs(mPeersByConnection.value(connection));
     }
 }
 
 void Daemon::handleCompilerRequestMessage(const CompilerRequestMessage *message, const std::shared_ptr<Connection> &connection)
 {
-    std::shared_ptr<Compiler> compiler = Compiler::compilerBySha256(message->sha256());
+    std::shared_ptr<Compiler> compiler = mCompilerCache->findBySha256(message->sha256());
     if (compiler) {
         error() << "Sending compiler" << message->sha256();
         connection->send(CompilerMessage(compiler));

@@ -24,18 +24,12 @@
 class Compiler
 {
 public:
-    static Path resolve(const Path &path);
-    static std::shared_ptr<Compiler> compiler(const Path& executable, const String& path = String());
-    static std::shared_ptr<Compiler> compilerBySha256(const String &sha256) { return sBySha.value(sha256); }
-    static void insert(const Path &executable, const String &sha256, const Set<Path> &files);
-    static String dump();
-    static void cleanup();
-    static int count() { return sBySha.size(); }
-
     String sha256() const { return mSha256; }
     Path path() const { return mPath; }
     Set<Path> files() const { return mFiles; }
     bool isValid() const { return !mPath.isEmpty(); }
+
+    static Path resolve(const Path &path);
 private:
     static void ensureEnviron();
 
@@ -46,6 +40,7 @@ private:
     String mSha256;
     Path mPath;
     Set<Path> mFiles;
+    friend class CompilerCache;
 };
 
 #endif

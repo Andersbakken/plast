@@ -1,13 +1,14 @@
 #include "CompilerMessage.h"
 #include <rct/Process.h>
 
+#if 0
 class CompilerPackage {
 public:
     struct File;
     CompilerPackage()
     {
     }
-    CompilerPackage(const Path &executable, const Hash<Path, File> &files)
+    CompilerPackage(const Path &executable, const Hash<Path, std::pair<String, mode_t> > &files)
         : mExecutable(executable), mFiles(files)
     {
     }
@@ -21,15 +22,10 @@ public:
     bool loadFile(const Path &file);
 
     const Path &executable() const { return mExecutable; }
-    struct File {
-        String contents;
-        mode_t perm;
-    };
-
-    const Hash<Path, File> &files() const { return mFiles; }
+    const Hash<Path, std::pair<String, mode_t> > &files() const { return mFiles; }
 private:
     Path mExecutable;
-    Hash<Path, File> mFiles;
+    Hash<Path, std::pair<String, mode_t> > mFiles;
 };
 
 CompilerPackage *CompilerPackage::loadFromPaths(const Path &executable, const Set<Path> &paths)
@@ -65,17 +61,17 @@ bool CompilerPackage::loadFile(const Path &file)
     return true;
 }
 
-Serializer &operator<<(Serializer &s, const CompilerPackage::File &p)
+Serializer &operator<<(Serializer &s, const std::pair<String, mode_t> &p)
 {
-    s << p.contents << static_cast<uint32_t>(p.perm);
+    s << p.first << static_cast<uint32_t>(p.second);
     return s;
 }
 
-Deserializer &operator>>(Deserializer &s, CompilerPackage::File &p)
+Deserializer &operator>>(Deserializer &s, std::pair<String, mode_t> &p)
 {
     uint32_t perm;
-    s >> p.contents >> perm;
-    p.perm = static_cast<mode_t>(perm);
+    s >> p.first >> perm;
+    p.second = static_cast<mode_t>(perm);
     return s;
 }
 
@@ -88,118 +84,11 @@ Serializer &operator<<(Serializer &s, const CompilerPackage &p)
 Deserializer &operator>>(Deserializer &s, CompilerPackage &p)
 {
     Path compiler;
-    Hash<Path, CompilerPackage::File> files;
+    Hash<Path, std::pair<String, mode_t> > files;
     s >> compiler >> files;
     p = CompilerPackage(compiler, files);
     return s;
 }
 
-Hash<String, CompilerPackage *> CompilerMessage::sPackages;
+#endif
 
-CompilerMessage::CompilerMessage(const std::shared_ptr<Compiler> &compiler)
-    : Message(MessageId, Compressed), mPackage(0)
-{
-    if (compiler) {
-        mSha256 = compiler->sha256();
-        mCompiler = compiler->path();
-        const Hash<String, CompilerPackage *>::const_iterator package = sPackages.find(compiler->sha256());
-        if (package != sPackages.end()) {
-            mPackage = package->second;
-            return;
-        }
-        /*
-          for (Set<Path>::const_iterator it = paths.begin(); it != paths.end(); ++it) {
-          if (it->isSymLink()) {
-          mLinks[*it] = it->followLink();
-          } else {
-          mFiles[*it] = it->readAll();
-          }
-          }
-        */
-
-        mPackage = loadCompiler(compiler->path(), compiler->files());
-        if (mPackage) {
-            sPackages[mSha256] = mPackage;
-        }
-    }
-}
-
-CompilerMessage::~CompilerMessage()
-{
-}
-
-CompilerPackage *CompilerMessage::loadCompiler(const Path &compiler, const Set<Path> &paths)
-{
-    error() << "loading" << paths;
-    return CompilerPackage::loadFromPaths(compiler, paths);
-}
-
-void CompilerMessage::encode(Serializer &serializer) const
-{
-    serializer << mCompiler << mSha256 << (mPackage != 0);
-    if (mPackage)
-        serializer << *mPackage;
-}
-
-void CompilerMessage::decode(Deserializer &deserializer)
-{
-    bool hasPackage;
-    deserializer >> mCompiler >> mSha256 >> hasPackage;
-    error() << "Decoding" << mCompiler << mSha256 << hasPackage;
-    if (hasPackage) {
-        if (!mPackage)
-            mPackage = new CompilerPackage;
-        deserializer >> *mPackage;
-    }
-}
-
-bool CompilerMessage::writeFiles(const Path &root) const
-{
-    if (!mPackage)
-        return false;
-
-    Path::mkdir(root);
-    Set<Path> files;
-    for (const auto &file : mPackage->files()) {
-        // const Path path = root + file.first;
-        // Path::mkdir(path.parentDir(), Path::Recursive);
-        const char *fileName = file.first.fileName();
-        const Path path = root + fileName;
-        // Path::mkdir(path.parentDir(), Path::Recursive);
-        if (!Rct::writeFile(path, file.second.contents, file.second.perm)) {
-            error() << "Couldn't write file" << path;
-            for (const Path &f : root.files(Path::File))
-                Path::rm(f);
-            rmdir(root.constData());
-            return false;
-        }
-        files.insert(path);
-    }
-    const char *compilerFileName = mCompiler.fileName();
-    if (symlink(compilerFileName, (root + "COMPILER").constData())) {
-        for (const Path &f : root.files(Path::File))
-            Path::rm(f);
-        rmdir(root.constData());
-        error() << "Failed to create symlink" << errno << strerror(errno) << (root + "COMPILER");
-        return false;
-    }
-    const Path compilerPath = root + compilerFileName;
-    error() << "chmoding" << compilerPath;
-    if (chmod(compilerPath.constData(), S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH)) {
-        error() << "Failed to chmod compiler" << errno << strerror(errno) << compilerPath;
-        for (const Path &f : root.files(Path::File))
-            Path::rm(f);
-        rmdir(root.constData());
-        return false;
-    }
-
-    Process process;
-    if (!process.exec(compilerPath, List<String>() << "-v")) { // compiler can't run. Cache as bad?
-        for (const Path &f : root.files(Path::File))
-            Path::rm(f);
-        Rct::writeFile(root + "BAD", String());
-        return false;
-    }
-    Compiler::insert(compilerPath, mSha256, files);
-    return true;
-}

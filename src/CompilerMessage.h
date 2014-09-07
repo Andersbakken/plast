@@ -20,31 +20,28 @@
 #include "Plast.h"
 #include "Compiler.h"
 
-class CompilerPackage;
 class CompilerMessage : public Message
 {
 public:
     enum { MessageId = Plast::CompilerMessageId };
-    CompilerMessage(const std::shared_ptr<Compiler> &compiler = std::shared_ptr<Compiler>());
-    ~CompilerMessage();
+    CompilerMessage(const Path &compiler = Path(), const String &sha256 = String(),
+                    const Hash<Path, std::pair<String, uint32_t> > &contents = Hash<Path, std::pair<String, uint32_t> >())
+        : Message(MessageId, Compressed), mCompiler(compiler), mSha256(sha256), mContents(contents)
+    {
+    }
+    virtual void encode(Serializer &serializer) const { serializer << mCompiler << mSha256 << mContents; }
+    virtual void decode(Deserializer &deserializer) { deserializer >> mCompiler >> mSha256 >> mContents; }
 
-    virtual void encode(Serializer &serializer) const;
-    virtual void decode(Deserializer &deserializer);
     Path compiler() const { return mCompiler; }
     String sha256() const { return mSha256; }
 
-    bool isValid() const { return mPackage != 0; }
-
-    bool writeFiles(const Path& path) const;
-private:
-    CompilerPackage* loadCompiler(const Path &compiler, const Set<Path> &paths);
+    bool isValid() const { return !mContents.isEmpty(); }
+    Hash<Path, std::pair<String, uint32_t> > contents() const { return mContents; }
 
 private:
-    static Hash<String, CompilerPackage*> sPackages; // keyed on sha256
-
     Path mCompiler;
     String mSha256;
-    CompilerPackage* mPackage;
+    Hash<Path, std::pair<String, uint32_t> > mContents;
 };
 
 #endif

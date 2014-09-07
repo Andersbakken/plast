@@ -35,6 +35,7 @@
 #include "JobRequestMessage.h"
 #include "JobResponseMessage.h"
 #include "QuitMessage.h"
+#include "CompilerCache.h"
 
 class Daemon
 {
@@ -125,8 +126,6 @@ private:
     void addJob(Job::Flag flag, const std::shared_ptr<Job> &job);
     void removeJob(const std::shared_ptr<Job> &job);
 
-    Path compilerDir() const { return mOptions.cacheDir + "compilers/"; }
-
     LinkedList<std::shared_ptr<Job> > mPendingPreprocessJobs, mPendingCompileJobs, mPreprocessingJobs, mCompilingJobs;
 
     Hash<std::shared_ptr<Connection>, std::shared_ptr<Job> > mJobsByLocalConnection;
@@ -150,6 +149,7 @@ private:
     SocketServer mLocalServer, mRemoteServer;
     std::shared_ptr<SocketClient> mDiscoverySocket;
     std::shared_ptr<Connection> mServerConnection;
+    std::shared_ptr<CompilerCache> mCompilerCache;
     Timer mServerTimer;
 };
 
