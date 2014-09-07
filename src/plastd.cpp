@@ -66,10 +66,10 @@ int main(int argc, char** argv)
     Config::registerOption<bool>("silent", "Be silent", 'S');
     Config::registerOption<bool>("clear-cache", "Clear the compiler cache on start", 'C');
     Config::registerOption<bool>("no-local-jobs", "Don't run any local jobs. Only useful for debugging", 'L');
-    Config::registerOption<String>("cache-dir", "Where to put compiler cache. Default ~/.plastd/cache", 'c', Path::home() + ".plastd/cache/",
+    Config::registerOption<String>("data-dir", "Where to put compiler cache. Default ~/.plastd/", 'c', Path::home() + ".plastd/",
                                    [](const String &dir, String &err) {
                                        if (dir.isEmpty()) {
-                                           err = "cache-dir can't be empty";
+                                           err = "data-dir can't be empty";
                                            return false;
                                        }
                                        if (!Path::mkdir(dir, Path::Recursive)) {
@@ -109,7 +109,7 @@ int main(int argc, char** argv)
         static_cast<uint16_t>(Config::value<int>("port")),
         static_cast<uint16_t>(Config::value<int>("discovery-port")),
         String(),
-        Path(Config::value<String>("cache-dir")).ensureTrailingSlash(),
+        Path(Config::value<String>("data-dir")).ensureTrailingSlash(),
         Config::value<int>("job-count"),
         Config::value<int>("preprocess-count"),
         Config::isEnabled("no-local-jobs") ? Daemon::Options::NoLocalJobs : Daemon::Options::None

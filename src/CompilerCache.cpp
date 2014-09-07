@@ -19,8 +19,8 @@
 #include <rct/Log.h>
 #include <rct/Rct.h>
 
-CompilerCache::CompilerCache(const Path &path)
-    : mPath(path)
+CompilerCache::CompilerCache(const Path &path, int cacheSize)
+    : mPath(path), mCacheSize(cacheSize)
 {
     mEnviron = Process::environment();
     for (int i = 0; i < mEnviron.size(); ++i) {
@@ -108,6 +108,7 @@ std::shared_ptr<Compiler> CompilerCache::create(const Path &compiler)
     }
     SHA256 sha;
     c.reset(new Compiler);
+    c->mFiles.insert(compiler);
     List<String> shaList;
     const char *progNames[] = { "as", "cc1", "cc1plus" };
     for (size_t i=0; i < sizeof(progNames) / sizeof(progNames[0]); ++i) {
@@ -173,7 +174,31 @@ std::shared_ptr<Compiler> CompilerCache::create(const Path &compiler)
         if (!resolvedCompiler)
             resolvedCompiler = c;
         warning() << "Created package" << compiler << c->mFiles << c->mSha256;
-#warning should write these files to local cache here
+        const Path root = mPath + c->mSha256 + '/';
+        Path::mkdir(root, Path::Recursive);
+        bool ok = true;
+        error() << root;
+        for (const Path &file : c->mFiles) {
+            error() << "Linking" << file << (root + file.fileName());
+            if (symlink(file.constData(), (root + file.fileName()).constData())) {
+                error() << "Failed to create symlink" << errno << strerror(errno) << (root + file.fileName()) << file;
+                ok = false;
+                break;
+            }
+        }
+
+        if (ok && symlink(c->mPath.fileName(), (root + "COMPILER").constData())) {
+            error() << "Failed to create symlink" << errno << strerror(errno) << (root + "COMPILER");
+            ok = false;
+        }
+
+
+        error() << "SHIT" << ok;
+        if (!ok) {
+            for (const Path &f : root.files(Path::File))
+                Path::rm(f);
+            rmdir(root.constData());
+        }
     }
     return c;
 }
@@ -267,10 +292,10 @@ Hash<Path, std::pair<String, uint32_t> > CompilerCache::contentsForSha256(const 
     assert(compiler);
     std::shared_ptr<Cache> cache(new Cache);
     cache->sha256 = sha256;
-    for (const auto &path : compiler->mPaths) {
+    for (const auto &path : compiler->mFiles) {
         auto &ref = cache->contents[path.fileName()];
         mode_t mode;
-        if (!Rct::readFile(path, ref.first, mode)) {
+        if (!Rct::readFile(path, ref.first, &mode)) {
             error() << "Failed to load file" << path;
             return Hash<Path, std::pair<String, uint32_t> >();
         }
@@ -280,4 +305,5 @@ Hash<Path, std::pair<String, uint32_t> > CompilerCache::contentsForSha256(const 
     if (mContentsCache.size() == mCacheSize)
         mContentsCache.pop_back();
     mContentsCache.insert(mContentsCache.begin(), cache);
+    return cache->contents;
 }

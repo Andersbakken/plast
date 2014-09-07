@@ -168,28 +168,22 @@ void Daemon::handleClientJobMessage(const ClientJobMessage *msg, const std::shar
     assert(!env.contains("PLAST=1"));
     env.append("PLAST=1");
 
-#warning not done
-    // const Path resolvedCompiler = msg->resolvedCompiler();
-    // bool created;
-    // std::shared_ptr<Compiler> compiler = Compiler::compilerByP
-    // std::shared_ptr<Compiler> compiler = Compiler::compiler(resolvedCompiler, &created);
-    // if (!compiler) {
-    //     warning() << "Can't find compiler for" << resolvedCompiler;
-    //     conn->send(ClientJobResponseMessage());
-    //     conn->close();
-    //     return;
-    // }
-    // if (created) {
-    //     const CompilerMessage msg(compiler);
-    //     assert(msg.isValid());
-    //     if (!msg.writeFiles(compilerDir() + msg.sha256() + '/')) {
-    //         error() << "Couldn't write files to" << mOptions.cacheDir + msg.sha256() + '/';
-    //     }
-    // }
-    // std::shared_ptr<Job> job = std::make_shared<Job>(msg->arguments(), resolvedCompiler, env, msg->cwd(), compiler, conn);
-    // mJobsByLocalConnection[conn] = job;
-    // addJob(Job::PendingPreprocessing, job);
-    // startJobs();
+    const Path resolvedCompiler = msg->resolvedCompiler();
+    std::shared_ptr<Compiler> compiler = mCompilerCache->findByPath(resolvedCompiler);
+    if (!compiler) {
+        warning() << "I haven't seen this compiler before. Lets see if we can load it" << resolvedCompiler;
+        compiler = mCompilerCache->create(resolvedCompiler);
+        if (!compiler) {
+            warning() << "Can't create compiler for" << resolvedCompiler;
+            conn->send(ClientJobResponseMessage());
+            conn->close();
+            return;
+        }
+    }
+    std::shared_ptr<Job> job = std::make_shared<Job>(msg->arguments(), resolvedCompiler, env, msg->cwd(), compiler, conn);
+    mJobsByLocalConnection[conn] = job;
+    addJob(Job::PendingPreprocessing, job);
+    startJobs();
 }
 
 void Daemon::handleCompilerMessage(const CompilerMessage *message, const std::shared_ptr<Connection> &connection)
@@ -205,9 +199,12 @@ void Daemon::handleCompilerRequestMessage(const CompilerRequestMessage *message,
     std::shared_ptr<Compiler> compiler = mCompilerCache->findBySha256(message->sha256());
     if (compiler) {
         error() << "Sending compiler" << message->sha256();
-        connection->send(CompilerMessage(compiler));
+        const auto contents = mCompilerCache->contentsForSha256(message->sha256());
+        if (contents.isEmpty())
+            return;
+        connection->send(CompilerMessage(compiler->path().fileName(), compiler->sha256(), contents));
     } else {
-        error() << "I don't know nothing about no" << message->sha256() << "Fisk" << Compiler::dump();
+        error() << "I don't know nothing about no" << message->sha256() << "Fisk" << mCompilerCache->dump();
     }
 }
 
@@ -243,7 +240,7 @@ void Daemon::handleJobMessage(const JobMessage *message, const std::shared_ptr<C
         assert(peer);
         peer->jobsAvailable.remove(message->sha256());
     } else {
-        auto compiler = Compiler::compilerBySha256(message->sha256());
+        auto compiler = mCompilerCache->findBySha256(message->sha256());
         assert(compiler);
         List<String> env;
         env << ("PATH=" + compiler->path().parentDir());
@@ -627,7 +624,7 @@ void Daemon::announceJobs(Peer *peer)
         return;
     }
 
-    const int shaCount = Compiler::count();
+    const int shaCount = mCompilerCache->count();
     Set<String> jobs;
     for (const auto &it : mPendingCompileJobs) {
         assert(it->compiler);
@@ -670,10 +667,10 @@ void Daemon::fetchJobs(Peer *peer)
     warning() << "About to fetch jobs" << (peer ? peer->host.toString() : String()) << available;
     List<std::pair<Peer *, String> > candidates;
     Set<String> compilerRequests;
-    auto process = [&candidates, &compilerRequests, available](Peer *p) {
+    auto process = [&candidates, &compilerRequests, this, available](Peer *p) {
         for (const String &sha : p->jobsAvailable) {
             warning() << p->host.toString() << "has jobs for" << sha;
-            if (auto compiler = Compiler::compilerBySha256(sha)) {
+            if (auto compiler = mCompilerCache->findBySha256(sha)) {
                 if (compiler->isValid()) {
                     debug() << "Adding a candidate" << sha;
                     candidates.append(std::make_pair(p, sha));
@@ -794,7 +791,7 @@ void Daemon::handleConsoleCommand(const String &string)
             printf("Peer: %s\n", peer.first.toString().constData());
         }
     } else if (str == "compilers") {
-        printf("%s\n", Compiler::dump().constData());
+        printf("%s\n", mCompilerCache->dump().constData());
     }
 }
 

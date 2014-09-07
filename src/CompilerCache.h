@@ -20,6 +20,7 @@
 #include <rct/Path.h>
 #include <rct/Set.h>
 #include <rct/Hash.h>
+#include <rct/LinkedList.h>
 #include <memory>
 
 class CompilerCache
@@ -42,7 +43,7 @@ private:
     Hash<String, std::shared_ptr<Compiler> > mBySha256;
     struct Cache {
         String sha256;
-        Hash<Path, std::pair<String, uint32_t> contents;
+        Hash<Path, std::pair<String, uint32_t> > contents;
     };
     LinkedList<std::shared_ptr<Cache> > mContentsCache;
 };
