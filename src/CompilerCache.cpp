@@ -57,8 +57,9 @@ CompilerCache::CompilerCache(const Path &path, int cacheSize)
             error() << "Invalid compiler" << p << sha256 << shaList;
             Path::rmdir(p);
         } else {
-            const Path exec = Path::resolved(p + "/COMPILER");
-            if (!exec.isFile()) {
+            bool ok;
+            const Path exec = (p + Path(p + "COMPILER").followLink(&ok));
+            if (!ok || !exec.isFile()) {
                 error() << "Can't find COMPILER symlink";
             } else {
                 warning() << "Got compiler" << sha256 << p.fileName();
