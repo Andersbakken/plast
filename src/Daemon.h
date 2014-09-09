@@ -28,6 +28,7 @@
 #include "ClientJobResponseMessage.h"
 #include "CompilerMessage.h"
 #include "CompilerRequestMessage.h"
+#include "MonitorMessage.h"
 #include "DaemonListMessage.h"
 #include "HandshakeMessage.h"
 #include "JobAnnouncementMessage.h"
@@ -127,6 +128,7 @@ private:
     void announceJobs(Peer *peer = 0);
     void fetchJobs(Peer *peer = 0);
     void checkJobRequestTimeout();
+    void sendMonitorMessage(const String &message);
 
     void addJob(Job::Flag flag, const std::shared_ptr<Job> &job);
     void removeJob(const std::shared_ptr<Job> &job);

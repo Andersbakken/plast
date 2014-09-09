@@ -230,7 +230,7 @@ void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std
         }
         return false;
     };
-        
+
     error() << "Got job request" << message->id() << message->sha256();
     for (const auto &job : mPendingCompileJobs) {
         if (job->compiler->sha256() == message->sha256()) {
@@ -783,6 +783,13 @@ void Daemon::checkJobRequestTimeout()
     }
 }
 
+
+void Daemon::sendMonitorMessage(const String &message)
+{
+    if (mServerConnection)
+        mServerConnection->send(MonitorMessage(message));
+}
+
 void Daemon::onConnectionDisconnected(Connection *conn)
 {
     // warning() << "Lost connection" << conn->client()->port();
@@ -950,4 +957,3 @@ uint64_t Daemon::removeRemoteJob(const std::shared_ptr<Connection> &conn, const 
     }
     return id;
 }
-

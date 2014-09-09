@@ -15,6 +15,7 @@
 #include "JobMessage.h"
 #include "JobRequestMessage.h"
 #include "JobResponseMessage.h"
+#include "MonitorMessage.h"
 #include "QuitMessage.h"
 
 namespace Plast {
@@ -31,6 +32,7 @@ bool init()
     Message::registerMessage<JobMessage>();
     Message::registerMessage<JobRequestMessage>();
     Message::registerMessage<JobResponseMessage>();
+    Message::registerMessage<MonitorMessage>();
     Message::registerMessage<QuitMessage>();
     return true;
 }
