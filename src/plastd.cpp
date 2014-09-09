@@ -79,10 +79,13 @@ int main(int argc, char** argv)
                                        return true;
                                    });
     const int idealThreadCount = ThreadPool::idealThreadCount();
+    enum { DefaultRescheduleTimeout = 10000 };
     Config::registerOption<int>("job-count", String::format<128>("Job count (defaults to %d", idealThreadCount), 'j', idealThreadCount,
                                 [](const int &count, String &err) { return validate(count, "job-count", err); });
     Config::registerOption<int>("preprocess-count", String::format<128>("Preprocess count (defaults to %d", idealThreadCount * 5), 'E', idealThreadCount * 5,
                                 [](const int &count, String &err) { return validate(count, "preprocess-count", err); });
+    Config::registerOption<int>("reschedule-timeout", String::format<128>("Reschedule threshold (defaults to %d", DefaultRescheduleTimeout), 'r', DefaultRescheduleTimeout,
+                                [](const int &count, String &err) { return validate(count, "reschedule-timeout", err); });
     Config::registerOption<String>("server",
                                    String::format<128>("Server to connect to. (defaults to port %d if hostname doesn't contain a port)", Plast::DefaultServerPort), 's');
     Config::registerOption<int>("port", String::format<129>("Use this port, (default %d)", Plast::DefaultDaemonPort),'p', Plast::DefaultDaemonPort,
@@ -112,6 +115,7 @@ int main(int argc, char** argv)
         Path(Config::value<String>("data-dir")).ensureTrailingSlash(),
         Config::value<int>("job-count"),
         Config::value<int>("preprocess-count"),
+        Config::value<int>("reschedule-timeout"),
         Config::isEnabled("no-local-jobs") ? Daemon::Options::NoLocalJobs : Daemon::Options::None
     };
 

@@ -213,19 +213,55 @@ void Daemon::handleCompilerRequestMessage(const CompilerRequestMessage *message,
 
 void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std::shared_ptr<Connection> &connection)
 {
+    auto send = [connection, message, this](const std::shared_ptr<Job> &job) {
+        debug() << "Sending job request to" << connection->client()->peerString() << job->arguments->commandLine << job->arguments->sourceFiles();
+        if (connection->send(JobMessage(message->id(), message->sha256(), job->preprocessed, job->arguments))) {
+            warning() << "Sent job request to" << connection->client()->peerString();
+            removeJob(job);
+            job->remoteConnections.insert(connection);
+            std::shared_ptr<RemoteData> &data = mJobsByRemoteConnection[connection];
+            assert(!data);
+            data.reset(new RemoteData);
+            data->byJob[job] = message->id();
+            data->byId[message->id()] = { job, Rct::monoMs() };
+            job->flags |= Job::Remote;
+            addJob(Job::Compiling, job);
+            return true;
+        }
+        return false;
+    };
+        
     error() << "Got job request" << message->id() << message->sha256();
     for (const auto &job : mPendingCompileJobs) {
         if (job->compiler->sha256() == message->sha256()) {
-            debug() << "Sending job request to" << connection->client()->peerString() << job->arguments->commandLine << job->arguments->sourceFiles();
-            if (connection->send(JobMessage(message->id(), message->sha256(), job->preprocessed, job->arguments))) {
-                warning() << "Sent job request to" << connection->client()->peerString();
-                removeJob(job);
-                job->remoteConnection = connection;
-                mJobsByRemoteConnection[connection][message->id()] = job;
-                job->flags |= Job::Remote;
-                addJob(Job::Compiling, job);
-            }
+            send(job);
             return;
+        }
+    }
+
+    if (mOptions.rescheduleTimeout > 0) {
+        const uint64_t threshold = Rct::monoMs() + mOptions.rescheduleTimeout;
+        for (const auto &job : mCompilingJobs) {
+            if (!job->process && job->compiler->sha256() == message->sha256()) {
+                bool reschedule = true;
+                for (const auto &remoteConn : job->remoteConnections) {
+                    const auto &remoteData = mJobsByRemoteConnection[remoteConn];
+                    assert(remoteData);
+                    if (remoteData) {
+                        const uint64_t id = remoteData->byJob.value(job);
+                        if (id) {
+                            const auto &remoteJob = remoteData->byId[id];
+                            if (remoteJob.startTime < threshold) {
+                                reschedule = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (reschedule) {
+                    send(job);
+                }
+            }
         }
     }
 
@@ -249,9 +285,13 @@ void Daemon::handleJobMessage(const JobMessage *message, const std::shared_ptr<C
         std::shared_ptr<Job> job(new Job(message->args(), compiler->path(), env, Path(), compiler));
         job->preprocessed = message->preprocessed();
         job->flags |= Job::FromRemote;
-        job->remoteConnection = connection;
+        job->source = connection;
         job->id = message->id();
-        mJobsByRemoteConnection[connection][message->id()] = job;
+        std::shared_ptr<RemoteData> &data = mJobsByRemoteConnection[connection];
+        assert(!data);
+        data.reset(new RemoteData);
+        data->byJob[job] = message->id();
+        data->byId[message->id()] = { job, Rct::monoMs() };
         addJob(Job::PendingCompiling, job);
         error() << "Got job message" << message->id() << message->preprocessed().size() << message->args();
     }
@@ -264,11 +304,9 @@ void Daemon::handleJobResponseMessage(const JobResponseMessage *message, const s
 {
     debug() << "Got job response" << message->id() << message->objectFileContents().size();
 
-    std::shared_ptr<Job> job = mJobsByRemoteConnection[connection].take(message->id());
-    if (!job) {
-        // we don't need this response anymore
+    std::shared_ptr<Job> job = removeRemoteJob(connection, message->id());
+    if (!job)
         return;
-    }
 
     Path output = job->arguments->output();
     if (!output.startsWith('/'))
@@ -280,12 +318,16 @@ void Daemon::handleJobResponseMessage(const JobResponseMessage *message, const s
     removeJob(job);
     job->localConnection->send(ClientJobResponseMessage(message->status(), message->output()));
     mJobsByLocalConnection.remove(job->localConnection);
+
+    job->remoteConnections.remove(connection);
+    if (!job->remoteConnections.isEmpty())
+        sendJobDiscardedMessage(job);
     error() << "Couldn't find job with this id" << message->id();
 }
 
 void Daemon::handleJobDiscardedMessage(const JobDiscardedMessage *message, const std::shared_ptr<Connection> &connection)
 {
-    auto job = mJobsByRemoteConnection[connection].take(message->id());
+    auto job = removeRemoteJob(connection, message->id());
     if (job) {
         if (job->process) {
             mCompileJobsByProcess.remove(job->process);
@@ -414,31 +456,6 @@ void Daemon::restartServerTimer()
     mServerTimer.restart(1000, Timer::SingleShot);
 }
 
-template <typename T>
-static inline bool addOutput(Process *process, Hash<Process*, T> &hash,
-                             Output::Type type, const String &text)
-{
-    if (T t = hash.value(process)) {
-        t->output.append(Output({type, text}));
-        return true;
-    }
-    return false;
-}
-
-void Daemon::onCompileProcessReadyReadStdOut(Process *process)
-{
-    const String out = process->readAllStdOut();
-    debug() << "ready read stdout" << process << out;
-    addOutput(process, mCompileJobsByProcess, Output::StdOut, out);
-}
-
-void Daemon::onCompileProcessReadyReadStdErr(Process *process)
-{
-    const String out = process->readAllStdErr();
-    debug() << "ready read stderr" << process << out;
-    addOutput(process, mCompileJobsByProcess, Output::StdErr, out);
-}
-
 void Daemon::onCompileProcessFinished(Process *process)
 {
     std::shared_ptr<Job> job = mCompileJobsByProcess.take(process);
@@ -449,17 +466,21 @@ void Daemon::onCompileProcessFinished(Process *process)
         assert(job->flags & Job::Compiling);
         removeJob(job);
         if (job->flags & Job::FromRemote) {
-            assert(job->remoteConnection);
-            mJobsByRemoteConnection[job->remoteConnection].remove(job->id);
+            assert(job->source);
+            removeRemoteJob(job->source, job->id);
             assert(!job->tempObjectFile.isEmpty());
             String objectFile;
 #warning what to do if file fails to load? Try again locally? Also, what if the job produced other output (separate debug info)
             Rct::readFile(job->tempObjectFile, objectFile);
             Path::rm(job->tempObjectFile);
-            job->remoteConnection->send(JobResponseMessage(job->id, process->returnCode(), objectFile, job->output));
+            job->source->send(JobResponseMessage(job->id, process->returnCode(), objectFile, job->output));
         } else {
             job->localConnection->send(ClientJobResponseMessage(process->returnCode(), job->output));
             mJobsByLocalConnection.remove(job->localConnection);
+            if (job->flags & Job::Remote) {
+                assert(!job->remoteConnections.isEmpty());
+                sendJobDiscardedMessage(job);
+            }
         }
         assert(job.use_count() == 1);
     }
@@ -535,12 +556,8 @@ void Daemon::startJobs()
         debug() << "Starting preprocessing in" << job->cwd << String::format<256>("%s %s", compiler.constData(), String::join(args.mid(1), ' ').constData());
     }
 
-    if (!mOptions.flags & Options::NoLocalJobs) {
-        while (mCompileJobsByProcess.size() < mOptions.jobCount && !mPendingCompileJobs.isEmpty()) {
-            auto job = mPendingCompileJobs.first();
-            removeJob(job);
-            addJob(Job::Compiling, job);
-
+    auto startJob = [this](const std::shared_ptr<Job> &job)
+        {
             List<String> args = job->arguments->commandLine.mid(1);
             assert(job->arguments->sourceFileIndexes.size() == 1);
             args.removeAt(job->arguments->sourceFileIndexes.first() - 1);
@@ -548,7 +565,7 @@ void Daemon::startJobs()
             switch (lang) {
             case CompilerArgs::CPlusPlus: lang = CompilerArgs::CPlusPlusPreprocessed; break;
             case CompilerArgs::C: lang = CompilerArgs::CPreprocessed; break;
-            default: break; // ### what about the other languages?
+            default: break;
             }
             if (!(job->arguments->flags & CompilerArgs::HasDashX)) {
                 args << "-x";
@@ -608,8 +625,9 @@ void Daemon::startJobs()
             job->process = new Process;
             job->process->setCwd(job->cwd);
             job->process->finished().connect(std::bind(&Daemon::onCompileProcessFinished, this, std::placeholders::_1));
-            job->process->readyReadStdOut().connect(std::bind(&Daemon::onCompileProcessReadyReadStdOut, this, std::placeholders::_1));
-            job->process->readyReadStdErr().connect(std::bind(&Daemon::onCompileProcessReadyReadStdErr, this, std::placeholders::_1));
+#warning I hope this wont keep the shared_ptr alive for ever more?
+            job->process->readyReadStdOut().connect([job](Process *process) { job->output.append(Output({Output::StdOut, process->readAllStdOut()})); });
+            job->process->readyReadStdErr().connect([job](Process *process) { job->output.append(Output({Output::StdErr, process->readAllStdErr()})); });
 
             if (!job->process->start(job->resolvedCompiler, args, job->environ)) {
                 delete job->process;
@@ -618,14 +636,36 @@ void Daemon::startJobs()
                 mJobsByLocalConnection.remove(job->localConnection);
                 assert(job.use_count() == 1);
                 error() << "Failed to start compiler" << job->resolvedCompiler;
+                return false;
             } else {
                 debug() << "writing" << job->preprocessed.size() << "bytes to stdin of" << job->resolvedCompiler;
                 job->process->write(job->preprocessed);
                 job->process->closeStdIn();
                 mCompileJobsByProcess[job->process] = job;
+                return true;
+            }
+        };
+
+    if (!mOptions.flags & Options::NoLocalJobs) {
+        while (mCompileJobsByProcess.size() < mOptions.jobCount && !mPendingCompileJobs.isEmpty()) {
+            auto job = mPendingCompileJobs.first();
+            removeJob(job);
+            addJob(Job::Compiling, job);
+            startJob(job);
+        }
+
+        if (mPreprocessingJobs.isEmpty() && mCompileJobsByProcess.size() < mOptions.jobCount) {
+            // start local version of remote job, oldest first
+            for (const auto &job : mCompilingJobs) {
+                if (!job->process) {
+                    assert(!job->remoteConnections.isEmpty());
+                    assert(job->flags & Job::Remote);
+                    if (startJob(job) && mCompileJobsByProcess.size() == mOptions.jobCount) {
+                        break;
+                    }
+                }
             }
         }
-        // ### start compiling our jobs that are being handled by other daemons
     }
     announceJobs();
     fetchJobs();
@@ -754,15 +794,8 @@ void Daemon::onConnectionDisconnected(Connection *conn)
             mPreprocessJobsByProcess.remove(job->process);
             job->process->kill();
         } else if (job->flags & Job::Remote) {
-            assert(job->remoteConnection);
-            Hash<uint64_t, std::shared_ptr<Job> > &remoteJobs = mJobsByRemoteConnection[job->remoteConnection];
-            for (auto it = remoteJobs.begin(); it != remoteJobs.end(); ++it) {
-                if (it->second == job) {
-                    job->remoteConnection->send(JobDiscardedMessage(it->first));
-                    remoteJobs.erase(it);
-                    break;
-                }
-            }
+            assert(!job->remoteConnections.isEmpty());
+            sendJobDiscardedMessage(job);
         } else if (job->flags & Job::Compiling) {
             assert(job->process);
             mCompileJobsByProcess.remove(job->process);
@@ -774,9 +807,15 @@ void Daemon::onConnectionDisconnected(Connection *conn)
     } else if (Peer *peer = mPeersByConnection.take(c)) {
         error() << "Lost peer" << peer->host.friendlyName;
         mPeersByHost.remove(peer->host);
-        for (const auto &job : mJobsByRemoteConnection.take(c)) {
-            removeJob(job.second);
-            addJob(Job::PendingCompiling, job.second);
+        auto remoteData = mJobsByRemoteConnection.take(c);
+        if (remoteData) {
+            for (const auto &remoteJob : remoteData->byJob) {
+                remoteJob.first->remoteConnections.remove(c);
+                if (!job->process) {
+                    removeJob(remoteJob.first);
+                    addJob(Job::PendingCompiling, remoteJob.first);
+                }
+            }
         }
         // ### is this right?
         delete peer;
@@ -877,3 +916,38 @@ void Daemon::removeJob(const std::shared_ptr<Job> &job)
         assert(0);
     }
 }
+
+void Daemon::sendJobDiscardedMessage(const std::shared_ptr<Job> &job)
+{
+    assert(job->remoteConnections.isEmpty());
+    assert(job->flags & Job::Remote);
+    for (const auto &remoteConnection : job->remoteConnections) {
+        if (uint64_t id = removeRemoteJob(remoteConnection, job)) {
+            remoteConnection->send(JobDiscardedMessage(id));
+        }
+    }
+}
+
+std::shared_ptr<Daemon::Job> Daemon::removeRemoteJob(const std::shared_ptr<Connection> &conn, uint64_t id)
+{
+    std::shared_ptr<RemoteData> &data = mJobsByRemoteConnection[conn];
+    if (!data)
+        return std::shared_ptr<Job>();
+    std::shared_ptr<Job> job = data->byId.take(id).job;
+    if (job)
+        data->byJob.remove(job);
+    return job;
+}
+
+uint64_t Daemon::removeRemoteJob(const std::shared_ptr<Connection> &conn, const std::shared_ptr<Job> &job)
+{
+    std::shared_ptr<RemoteData> &data = mJobsByRemoteConnection[conn];
+    if (!data)
+        return 0;
+    const uint64_t id = data->byJob.take(job);
+    if (id) {
+        data->byJob.remove(job);
+    }
+    return id;
+}
+

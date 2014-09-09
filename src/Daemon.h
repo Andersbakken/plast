@@ -48,7 +48,7 @@ public:
         uint16_t serverPort, port, discoveryPort;
         String serverHost;
         Path cacheDir;
-        int jobCount, preprocessCount;
+        int jobCount, preprocessCount, rescheduleTimeout;
         enum Flag {
             None = 0x0,
             NoLocalJobs = 0x1
@@ -59,35 +59,6 @@ public:
     const Options &options() const { return mOptions; }
 
 private:
-    void handleConsoleCommand(const String &string);
-    void handleConsoleCompletion(const String &string, int start, int end, String &common, List<String> &candidates);
-
-    void restartServerTimer();
-    void onNewMessage(Message *message, Connection *connection);
-    void handleClientJobMessage(const ClientJobMessage *msg, const std::shared_ptr<Connection> &conn);
-    void handleCompilerMessage(const CompilerMessage* message, const std::shared_ptr<Connection> &connection);
-    void handleCompilerRequestMessage(const CompilerRequestMessage *message, const std::shared_ptr<Connection> &connection);
-    void handleJobRequestMessage(const JobRequestMessage *message, const std::shared_ptr<Connection> &connection);
-    void handleJobMessage(const JobMessage *message, const std::shared_ptr<Connection> &connection);
-    void handleJobResponseMessage(const JobResponseMessage *message, const std::shared_ptr<Connection> &connection);
-    void handleJobDiscardedMessage(const JobDiscardedMessage *message, const std::shared_ptr<Connection> &connection);
-    void handleDaemonListMessage(const DaemonListMessage *message, const std::shared_ptr<Connection> &connection);
-    void handleHandshakeMessage(const HandshakeMessage *message, const std::shared_ptr<Connection> &connection);
-    void handleJobAnnouncementMessage(const JobAnnouncementMessage *message, const std::shared_ptr<Connection> &connection);
-    void reconnectToServer();
-    void onDiscoverySocketReadyRead(Buffer &&data, const String &ip);
-
-    void onConnectionDisconnected(Connection *conn);
-    void onCompileProcessReadyReadStdOut(Process *process);
-    void onCompileProcessReadyReadStdErr(Process *process);
-    void onCompileProcessFinished(Process *process);
-    void startJobs();
-    void sendHandshake(const std::shared_ptr<Connection> &conn);
-    struct Peer;
-    void announceJobs(Peer *peer = 0);
-    void fetchJobs(Peer *peer = 0);
-    void checkJobRequestTimeout();
-
     struct Job {
         Job(const std::shared_ptr<CompilerArgs> &args, const Path &resolved, const List<String> &env, const Path &dir,
             std::shared_ptr<Compiler> &c, const std::shared_ptr<Connection> &localConn = std::shared_ptr<Connection>())
@@ -121,26 +92,65 @@ private:
         uint64_t id; // only set if flags & FromRemote
         LinkedList<std::shared_ptr<Job> >::iterator position;
         std::shared_ptr<Compiler> compiler;
-        std::shared_ptr<Connection> localConnection, remoteConnection;
+        std::shared_ptr<Connection> localConnection, source;
+        Set<std::shared_ptr<Connection> > remoteConnections;
     };
-
-    void addJob(Job::Flag flag, const std::shared_ptr<Job> &job);
-    void removeJob(const std::shared_ptr<Job> &job);
-
-    LinkedList<std::shared_ptr<Job> > mPendingPreprocessJobs, mPendingCompileJobs, mPreprocessingJobs, mCompilingJobs;
-
-    Hash<std::shared_ptr<Connection>, std::shared_ptr<Job> > mJobsByLocalConnection;
-    Hash<std::shared_ptr<Connection>, Hash<uint64_t, std::shared_ptr<Job> > > mJobsByRemoteConnection;
-    Hash<Process*, std::shared_ptr<Job> > mCompileJobsByProcess, mPreprocessJobsByProcess;
-    Hash<uint64_t, uint64_t> mOutstandingJobRequests; // jobid: Rct::monoMs
-    Timer mOutstandingJobRequestsTimer;
-    uint64_t mNextJobId;
 
     struct Peer {
         std::shared_ptr<Connection> connection;
         Host host;
         Set<String> announced, jobsAvailable;
     };
+
+    void handleConsoleCommand(const String &string);
+    void handleConsoleCompletion(const String &string, int start, int end, String &common, List<String> &candidates);
+
+    void restartServerTimer();
+    void onNewMessage(Message *message, Connection *connection);
+    void handleClientJobMessage(const ClientJobMessage *msg, const std::shared_ptr<Connection> &conn);
+    void handleCompilerMessage(const CompilerMessage* message, const std::shared_ptr<Connection> &connection);
+    void handleCompilerRequestMessage(const CompilerRequestMessage *message, const std::shared_ptr<Connection> &connection);
+    void handleJobRequestMessage(const JobRequestMessage *message, const std::shared_ptr<Connection> &connection);
+    void handleJobMessage(const JobMessage *message, const std::shared_ptr<Connection> &connection);
+    void handleJobResponseMessage(const JobResponseMessage *message, const std::shared_ptr<Connection> &connection);
+    void handleJobDiscardedMessage(const JobDiscardedMessage *message, const std::shared_ptr<Connection> &connection);
+    void handleDaemonListMessage(const DaemonListMessage *message, const std::shared_ptr<Connection> &connection);
+    void handleHandshakeMessage(const HandshakeMessage *message, const std::shared_ptr<Connection> &connection);
+    void handleJobAnnouncementMessage(const JobAnnouncementMessage *message, const std::shared_ptr<Connection> &connection);
+    void reconnectToServer();
+    void onDiscoverySocketReadyRead(Buffer &&data, const String &ip);
+
+    void onConnectionDisconnected(Connection *conn);
+    void onCompileProcessFinished(Process *process);
+    void startJobs();
+    void sendHandshake(const std::shared_ptr<Connection> &conn);
+    void announceJobs(Peer *peer = 0);
+    void fetchJobs(Peer *peer = 0);
+    void checkJobRequestTimeout();
+
+    void addJob(Job::Flag flag, const std::shared_ptr<Job> &job);
+    void removeJob(const std::shared_ptr<Job> &job);
+    void sendJobDiscardedMessage(const std::shared_ptr<Job> &job);
+    std::shared_ptr<Job> removeRemoteJob(const std::shared_ptr<Connection> &conn, uint64_t id);
+    uint64_t removeRemoteJob(const std::shared_ptr<Connection> &conn, const std::shared_ptr<Job> &job);
+
+    LinkedList<std::shared_ptr<Job> > mPendingPreprocessJobs, mPendingCompileJobs, mPreprocessingJobs, mCompilingJobs;
+
+    Hash<std::shared_ptr<Connection>, std::shared_ptr<Job> > mJobsByLocalConnection;
+    struct RemoteJob {
+        std::shared_ptr<Job> job;
+        uint64_t startTime;
+    };
+    struct RemoteData {
+        Hash<uint64_t, RemoteJob> byId;
+        Hash<std::shared_ptr<Job>, uint64_t> byJob;
+    };
+    Hash<std::shared_ptr<Connection>, std::shared_ptr<RemoteData> > mJobsByRemoteConnection;
+    Hash<Process*, std::shared_ptr<Job> > mCompileJobsByProcess, mPreprocessJobsByProcess;
+    Hash<uint64_t, uint64_t> mOutstandingJobRequests; // jobid: Rct::monoMs
+    Timer mOutstandingJobRequestsTimer;
+    uint64_t mNextJobId;
+
     Hash<Host, Peer*> mPeersByHost;
     Hash<std::shared_ptr<Connection>, Peer*> mPeersByConnection;
 
