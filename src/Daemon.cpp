@@ -148,6 +148,9 @@ void Daemon::onNewMessage(Message *message, Connection *conn)
     case Plast::JobResponseMessageId:
         handleJobResponseMessage(static_cast<JobResponseMessage*>(message), connection);
         break;
+    case Plast::JobDiscardedMessageId:
+        handleJobDiscardedMessage(static_cast<JobDiscardedMessage*>(message), connection);
+        break;
     case Plast::DaemonListMessageId:
         handleDaemonListMessage(static_cast<DaemonListMessage*>(message), connection);
         break;
@@ -218,10 +221,9 @@ void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std
                 warning() << "Sent job request to" << connection->client()->peerString();
                 removeJob(job);
                 job->remoteConnection = connection;
-                mJobsByRemoteConnection[connection].insert(job);
+                mJobsByRemoteConnection[connection][message->id()] = job;
                 job->flags |= Job::Remote;
                 addJob(Job::Compiling, job);
-                job->id = message->id();
             }
             return;
         }
@@ -249,7 +251,7 @@ void Daemon::handleJobMessage(const JobMessage *message, const std::shared_ptr<C
         job->flags |= Job::FromRemote;
         job->remoteConnection = connection;
         job->id = message->id();
-        mJobsByRemoteConnection[connection].insert(job);
+        mJobsByRemoteConnection[connection][message->id()] = job;
         addJob(Job::PendingCompiling, job);
         error() << "Got job message" << message->id() << message->preprocessed().size() << message->args();
     }
@@ -261,24 +263,36 @@ void Daemon::handleJobMessage(const JobMessage *message, const std::shared_ptr<C
 void Daemon::handleJobResponseMessage(const JobResponseMessage *message, const std::shared_ptr<Connection> &connection)
 {
     debug() << "Got job response" << message->id() << message->objectFileContents().size();
-#warning This is O(n)
-    for (auto job : mCompilingJobs) {
-        if (job->id == message->id()) {
-            Path output = job->arguments->output();
-            if (!output.startsWith('/'))
-                output.prepend(job->cwd);
-            Rct::writeFile(output, message->objectFileContents());
-            debug() << "Writing object file contents to" << job->arguments->output() << message->status()
-                    << message->output();
-#warning do we need to fflush this before notifying plastc?
-            mJobsByRemoteConnection[job->remoteConnection].remove(job);
-            removeJob(job);
-            job->localConnection->send(ClientJobResponseMessage(message->status(), message->output()));
-            mJobsByLocalConnection.remove(job->localConnection);
-            return;
-        }
+
+    std::shared_ptr<Job> job = mJobsByRemoteConnection[connection].take(message->id());
+    if (!job) {
+        // we don't need this response anymore
+        return;
     }
+
+    Path output = job->arguments->output();
+    if (!output.startsWith('/'))
+        output.prepend(job->cwd);
+    Rct::writeFile(output, message->objectFileContents());
+    debug() << "Writing object file contents to" << job->arguments->output() << message->status()
+            << message->output();
+#warning do we need to fflush this before notifying plastc?
+    removeJob(job);
+    job->localConnection->send(ClientJobResponseMessage(message->status(), message->output()));
+    mJobsByLocalConnection.remove(job->localConnection);
     error() << "Couldn't find job with this id" << message->id();
+}
+
+void Daemon::handleJobDiscardedMessage(const JobDiscardedMessage *message, const std::shared_ptr<Connection> &connection)
+{
+    auto job = mJobsByRemoteConnection[connection].take(message->id());
+    if (job) {
+        if (job->process) {
+            mCompileJobsByProcess.remove(job->process);
+            job->process->kill();
+        }
+        removeJob(job);
+    }
 }
 
 void Daemon::handleDaemonListMessage(const DaemonListMessage *message, const std::shared_ptr<Connection> &connection)
@@ -436,7 +450,7 @@ void Daemon::onCompileProcessFinished(Process *process)
         removeJob(job);
         if (job->flags & Job::FromRemote) {
             assert(job->remoteConnection);
-            mJobsByRemoteConnection[job->remoteConnection].remove(job);
+            mJobsByRemoteConnection[job->remoteConnection].remove(job->id);
             assert(!job->tempObjectFile.isEmpty());
             String objectFile;
 #warning what to do if file fails to load? Try again locally? Also, what if the job produced other output (separate debug info)
@@ -731,7 +745,6 @@ void Daemon::checkJobRequestTimeout()
 
 void Daemon::onConnectionDisconnected(Connection *conn)
 {
-#warning need to handle all jobs we had sitting in mJobsByRemoteConnection. Return to pending compilation
     // warning() << "Lost connection" << conn->client()->port();
     std::shared_ptr<Connection> c = conn->shared_from_this();
     mConnections.remove(c);
@@ -742,7 +755,14 @@ void Daemon::onConnectionDisconnected(Connection *conn)
             job->process->kill();
         } else if (job->flags & Job::Remote) {
             assert(job->remoteConnection);
-            mJobsByRemoteConnection[job->remoteConnection].remove(job);
+            Hash<uint64_t, std::shared_ptr<Job> > &remoteJobs = mJobsByRemoteConnection[job->remoteConnection];
+            for (auto it = remoteJobs.begin(); it != remoteJobs.end(); ++it) {
+                if (it->second == job) {
+                    job->remoteConnection->send(JobDiscardedMessage(it->first));
+                    remoteJobs.erase(it);
+                    break;
+                }
+            }
         } else if (job->flags & Job::Compiling) {
             assert(job->process);
             mCompileJobsByProcess.remove(job->process);
@@ -754,6 +774,11 @@ void Daemon::onConnectionDisconnected(Connection *conn)
     } else if (Peer *peer = mPeersByConnection.take(c)) {
         error() << "Lost peer" << peer->host.friendlyName;
         mPeersByHost.remove(peer->host);
+        for (const auto &job : mJobsByRemoteConnection.take(c)) {
+            removeJob(job.second);
+            addJob(Job::PendingCompiling, job.second);
+        }
+        // ### is this right?
         delete peer;
     }
 }

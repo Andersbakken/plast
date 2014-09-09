@@ -31,6 +31,7 @@
 #include "DaemonListMessage.h"
 #include "HandshakeMessage.h"
 #include "JobAnnouncementMessage.h"
+#include "JobDiscardedMessage.h"
 #include "JobMessage.h"
 #include "JobRequestMessage.h"
 #include "JobResponseMessage.h"
@@ -69,6 +70,7 @@ private:
     void handleJobRequestMessage(const JobRequestMessage *message, const std::shared_ptr<Connection> &connection);
     void handleJobMessage(const JobMessage *message, const std::shared_ptr<Connection> &connection);
     void handleJobResponseMessage(const JobResponseMessage *message, const std::shared_ptr<Connection> &connection);
+    void handleJobDiscardedMessage(const JobDiscardedMessage *message, const std::shared_ptr<Connection> &connection);
     void handleDaemonListMessage(const DaemonListMessage *message, const std::shared_ptr<Connection> &connection);
     void handleHandshakeMessage(const HandshakeMessage *message, const std::shared_ptr<Connection> &connection);
     void handleJobAnnouncementMessage(const JobAnnouncementMessage *message, const std::shared_ptr<Connection> &connection);
@@ -89,13 +91,12 @@ private:
     struct Job {
         Job(const std::shared_ptr<CompilerArgs> &args, const Path &resolved, const List<String> &env, const Path &dir,
             std::shared_ptr<Compiler> &c, const std::shared_ptr<Connection> &localConn = std::shared_ptr<Connection>())
-            : received(time(0)), arguments(args), resolvedCompiler(resolved),
-              environ(env), cwd(dir), process(0), flags(None), compiler(c), localConnection(localConn),
-              id(0)
+            : received(Rct::monoMs()), arguments(args), resolvedCompiler(resolved),
+              environ(env), cwd(dir), process(0), flags(None), id(0), compiler(c), localConnection(localConn)
         {
         }
 
-        time_t received;
+        uint64_t received;
         std::shared_ptr<CompilerArgs> arguments;
         Path resolvedCompiler;
         List<String> environ;
@@ -117,10 +118,10 @@ private:
         Path tempObjectFile;
         String preprocessed;
         uint32_t flags;
+        uint64_t id; // only set if flags & FromRemote
         LinkedList<std::shared_ptr<Job> >::iterator position;
         std::shared_ptr<Compiler> compiler;
         std::shared_ptr<Connection> localConnection, remoteConnection;
-        uint64_t id;
     };
 
     void addJob(Job::Flag flag, const std::shared_ptr<Job> &job);
@@ -129,7 +130,7 @@ private:
     LinkedList<std::shared_ptr<Job> > mPendingPreprocessJobs, mPendingCompileJobs, mPreprocessingJobs, mCompilingJobs;
 
     Hash<std::shared_ptr<Connection>, std::shared_ptr<Job> > mJobsByLocalConnection;
-    Hash<std::shared_ptr<Connection>, Set<std::shared_ptr<Job> > > mJobsByRemoteConnection;
+    Hash<std::shared_ptr<Connection>, Hash<uint64_t, std::shared_ptr<Job> > > mJobsByRemoteConnection;
     Hash<Process*, std::shared_ptr<Job> > mCompileJobsByProcess, mPreprocessJobsByProcess;
     Hash<uint64_t, uint64_t> mOutstandingJobRequests; // jobid: Rct::monoMs
     Timer mOutstandingJobRequestsTimer;

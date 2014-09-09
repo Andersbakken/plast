@@ -13,34 +13,25 @@
    You should have received a copy of the GNU General Public License
    along with Plast.  If not, see <http://www.gnu.org/licenses/>. */
 
-#ifndef Plast_h
-#define Plast_h
+#ifndef JobDiscardedMessage_h
+#define JobDiscardedMessage_h
 
-#include <rct/Path.h>
+#include <rct/Message.h>
+#include "Plast.h"
 
-namespace Plast {
-bool init();
-Path defaultSocketFile();
-enum {
-    DefaultServerPort = 5160,
-    DefaultDaemonPort = 5161,
-    DefaultDiscoveryPort = 5162
-};
+class JobDiscardedMessage : public Message
+{
+public:
+    enum { MessageId = Plast::JobDiscardedMessageId };
+    JobDiscardedMessage(uint64_t id = 0)
+        : Message(MessageId), mId(id)
+    {}
 
-enum {
-    HandshakeMessageId = 100,
-    DaemonListMessageId,
-    ClientJobMessageId,
-    ClientJobResponseMessageId,
-    QuitMessageId,
-    JobAnnouncementMessageId,
-    CompilerMessageId,
-    CompilerRequestMessageId,
-    JobRequestMessageId,
-    JobMessageId,
-    JobResponseMessageId,
-    JobDiscardedMessageId
-};
+    uint64_t id() const { return mId; }
+    virtual void encode(Serializer &serializer) const { serializer << mId; }
+    virtual void decode(Deserializer &deserializer) { deserializer >> mId; }
+private:
+    uint64_t mId;
 };
 
 #endif

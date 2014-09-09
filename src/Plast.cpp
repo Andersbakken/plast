@@ -11,6 +11,7 @@
 #include "DaemonListMessage.h"
 #include "HandshakeMessage.h"
 #include "JobAnnouncementMessage.h"
+#include "JobDiscardedMessage.h"
 #include "JobMessage.h"
 #include "JobRequestMessage.h"
 #include "JobResponseMessage.h"
@@ -26,6 +27,7 @@ bool init()
     Message::registerMessage<DaemonListMessage>();
     Message::registerMessage<HandshakeMessage>();
     Message::registerMessage<JobAnnouncementMessage>();
+    Message::registerMessage<JobDiscardedMessage>();
     Message::registerMessage<JobMessage>();
     Message::registerMessage<JobRequestMessage>();
     Message::registerMessage<JobResponseMessage>();
