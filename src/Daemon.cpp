@@ -861,6 +861,8 @@ void Daemon::handleConsoleCommand(const String &string)
         for (const auto &peer : mPeersByHost) {
             printf("Peer: %s\n", peer.first.toString().constData());
         }
+    } else if (str.startsWith("monitor ")) {
+        sendMonitorMessage(str.mid(8));
     } else if (str == "compilers") {
         printf("%s\n", mCompilerCache->dump().constData());
     }
@@ -869,7 +871,7 @@ void Daemon::handleConsoleCommand(const String &string)
 void Daemon::handleConsoleCompletion(const String &string, int, int,
                                      String &common, List<String> &candidates)
 {
-    static const List<String> cands = List<String>() << "jobs" << "quit" << "peers" << "compilers";
+    static const List<String> cands = List<String>() << "jobs" << "quit" << "peers" << "compilers" << "monitor";
     auto res = Console::tryComplete(string, cands);
     // error() << res.text << res.candidates;
     common = res.text;

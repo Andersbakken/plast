@@ -19,6 +19,7 @@
 #include "Plast.h"
 #include "QuitMessage.h"
 #include "HandshakeMessage.h"
+#include "MonitorMessage.h"
 #include "DaemonListMessage.h"
 
 Server::Server()
@@ -91,7 +92,6 @@ bool Server::init()
                     });
 
                 client->disconnected().connect([this](const std::shared_ptr<SocketClient> &client) {
-                        printf("[%s:%d]: client->disconnected().connect([this](const std::shared_ptr<SocketClient> &client) {\n", __FILE__, __LINE__); fflush(stdout);
                         mHttpClients.remove(client);
                     });
                 client->readyRead().connect(std::bind(&Server::onHttpClientReadyRead, this, std::placeholders::_1, std::placeholders::_2));
@@ -117,10 +117,10 @@ bool Server::init()
 void Server::onNewMessage(Message *message, Connection *connection)
 {
     switch (message->messageId()) {
-    case QuitMessage::MessageId:
+    case Plast::QuitMessageId:
         EventLoop::eventLoop()->quit();
         break;
-    case HandshakeMessage::MessageId:
+    case Plast::HandshakeMessageId: {
         Node *&node = mNodes[connection->shared_from_this()];
         delete node;
         node = 0;
@@ -137,6 +137,23 @@ void Server::onNewMessage(Message *message, Connection *connection)
         node = new Node({ Host({ peerName, handShake->port(), handShake->friendlyName()}), handShake->capacity(), 0, 0 });
         connection->send(DaemonListMessage(nodes));
         error() << "Got handshake from" << connection->client()->peerName() << handShake->friendlyName() << nodes.size();
+        break; }
+    case Plast::MonitorMessageId:
+        if (!mHttpClients.isEmpty()) {
+            MonitorMessage *monitor = static_cast<MonitorMessage*>(message);
+            const String &msg = monitor->message();
+            for (const auto &client : mHttpClients) {
+                if (client.second.parsed) { // /events
+                    error() << "WRITING SHIT" << msg;
+                    static const unsigned char *header = reinterpret_cast<const unsigned char*>("data:");
+                    static const unsigned char *crlf = reinterpret_cast<const unsigned char*>("\r\n");
+                    client.first->write(header, 5);
+                    client.first->write(reinterpret_cast<const unsigned char *>(msg.constData()), msg.size());
+                    client.first->write(crlf, 2);
+                    client.first->write(crlf, 2);
+                }
+            }
+        }
         break;
     }
 }
@@ -174,26 +191,12 @@ void Server::handleConsoleCompletion(const String& string, int, int,
     candidates = res.candidates;
 }
 
-
-// +    static void send(const char *msg, int len, const SocketClient::SharedPtr &socket)
-// +    {
-// +        static const unsigned char *header = reinterpret_cast<const unsigned char*>("data:");
-// +        static const unsigned char *crlf = reinterpret_cast<const unsigned char*>("\r\n");
-// +        socket->write(header, 5);
-// +        socket->write(reinterpret_cast<const unsigned char *>(msg), len);
-// +        socket->write(crlf, 2);
-// +    }
-// +private:
-// +    SocketClient::SharedPtr mSocket;
-// +};
-
 void Server::onHttpClientReadyRead(const std::shared_ptr<SocketClient> &socket, Buffer &&buf)
 {
     Buffer buffer = std::forward<Buffer>(buf);
     auto &conn = mHttpClients[socket];
     if (conn.parsed)
         return;
-    // error() << buffer.size();
     conn.buffer.append(reinterpret_cast<const char*>(buffer.data()), buffer.size());
     if (!socket->buffer().isEmpty()) {
         buffer = std::move(socket->takeBuffer());
@@ -201,6 +204,7 @@ void Server::onHttpClientReadyRead(const std::shared_ptr<SocketClient> &socket, 
     }
 
     const List<String> lines = conn.buffer.split("\r\n");
+    error() << lines;
     const int blank = lines.indexOf(String());
     if (blank != -1 && blank + 1 < lines.size() && lines.at(blank + 1).isEmpty()) {
         conn.parsed = true;
