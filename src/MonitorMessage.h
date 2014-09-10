@@ -24,7 +24,7 @@ class MonitorMessage : public Message
 public:
     enum { MessageId = Plast::MonitorMessageId };
     MonitorMessage(const String &message = String())
-        : Message(MessageId), mMessage(mMessage)
+        : Message(MessageId), mMessage(message)
     {
     }
 
