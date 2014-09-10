@@ -22,9 +22,10 @@ namespace Plast {
 bool init();
 Path defaultSocketFile();
 enum {
-    DefaultServerPort = 5160,
-    DefaultDaemonPort = 5161,
-    DefaultDiscoveryPort = 5162
+    DefaultServerPort = 5166,
+    DefaultDaemonPort = 5167,
+    DefaultDiscoveryPort = 5168,
+    DefaultHttpPort = 5169
 };
 
 enum {

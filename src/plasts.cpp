@@ -44,6 +44,7 @@ int main(int argc, char** argv)
     Config::registerOption<String>("log-file", "Log to this file.", 'l');
     Config::registerOption<bool>("verbose", "Be more verbose.", 'v');
     Config::registerOption<bool>("silent", "Be silent.", 'S');
+    Config::registerOption<String>("doc-root", "Document root, default \".\".", 'd', ".");
     Config::registerOption<int>("port", String::format<129>("Use this port, (default %d)", Plast::DefaultServerPort),'p', Plast::DefaultServerPort,
                                 [](const int &count, String &err) {
                                     if (count <= 0) {
@@ -57,6 +58,16 @@ int main(int argc, char** argv)
                                 [](const int &count, String &err) {
                                     if (count < 0) {
                                         err = "Invalid discovery-port. Must be >= 0";
+                                        return false;
+                                    }
+                                    return true;
+                                });
+
+    Config::registerOption<int>("http-port", String::format<128>("Use this port for http (default %d).", Plast::DefaultHttpPort),
+                                'H', Plast::DefaultHttpPort,
+                                [](const int &count, String &err) {
+                                    if (count < 0) {
+                                        err = "Invalid http-port. Must be >= 0";
                                         return false;
                                     }
                                     return true;

@@ -22,7 +22,7 @@
 #include <rct/Message.h>
 #include "Plast.h"
 #include "Console.h"
-#include "Host.h"u
+#include "Host.h"
 
 class Server
 {
@@ -37,16 +37,24 @@ private:
 
     void onNewMessage(Message *message, Connection *connection);
     void onConnectionDisconnected(Connection *connection);
-    void onHttpClientReadyRead(const std::shared_ptr<SocketClient> &socket);
+    void onHttpClientReadyRead(const std::shared_ptr<SocketClient> &socket, Buffer &&buffer);
 
+    SocketServer mServer;
 
-    SocketServer mServer, mEventSourceServer;
     struct Node {
         Host host;
         int capacity, jobsSent, jobsReceived;
     };
     Hash<std::shared_ptr<Connection>, Node*> mNodes;
     std::shared_ptr<SocketClient> mDiscoverySocket;
+
+    SocketServer mHttpServer;
+    struct HttpConnection {
+        String buffer;
+        bool parsed;
+    };
+    Hash<std::shared_ptr<SocketClient>, HttpConnection> mHttpClients;
+    Path mDocRoot;
 };
 
 #endif

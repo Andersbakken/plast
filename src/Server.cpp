@@ -37,6 +37,7 @@ bool Server::init()
 {
     const uint16_t port = Config::value<int>("port");
     const uint16_t discoveryPort = Config::value<int>("discovery-port");
+    const uint16_t httpPort = Config::value<int>("http-port");
     if (!mServer.listen(port)) {
         enum { Timeout = 1000 };
         Connection connection;
@@ -54,7 +55,7 @@ bool Server::init()
             return false;
         }
     }
-    error() << "listening on" << port;
+    error() << "listening on" << port << discoveryPort << httpPort;
 
     if (discoveryPort) {
         mDiscoverySocket.reset(new SocketClient);
@@ -75,6 +76,27 @@ bool Server::init()
             });
     }
 
+    if (httpPort && !mHttpServer.listen(httpPort)) {
+        error() << "Can't seem to listen on" << httpPort;
+        return false;
+    }
+
+    mHttpServer.newConnection().connect([this](SocketServer*) {
+            while (std::shared_ptr<SocketClient> client = mHttpServer.nextConnection()) {
+                mHttpClients[client] = HttpConnection({ String(), false });
+                EventLoop::eventLoop()->callLater([client, this] {
+                        if (!client->buffer().isEmpty()) {
+                            onHttpClientReadyRead(client, std::forward<Buffer>(client->takeBuffer()));
+                        }
+                    });
+
+                client->disconnected().connect([this](const std::shared_ptr<SocketClient> &client) {
+                        printf("[%s:%d]: client->disconnected().connect([this](const std::shared_ptr<SocketClient> &client) {\n", __FILE__, __LINE__); fflush(stdout);
+                        mHttpClients.remove(client);
+                    });
+                client->readyRead().connect(std::bind(&Server::onHttpClientReadyRead, this, std::placeholders::_1, std::placeholders::_2));
+            }
+        });
 
     mServer.newConnection().connect([this](SocketServer*) {
             while (true) {
@@ -88,6 +110,7 @@ bool Server::init()
             }
         });
 
+    mDocRoot = Config::value<String>("doc-root");
     return true;
 }
 
@@ -152,162 +175,77 @@ void Server::handleConsoleCompletion(const String& string, int, int,
 }
 
 
-commit 44f5ee2793c70d0640c71d6d8fbbe06c41d488fa
-Author: Anders Bakken <agbakken@gmail.com>
-Date:   Mon Jan 13 00:48:25 2014 -0800
+// +    static void send(const char *msg, int len, const SocketClient::SharedPtr &socket)
+// +    {
+// +        static const unsigned char *header = reinterpret_cast<const unsigned char*>("data:");
+// +        static const unsigned char *crlf = reinterpret_cast<const unsigned char*>("\r\n");
+// +        socket->write(header, 5);
+// +        socket->write(reinterpret_cast<const unsigned char *>(msg), len);
+// +        socket->write(crlf, 2);
+// +    }
+// +private:
+// +    SocketClient::SharedPtr mSocket;
+// +};
 
-    Simple HTTP server for statistics.
+void Server::onHttpClientReadyRead(const std::shared_ptr<SocketClient> &socket, Buffer &&buf)
+{
+    Buffer buffer = std::forward<Buffer>(buf);
+    auto &conn = mHttpClients[socket];
+    if (conn.parsed)
+        return;
+    // error() << buffer.size();
+    conn.buffer.append(reinterpret_cast<const char*>(buffer.data()), buffer.size());
+    if (!socket->buffer().isEmpty()) {
+        buffer = std::move(socket->takeBuffer());
+        conn.buffer.append(reinterpret_cast<const char*>(buffer.data()), buffer.size());
+    }
 
-diff --git a/src/Project.cpp b/src/Project.cpp
-index 20b5699..fc03251 100644
---- a/src/Project.cpp
-+++ b/src/Project.cpp
-@@ -340,7 +340,10 @@ void Project::onJobFinished(const std::shared_ptr<IndexData> &indexData)
-     JobData *jobData = &it->second;
-     assert(jobData->job);
-     const bool success = jobData->job->flags & (IndexerJob::CompleteLocal|IndexerJob::CompleteRemote);
--    assert(!success || !(jobData->job->flags & (IndexerJob::Crashed|IndexerJob::Aborted)));
-+    if (success && jobData->job->flags & (IndexerJob::Crashed|IndexerJob::Aborted)) {
-+        error() << "Could die" << String::format<8>("0x%x", jobData->job->flags);
-+    }
-+    // assert(!success || !(jobData->job->flags & (IndexerJob::Crashed|IndexerJob::Aborted)));
-     if (jobData->job->flags & IndexerJob::Crashed) {
-         ++jobData->crashCount;
-     } else {
-diff --git a/src/Server.cpp b/src/Server.cpp
-index a8af113..48d1659 100644
---- a/src/Server.cpp
-+++ b/src/Server.cpp
-@@ -61,11 +61,49 @@
- #include <arpa/inet.h>
- #include <limits>
+    const List<String> lines = conn.buffer.split("\r\n");
+    const int blank = lines.indexOf(String());
+    if (blank != -1 && blank + 1 < lines.size() && lines.at(blank + 1).isEmpty()) {
+        conn.parsed = true;
+        const String &first = lines.first();
+        if (!first.startsWith("GET /") || !first.endsWith(" HTTP/1.1")) {
+            socket->write("HTTP/1.1 400 Bad Request\r\n\r\n");
+            socket->close();
+            return;
+        }
 
-+class HttpLogObject : public LogOutput
-+{
-+public:
-+    HttpLogObject(const SocketClient::SharedPtr &socket)
-+        : LogOutput(Error), mSocket(socket)
-+    {}
-+
-+    // virtual bool testLog(int level) const
-+    // {
-+    //     return
-+    // }
-+    virtual void log(const char *msg, int len)
-+    {
-+        if (!EventLoop::isMainThread()) {
-+            String message(msg, len);
-+            SocketClient::WeakPtr weak = mSocket;
-+
-+            EventLoop::eventLoop()->callLater(std::bind([message,weak] {
-+                        if (SocketClient::SharedPtr socket = weak.lock()) {
-+                            send(message.constData(), message.size(), socket);
-+                        }
-+                    }));
-+        } else {
-+            send(msg, len, mSocket);
-+        }
-+    }
-+    static void send(const char *msg, int len, const SocketClient::SharedPtr &socket)
-+    {
-+        static const unsigned char *header = reinterpret_cast<const unsigned char*>("data:");
-+        static const unsigned char *crlf = reinterpret_cast<const unsigned char*>("\r\n");
-+        socket->write(header, 5);
-+        socket->write(reinterpret_cast<const unsigned char *>(msg), len);
-+        socket->write(crlf, 2);
-+    }
-+private:
-+    SocketClient::SharedPtr mSocket;
-+};
-+
- static const bool debugMulti = getenv("RDM_DEBUG_MULTI");
-
- Server *Server::sInstance = 0;
- Server::Server()
--    : mVerbose(false), mCurrentFileId(0), mThreadPool(0), mRemotePending(0), mCompletionThread(0), mWebServer(0)
-+    : mVerbose(false), mCurrentFileId(0), mThreadPool(0), mRemotePending(0), mCompletionThread(0)
- {
-     Messages::registerMessage<JobRequestMessage>();
-     Messages::registerMessage<JobResponseMessage>();
-@@ -100,11 +138,6 @@ void Server::clear()
-     mThreadPool = 0;
- }
-
--static int mongooseStatistics(struct mg_connection *conn)
--{
--    return Server::instance()->mongooseStatistics(conn);
--}
--
- bool Server::init(const Options &options)
- {
-     RTags::initMessages();
-@@ -218,8 +251,24 @@ bool Server::init(const Options &options)
-     }
-     mThreadPool = new ThreadPool(mOptions.jobCount);
-     if (mOptions.httpPort) {
--        mWebServer = mg_create_server(this);
--        mg_add_uri_handler(mWebServer, "/stats", ::mongooseStatistics);
-+        mHttpServer.reset(new SocketServer);
-+        if (!mHttpServer->listen(mOptions.httpPort)) {
-+            error() << "Unable to listen on port" << mOptions.httpPort;
-+            return false;
-+        }
-+
-+        mHttpServer->newConnection().connect(std::bind([this](){
-+                    int foo = 0;
-+                    while (SocketClient::SharedPtr client = mHttpServer->nextConnection()) {
-+                        ++foo;
-+                        mHttpClients[client] = 0;
-+                        client->disconnected().connect(std::bind([this,client] { mHttpClients.remove(client); }));
-+                        client->readyRead().connect(std::bind(&Server::onHttpClientReadyRead, this, std::placeholders::_1));
-+                    }
-+                    error() << foo;
-+
-+                }));
-+
-     }
-     return true;
- }
-@@ -1785,11 +1834,8 @@ void Server::stopServers()
-     Path::rm(mOptions.socketFile);
-     mUnixServer.reset();
-     mTcpServer.reset();
-+    mHttpServer.reset();
-     mProjects.clear();
--    if (mWebServer) {
--        mg_destroy_server(&mWebServer);
--        assert(!mWebServer);
--    }
- }
-
- static inline uint64_t connectTime(uint64_t lastAttempt, int failures)
-@@ -1881,7 +1927,26 @@ int Server::startPreprocessJobs()
-     return ret;
- }
-
--int Server::mongooseStatistics(struct mg_connection *conn)
--{
--    return 0;
-+void Server::onHttpClientReadyRead(const std::shared_ptr<SocketClient> &socket)
-+{
-+    error() << "Balls" << socket->buffer().size();
-+    auto &log = mHttpClients[socket];
-+    if (!log) {
-+        static const char *requestLine = "GET /stats HTTP/1.1\r\n";
-+        static const size_t len = strlen(requestLine);
-+        if (socket->buffer().size() >= len) {
-+            if (!memcmp(socket->buffer().data(), requestLine, len)) {
-+                static const char *response = ("HTTP/1.1 200 OK\r\n"
-+                                               "Cache: no-cache\r\n"
-+                                               "Cache-Control: private\r\n"
-+                                               "Pragma: no-cache\r\n"
-+                                               "Content-Type: text/event-stream\r\n\r\n");
-+                static const int responseLen = strlen(response);
-+                socket->write(reinterpret_cast<const unsigned char*>(response), responseLen);
-+                log.reset(new HttpLogObject(socket));
-+            } else {
-+                socket->close();
-+            }
-+        }
-+    }
+        String path = first.mid(4, first.size() - 9 - 4);
+        List<String> search;
+        const int q = path.indexOf('?');
+        if (q != -1) {
+            search = path.mid(q + 1).split('&');
+            path.resize(q);
+        }
+        warning() << "path is" << path << search;
+        if (path == "/events") {
+            socket->write("HTTP/1.1 200 OK\r\n"
+                          "Cache: no-cache\r\n"
+                          "Cache-Control: private\r\n"
+                          "Pragma: no-cache\r\n"
+                          "Content-Type: text/event-stream\r\n\r\n");
+        } else if (path.contains("../")) {
+            socket->write("HTTP/1.1 403 Forbidden\r\n\r\n");
+            socket->close();
+        } else {
+            Path req = mDocRoot + path;
+            String contents;
+            warning() << req << Path::pwd();
+            if (Rct::readFile(req, contents)) {
+                socket->write(String::format<256>("HTTP/1.1 200 OK\r\n"
+                                                  "Cache: no-cache\r\n"
+                                                  "Cache-Control: private\r\n"
+                                                  "Pragma: no-cache\r\n"
+                                                  "Content-Length: %d\r\n"
+                                                  "Connection: Close\r\n"
+                                                  "Content-Type: text/html\r\n\r\n", contents.size()));
+                socket->write(contents);
+                socket->close();
+            } else {
+                socket->write("HTTP/1.1 404 Not Found\r\n\r\n");
+                socket->close();
+            }
+        }
+    }
 }
