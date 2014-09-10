@@ -174,6 +174,8 @@ std::shared_ptr<Compiler> CompilerCache::create(const Path &compiler)
         mByPath[compiler] = c;
         if (!resolvedCompiler)
             resolvedCompiler = c;
+#warning this doesnt quite work
+#if 0
         warning() << "Created package" << compiler << c->mFiles << c->mSha256;
         const Path root = mPath + c->mSha256 + '/';
         Path::mkdir(root, Path::Recursive);
@@ -200,6 +202,7 @@ std::shared_ptr<Compiler> CompilerCache::create(const Path &compiler)
                 Path::rm(f);
             rmdir(root.constData());
         }
+#endif
     }
     return c;
 }

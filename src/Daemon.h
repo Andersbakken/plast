@@ -163,6 +163,7 @@ private:
     std::shared_ptr<SocketClient> mDiscoverySocket;
     std::shared_ptr<Connection> mServerConnection;
     std::shared_ptr<CompilerCache> mCompilerCache;
+    String mHostName;
     Timer mServerTimer;
 };
 

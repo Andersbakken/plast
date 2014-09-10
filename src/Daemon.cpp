@@ -17,7 +17,7 @@
 #include <rct/SHA256.h>
 
 Daemon::Daemon()
-    : mNextJobId(1), mExplicitServer(false), mServerConnection(std::make_shared<Connection>())
+    : mNextJobId(1), mExplicitServer(false), mServerConnection(std::make_shared<Connection>()), mHostName(Rct::hostName())
 {
     Console::init("plastd> ",
                   std::bind(&Daemon::handleConsoleCommand, this, std::placeholders::_1),
@@ -226,6 +226,17 @@ void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std
             data->byId[message->id()] = { job, Rct::monoMs() };
             job->flags |= Job::Remote;
             addJob(Job::Compiling, job);
+            sendMonitorMessage(String::format<128>("{\"type\":\"start\","
+                                                   "\"host\":\"%s:%d\","
+                                                   "\"peer\":\"%s\","
+                                                   "\"path\":\"%s\","
+                                                   "\"arguments\":\"%s\","
+                                                   "\"id\":%p}",
+                                                   mHostName.constData(), mOptions.port,
+                                                   connection->client()->peerString().constData(),
+                                                   job->arguments->sourceFile().constData(),
+                                                   String::join(job->arguments->commandLine, ' ').constData(),
+                                                   job.get()));
             return true;
         }
         return false;
@@ -316,6 +327,7 @@ void Daemon::handleJobResponseMessage(const JobResponseMessage *message, const s
             << message->output();
 #warning do we need to fflush this before notifying plastc?
     removeJob(job);
+    sendMonitorMessage(String::format<128>("{\"type\":\"end\",\"id\":%p}", job.get()));
     job->localConnection->send(ClientJobResponseMessage(message->status(), message->output()));
     mJobsByLocalConnection.remove(job->localConnection);
 
@@ -411,7 +423,7 @@ void Daemon::reconnectToServer()
 
 void Daemon::sendHandshake(const std::shared_ptr<Connection> &conn)
 {
-    conn->send(HandshakeMessage(Rct::hostName(), mOptions.port, mOptions.jobCount));
+    conn->send(HandshakeMessage(mHostName, mOptions.port, mOptions.jobCount));
 }
 
 void Daemon::onDiscoverySocketReadyRead(Buffer &&data, const String &ip)
@@ -475,6 +487,8 @@ void Daemon::onCompileProcessFinished(Process *process)
             Path::rm(job->tempObjectFile);
             job->source->send(JobResponseMessage(job->id, process->returnCode(), objectFile, job->output));
         } else {
+            sendMonitorMessage(String::format<128>("{\"type\":\"end\",\"id\":%p}", job.get()));
+            
             job->localConnection->send(ClientJobResponseMessage(process->returnCode(), job->output));
             mJobsByLocalConnection.remove(job->localConnection);
             if (job->flags & Job::Remote) {
@@ -482,6 +496,9 @@ void Daemon::onCompileProcessFinished(Process *process)
                 sendJobDiscardedMessage(job);
             }
         }
+        error() << job.use_count() << mCompileJobsByProcess.size() << mPreprocessJobsByProcess.size()
+                << mJobsByRemoteConnection.size() << mJobsByLocalConnection.size();
+
         assert(job.use_count() == 1);
     }
     EventLoop::deleteLater(process);
@@ -556,95 +573,108 @@ void Daemon::startJobs()
         debug() << "Starting preprocessing in" << job->cwd << String::format<256>("%s %s", compiler.constData(), String::join(args.mid(1), ' ').constData());
     }
 
-    auto startJob = [this](const std::shared_ptr<Job> &job)
-        {
-            List<String> args = job->arguments->commandLine.mid(1);
-            assert(job->arguments->sourceFileIndexes.size() == 1);
-            args.removeAt(job->arguments->sourceFileIndexes.first() - 1);
-            CompilerArgs::Flag lang = static_cast<CompilerArgs::Flag>(job->arguments->flags & CompilerArgs::LanguageMask);
-            switch (lang) {
-            case CompilerArgs::CPlusPlus: lang = CompilerArgs::CPlusPlusPreprocessed; break;
-            case CompilerArgs::C: lang = CompilerArgs::CPreprocessed; break;
-            default: break;
-            }
-            if (!(job->arguments->flags & CompilerArgs::HasDashX)) {
-                args << "-x";
-                args << CompilerArgs::languageName(lang);
-            } else {
-                const int idx = args.indexOf("-x");
-                assert(idx != -1);
-                assert(idx + 1 < args.size());
-                args[idx + 1] = CompilerArgs::languageName(lang);
-            }
-            args << "-";
-            if (job->flags & Job::FromRemote) {
-                assert(job->tempObjectFile.isEmpty());
-                const Path dir = mOptions.cacheDir + "output/";
-                Path::mkdir(dir, Path::Recursive);
-                job->tempObjectFile = dir + job->arguments->sourceFile().fileName() + ".XXXXXX";
-                const int fd = mkstemp(&job->tempObjectFile[0]);
-                // error() << errno << strerror(errno) << job->tempOutput;
-                assert(fd != -1);
-                close(fd);
-                int i=0;
-                while (i<args.size()) {
-                    const String &arg = args.at(i);
-                    // error() << "considering" << i << arg;
-                    if (arg == "-MF") {
+    auto startJob = [this](const std::shared_ptr<Job> &job) {
+        List<String> args = job->arguments->commandLine.mid(1);
+        assert(job->arguments->sourceFileIndexes.size() == 1);
+        args.removeAt(job->arguments->sourceFileIndexes.first() - 1);
+        CompilerArgs::Flag lang = static_cast<CompilerArgs::Flag>(job->arguments->flags & CompilerArgs::LanguageMask);
+        switch (lang) {
+        case CompilerArgs::CPlusPlus: lang = CompilerArgs::CPlusPlusPreprocessed; break;
+        case CompilerArgs::C: lang = CompilerArgs::CPreprocessed; break;
+        default: break;
+        }
+        if (!(job->arguments->flags & CompilerArgs::HasDashX)) {
+            args << "-x";
+            args << CompilerArgs::languageName(lang);
+        } else {
+            const int idx = args.indexOf("-x");
+            assert(idx != -1);
+            assert(idx + 1 < args.size());
+            args[idx + 1] = CompilerArgs::languageName(lang);
+        }
+        args << "-";
+        if (job->flags & Job::FromRemote) {
+            assert(job->tempObjectFile.isEmpty());
+            const Path dir = mOptions.cacheDir + "output/";
+            Path::mkdir(dir, Path::Recursive);
+            job->tempObjectFile = dir + job->arguments->sourceFile().fileName() + ".XXXXXX";
+            const int fd = mkstemp(&job->tempObjectFile[0]);
+            // error() << errno << strerror(errno) << job->tempOutput;
+            assert(fd != -1);
+            close(fd);
+            int i=0;
+            while (i<args.size()) {
+                const String &arg = args.at(i);
+                // error() << "considering" << i << arg;
+                if (arg == "-MF") {
+                    args.remove(i, 2);
+                } else if (arg == "-MT") {
+                    args.remove(i, 2);
+                } else if (arg == "-MMD") {
+                    args.removeAt(i);
+                } else if (arg.startsWith("-I")) {
+                    if (arg.size() == 2) {
                         args.remove(i, 2);
-                    } else if (arg == "-MT") {
-                        args.remove(i, 2);
-                    } else if (arg == "-MMD") {
-                        args.removeAt(i);
-                    } else if (arg.startsWith("-I")) {
-                        if (arg.size() == 2) {
-                            args.remove(i, 2);
-                        } else {
-                            args.removeAt(i);
-                        }
                     } else {
-                        ++i;
+                        args.removeAt(i);
                     }
-                }
-                // error() << "Args are now" << args;
-            }
-            if (!(job->arguments->flags & CompilerArgs::HasDashO)) {
-                args << "-o";
-                if (!(job->flags & Job::FromRemote)) {
-                    args << job->arguments->output();
                 } else {
-                    args << job->tempObjectFile;
+                    ++i;
                 }
-            } else if (job->flags & Job::FromRemote) {
-                const int idx = args.indexOf("-o");
-                assert(idx != -1);
-                args[idx + 1] = job->tempObjectFile;
             }
-            debug() << "Starting process" << args;
-            assert(!args.isEmpty());
-            job->process = new Process;
-            job->process->setCwd(job->cwd);
-            job->process->finished().connect(std::bind(&Daemon::onCompileProcessFinished, this, std::placeholders::_1));
-#warning I hope this wont keep the shared_ptr alive for ever more?
-            job->process->readyReadStdOut().connect([job](Process *process) { job->output.append(Output({Output::StdOut, process->readAllStdOut()})); });
-            job->process->readyReadStdErr().connect([job](Process *process) { job->output.append(Output({Output::StdErr, process->readAllStdErr()})); });
-
-            if (!job->process->start(job->resolvedCompiler, args, job->environ)) {
-                delete job->process;
-                removeJob(job);
-                job->localConnection->send(ClientJobResponseMessage());
-                mJobsByLocalConnection.remove(job->localConnection);
-                assert(job.use_count() == 1);
-                error() << "Failed to start compiler" << job->resolvedCompiler;
-                return false;
+            // error() << "Args are now" << args;
+        } else {
+            sendMonitorMessage(String::format<128>("{\"type\":\"start\","
+                                                   "\"host\":\"%s:%d\","
+                                                   "\"path\":\"%s\","
+                                                   "\"arguments\":\"%s\","
+                                                   "\"id\":%p}",
+                                                   mHostName.constData(), mOptions.port,
+                                                   job->arguments->sourceFile().constData(),
+                                                   String::join(job->arguments->commandLine, ' ').constData(),
+                                                   job.get()));
+        }
+        if (!(job->arguments->flags & CompilerArgs::HasDashO)) {
+            args << "-o";
+            if (!(job->flags & Job::FromRemote)) {
+                args << job->arguments->output();
             } else {
-                debug() << "writing" << job->preprocessed.size() << "bytes to stdin of" << job->resolvedCompiler;
-                job->process->write(job->preprocessed);
-                job->process->closeStdIn();
-                mCompileJobsByProcess[job->process] = job;
-                return true;
+                args << job->tempObjectFile;
             }
-        };
+        } else if (job->flags & Job::FromRemote) {
+            const int idx = args.indexOf("-o");
+            assert(idx != -1);
+            args[idx + 1] = job->tempObjectFile;
+        }
+        debug() << "Starting process" << args;
+        assert(!args.isEmpty());
+        job->process = new Process;
+        job->process->setCwd(job->cwd);
+        job->process->finished().connect(std::bind(&Daemon::onCompileProcessFinished, this, std::placeholders::_1));
+#warning I hope this wont keep the shared_ptr alive for ever more?
+        job->process->readyReadStdOut().connect([this](Process *process) {
+                mCompileJobsByProcess[process]->output.append(Output({Output::StdOut, process->readAllStdOut()}));
+            });
+        job->process->readyReadStdErr().connect([this](Process *process) {
+                mCompileJobsByProcess[process]->output.append(Output({Output::StdErr, process->readAllStdErr()}));
+            });
+
+        if (!job->process->start(job->resolvedCompiler, args, job->environ)) {
+            delete job->process;
+            removeJob(job);
+            job->localConnection->send(ClientJobResponseMessage());
+            mJobsByLocalConnection.remove(job->localConnection);
+            assert(job.use_count() == 1);
+            error() << "Failed to start compiler" << job->resolvedCompiler;
+            return false;
+        } else {
+            debug() << "writing" << job->preprocessed.size() << "bytes to stdin of" << job->resolvedCompiler;
+            job->process->write(job->preprocessed);
+            job->process->closeStdIn();
+            mCompileJobsByProcess[job->process] = job;
+            return true;
+        }
+    };
 
     if (!mOptions.flags & Options::NoLocalJobs) {
         while (mCompileJobsByProcess.size() < mOptions.jobCount && !mPendingCompileJobs.isEmpty()) {

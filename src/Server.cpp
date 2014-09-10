@@ -146,11 +146,10 @@ void Server::onNewMessage(Message *message, Connection *connection)
                 if (client.second.parsed) { // /events
                     error() << "WRITING SHIT" << msg;
                     static const unsigned char *header = reinterpret_cast<const unsigned char*>("data:");
-                    static const unsigned char *crlf = reinterpret_cast<const unsigned char*>("\r\n");
+                    static const unsigned char *lflf = reinterpret_cast<const unsigned char*>("\n\n");
                     client.first->write(header, 5);
                     client.first->write(reinterpret_cast<const unsigned char *>(msg.constData()), msg.size());
-                    client.first->write(crlf, 2);
-                    client.first->write(crlf, 2);
+                    client.first->write(lflf, 2);
                 }
             }
         }
@@ -189,6 +188,20 @@ void Server::handleConsoleCompletion(const String& string, int, int,
     // error() << res.text << res.candidates;
     common = res.text;
     candidates = res.candidates;
+}
+
+static inline const char *guessContentType(const Path &file)
+{
+    const char *ext = file.extension();
+    if (ext) {
+        if (!strcmp(ext, "html") || !strcmp(ext, "htm")) {
+            return "text/html";
+        } else if (!strcmp(ext, "js")) {
+            return "text/javascript";
+        }
+    }
+    return "application/octet-stream";
+
 }
 
 void Server::onHttpClientReadyRead(const std::shared_ptr<SocketClient> &socket, Buffer &&buf)
@@ -243,7 +256,9 @@ void Server::onHttpClientReadyRead(const std::shared_ptr<SocketClient> &socket, 
                                                   "Pragma: no-cache\r\n"
                                                   "Content-Length: %d\r\n"
                                                   "Connection: Close\r\n"
-                                                  "Content-Type: text/html\r\n\r\n", contents.size()));
+                                                  "Content-Type: %s\r\n\r\n",
+                                                  contents.size(),
+                                                  guessContentType(req)));
                 socket->write(contents);
                 socket->close();
             } else {
