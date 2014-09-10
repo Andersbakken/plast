@@ -85,6 +85,7 @@ bool Server::init()
     mHttpServer.newConnection().connect([this](SocketServer*) {
             while (std::shared_ptr<SocketClient> client = mHttpServer.nextConnection()) {
                 mHttpClients[client] = HttpConnection({ String(), false });
+                printf("[%s:%d]: mHttpClients[client] = HttpConnection({ String(), false });\n", __FILE__, __LINE__); fflush(stdout);
                 EventLoop::eventLoop()->callLater([client, this] {
                         if (!client->buffer().isEmpty()) {
                             onHttpClientReadyRead(client, std::forward<Buffer>(client->takeBuffer()));
@@ -92,6 +93,7 @@ bool Server::init()
                     });
 
                 client->disconnected().connect([this](const std::shared_ptr<SocketClient> &client) {
+                        printf("[%s:%d]: client->disconnected().connect([this](const std::shared_ptr<SocketClient> &client) {\n", __FILE__, __LINE__); fflush(stdout);
                         mHttpClients.remove(client);
                     });
                 client->readyRead().connect(std::bind(&Server::onHttpClientReadyRead, this, std::placeholders::_1, std::placeholders::_2));
@@ -218,14 +220,14 @@ void Server::onHttpClientReadyRead(const std::shared_ptr<SocketClient> &socket, 
     }
 
     const List<String> lines = conn.buffer.split("\r\n");
-    error() << lines;
+    // error() << lines;
     const int blank = lines.indexOf(String());
     if (blank != -1 && blank + 1 < lines.size() && lines.at(blank + 1).isEmpty()) {
-        conn.parsed = true;
         const String &first = lines.first();
         if (!first.startsWith("GET /") || !first.endsWith(" HTTP/1.1")) {
             socket->write("HTTP/1.1 400 Bad Request\r\n\r\n");
             socket->close();
+            mHttpClients.remove(socket);
             return;
         }
 
@@ -238,6 +240,7 @@ void Server::onHttpClientReadyRead(const std::shared_ptr<SocketClient> &socket, 
         }
         warning() << "path is" << path << search;
         if (path == "/events") {
+            conn.parsed = true;
             socket->write("HTTP/1.1 200 OK\r\n"
                           "Cache: no-cache\r\n"
                           "Cache-Control: private\r\n"
@@ -246,6 +249,7 @@ void Server::onHttpClientReadyRead(const std::shared_ptr<SocketClient> &socket, 
         } else if (path.contains("../")) {
             socket->write("HTTP/1.1 403 Forbidden\r\n\r\n");
             socket->close();
+            mHttpClients.remove(socket);
         } else {
             Path req = mDocRoot + path;
             String contents;
@@ -261,11 +265,11 @@ void Server::onHttpClientReadyRead(const std::shared_ptr<SocketClient> &socket, 
                                                   contents.size(),
                                                   guessContentType(req)));
                 socket->write(contents);
-                socket->close();
             } else {
                 socket->write("HTTP/1.1 404 Not Found\r\n\r\n");
-                socket->close();
             }
+            socket->close();
+            mHttpClients.remove(socket);
         }
     }
 }

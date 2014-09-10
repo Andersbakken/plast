@@ -40,7 +40,7 @@ function onEventSource(msg)
         ++skeletonCount;
         break;
     case 'end':
-        skeletons[msg.id].fadeOut(1000, function() {
+        skeletons[msg.id].fadeOut(5000, function() {
             delete skeletons[msg.id];
             --skeletonCount;
         });
