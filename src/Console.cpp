@@ -73,10 +73,35 @@ static int common(const String &l, const String &r)
     return common;
 }
 
-Console::TryCompleteResults Console::tryComplete(const String &text, const List<String> &candidates)
+Console::TryCompleteResults Console::tryComplete(const String &text, const Value &value)
 {
-    int best = -1;
+    List<String> candidates;
+    switch (value.type()) {
+    case Value::Type_String:
+        candidates = value.toString().split(' ', String::SkipEmpty);
+        break;
+    case Value::Type_Map: {
+        Map<String, Value> map = value.toMap();
+#warning Need to handle a tree here
+        break; }
+    case Value::Type_List:
+        candidates = value.toList<String>();
+        break;
+    default:
+        assert(0 && "Invalid value");
+        break;
+    }
+
     TryCompleteResults ret;
+
+    const List<String> split = text.split(' ', String::SkipEmpty);
+    // printf("[%s] => %d %d\n", split.value(0).constData(), split.size(), candidates.contains(split.value(0)));
+    if (!split.isEmpty() && candidates.contains(split.first())) {
+        // printf("[%s:%d]: if (!split.isEmpty() && candidates.contains(split.first())) {\n", __FILE__, __LINE__); fflush(stdout);
+        return ret;
+    }
+
+    int best = -1;
     if (text.isEmpty()) {
         ret.candidates = candidates;
         for (int i=1; i<candidates.size(); ++i) {

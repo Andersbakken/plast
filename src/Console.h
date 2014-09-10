@@ -3,6 +3,7 @@
 
 #include <rct/String.h>
 #include <rct/List.h>
+#include <rct/Value.h>
 #include <functional>
 
 class Console
@@ -17,7 +18,8 @@ public:
         List<String> candidates;
         String text;
     };
-    static TryCompleteResults tryComplete(const String &text, const List<String> &candidates);
+    // static TryCompleteResults tryComplete(const String &text, const List<String> &candidates);
+    static TryCompleteResults tryComplete(const String &text, const Value &value);
 private:
     Console();
     Console(const Console& other) = delete;
