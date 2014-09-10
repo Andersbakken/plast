@@ -142,9 +142,10 @@ void Server::onNewMessage(Message *message, Connection *connection)
         if (!mHttpClients.isEmpty()) {
             MonitorMessage *monitor = static_cast<MonitorMessage*>(message);
             const String &msg = monitor->message();
+            error() << mHttpClients.size();
             for (const auto &client : mHttpClients) {
                 if (client.second.parsed) { // /events
-                    error() << "WRITING SHIT" << msg;
+                    // error() << "WRITING SHIT" << msg;
                     static const unsigned char *header = reinterpret_cast<const unsigned char*>("data:");
                     static const unsigned char *lflf = reinterpret_cast<const unsigned char*>("\n\n");
                     client.first->write(header, 5);

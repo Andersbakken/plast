@@ -231,7 +231,7 @@ void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std
                                                    "\"peer\":\"%s\","
                                                    "\"path\":\"%s\","
                                                    "\"arguments\":\"%s\","
-                                                   "\"id\":%p}",
+                                                   "\"id\":\"%p\"}",
                                                    mHostName.constData(), mOptions.port,
                                                    connection->client()->peerString().constData(),
                                                    job->arguments->sourceFile().constData(),
@@ -327,7 +327,7 @@ void Daemon::handleJobResponseMessage(const JobResponseMessage *message, const s
             << message->output();
 #warning do we need to fflush this before notifying plastc?
     removeJob(job);
-    sendMonitorMessage(String::format<128>("{\"type\":\"end\",\"id\":%p}", job.get()));
+    sendMonitorMessage(String::format<128>("{\"type\":\"end\",\"id\":\"%p\"}", job.get()));
     job->localConnection->send(ClientJobResponseMessage(message->status(), message->output()));
     mJobsByLocalConnection.remove(job->localConnection);
 
@@ -487,7 +487,7 @@ void Daemon::onCompileProcessFinished(Process *process)
             Path::rm(job->tempObjectFile);
             job->source->send(JobResponseMessage(job->id, process->returnCode(), objectFile, job->output));
         } else {
-            sendMonitorMessage(String::format<128>("{\"type\":\"end\",\"id\":%p}", job.get()));
+            sendMonitorMessage(String::format<128>("{\"type\":\"end\",\"id\":\"%p\"}", job.get()));
             
             job->localConnection->send(ClientJobResponseMessage(process->returnCode(), job->output));
             mJobsByLocalConnection.remove(job->localConnection);
@@ -628,7 +628,7 @@ void Daemon::startJobs()
                                                    "\"host\":\"%s:%d\","
                                                    "\"path\":\"%s\","
                                                    "\"arguments\":\"%s\","
-                                                   "\"id\":%p}",
+                                                   "\"id\":\"%p\"}",
                                                    mHostName.constData(), mOptions.port,
                                                    job->arguments->sourceFile().constData(),
                                                    String::join(job->arguments->commandLine, ' ').constData(),

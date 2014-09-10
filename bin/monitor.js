@@ -9,9 +9,57 @@ function queryValue(key) {
     return undefined;
 }
 
+var skeletonCount = 0;
+var skeletons = {};
+
+function windowWidth()
+{
+    var x = 0;
+    if (self.innerHeight) {
+        x = self.innerWidth;
+    } else if (document.documentElement && document.documentElement.clientHeight) {
+        x = document.documentElement.clientWidth;
+    } else if (document.body) {
+        x = document.body.clientWidth;
+    }
+    return x;
+}
+
 function onEventSource(msg)
 {
-    console.log("GOT MESSAGE", msg);
+    console.log(msg.data);
+    var message = JSON.parse(msg.data);
+    switch (message.type) {
+    case 'start':
+        var skel = new Skeleton;
+        skel.move(undefined, 10 + (skeletonCount * 200));
+        var targetX = windowWidth() - 50;
+        console.log("WALKING TO", targetX);
+        skel.walk(targetX, undefined, 20000);
+        skeletons[msg.id] = skel;
+        ++skeletonCount;
+        break;
+    case 'end':
+        skeletons[msg.id].fadeOut(1000, function() {
+            delete skeletons[msg.id];
+            --skeletonCount;
+        });
+        break;
+    default:
+        console.log("Unknown message type", message);
+        break;
+    }
+}
+
+function interpolate(begin, end, startTime, duration) {
+    var elapsed = new Date() - startTime;
+    var progress;
+    if (elapsed >= duration) {
+        progress = 1;
+    } else {
+        progress = elapsed / duration;
+    }
+    return begin + ((end - begin) * progress);
 }
 
 function Skeleton()
@@ -23,19 +71,10 @@ function Skeleton()
     area.appendChild(img);
     var animationTimer, startX, targetX, startY, targetY, animationDuration, animationStart;
     function advance(self) {
-        var elapsed = new Date() - animationStart;
-        var progress;
-        if (elapsed >= animationDuration) {
-            progress = 1;
-        } else {
-            progress = elapsed / animationDuration;
-        }
-
-        function calc(start, end) { return start + ((end - start) * progress); }
-        var x = typeof startX === 'undefined' ? undefined : calc(startX, targetX);
-        var y = typeof startY === 'undefined' ? undefined : calc(startY, targetY);
+        var x = typeof startX === 'undefined' ? undefined : interpolate(startX, targetX, animationStart, animationDuration);
+        var y = typeof startY === 'undefined' ? undefined : interpolate(startY, targetY, animationStart, animationDuration);
         self.move(x, y);
-        return progress == 1;
+        return (new Date() >= animationStart + animationDuration);
     }
 
     return {
@@ -73,6 +112,21 @@ function Skeleton()
                 }
             }, 16);
         },
+        fadeOut: function(time, cb) {
+            var start = new Date();
+            if (!time)
+                time = 5000;
+            var that = this;
+            setInterval(function() {
+                img.style.opacity = interpolate(1.0, 0.0, start, time);
+                if (new Date() >= start + time) {
+                    that.kill();
+                    if (cb)
+                        cb();
+                }
+            }, 16);
+
+        },
         get node() { return img; },
         get area() { return area; }
     };
@@ -89,5 +143,5 @@ function start() {
     var eventSource = new EventSource(server);
     eventSource.onmessage = onEventSource;
 
-    window.skel = new Skeleton;
+    // window.skel = new Skeleton;
 }
