@@ -496,8 +496,6 @@ void Daemon::onCompileProcessFinished(Process *process)
                 sendJobDiscardedMessage(job);
             }
         }
-        error() << job.use_count() << mCompileJobsByProcess.size() << mPreprocessJobsByProcess.size()
-                << mJobsByRemoteConnection.size() << mJobsByLocalConnection.size();
 
         assert(job.use_count() == 1);
     }
