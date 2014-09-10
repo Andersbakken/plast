@@ -85,7 +85,6 @@ bool Server::init()
     mHttpServer.newConnection().connect([this](SocketServer*) {
             while (std::shared_ptr<SocketClient> client = mHttpServer.nextConnection()) {
                 mHttpClients[client] = HttpConnection({ String(), false });
-                printf("[%s:%d]: mHttpClients[client] = HttpConnection({ String(), false });\n", __FILE__, __LINE__); fflush(stdout);
                 EventLoop::eventLoop()->callLater([client, this] {
                         if (!client->buffer().isEmpty()) {
                             onHttpClientReadyRead(client, std::forward<Buffer>(client->takeBuffer()));
@@ -93,7 +92,6 @@ bool Server::init()
                     });
 
                 client->disconnected().connect([this](const std::shared_ptr<SocketClient> &client) {
-                        printf("[%s:%d]: client->disconnected().connect([this](const std::shared_ptr<SocketClient> &client) {\n", __FILE__, __LINE__); fflush(stdout);
                         mHttpClients.remove(client);
                     });
                 client->readyRead().connect(std::bind(&Server::onHttpClientReadyRead, this, std::placeholders::_1, std::placeholders::_2));
