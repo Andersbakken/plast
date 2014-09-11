@@ -17,8 +17,8 @@
 #include <rct/SHA256.h>
 
 Daemon::Daemon()
-    : mNextJobId(1), mExplicitServer(false), mServerConnection(std::make_shared<Connection>()),
-      mHostName(Rct::hostName()), mAnnouncementDirty(false)
+    : mAnnouncementDirty(false), mNextJobId(1), mExplicitServer(false),
+      mServerConnection(std::make_shared<Connection>()), mHostName(Rct::hostName())
 {
     Console::init("plastd> ",
                   std::bind(&Daemon::handleConsoleCommand, this, std::placeholders::_1),
@@ -215,17 +215,27 @@ void Daemon::handleCompilerRequestMessage(const CompilerRequestMessage *message,
 void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std::shared_ptr<Connection> &connection)
 {
     auto send = [connection, message, this](const std::shared_ptr<Job> &job) {
+        printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
         debug() << "Sending job request to" << connection->client()->peerString() << job->arguments->commandLine << job->arguments->sourceFiles();
         if (connection->send(JobMessage(message->id(), message->sha256(), job->preprocessed, job->arguments))) {
+            printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
             warning() << "Sent job request to" << connection->client()->peerString();
+            printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
             removeJob(job);
+            printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
             job->remoteConnections.insert(connection);
+            printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
             std::shared_ptr<RemoteData> &data = mJobsByRemoteConnection[connection];
             if (!data)
-                data.reset(new RemoteData);
+                printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
+            data.reset(new RemoteData);
+            printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
             data->byJob[job] = message->id();
+            printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
             data->byId[message->id()] = { job, Rct::monoMs() };
+            printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
             job->flags |= Job::Remote;
+            printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
             addJob(Job::Compiling, job);
             sendMonitorMessage(String::format<128>("{\"type\":\"start\","
                                                    "\"host\":\"%s:%d\","
@@ -238,46 +248,63 @@ void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std
                                                    job->arguments->sourceFile().constData(),
                                                    String::join(job->arguments->commandLine, ' ').constData(),
                                                    job.get()));
+            printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
             return true;
         }
+        printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
         return false;
+        printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
     };
 
+    printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
     error() << "Got job request" << message->id() << message->sha256();
     for (const auto &job : mPendingCompileJobs) {
         if (job->compiler->sha256() == message->sha256()) {
+            printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
             send(job);
+            printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
             return;
         }
     }
 
     if (mOptions.rescheduleTimeout > 0) {
+        printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
         const uint64_t threshold = Rct::monoMs() + mOptions.rescheduleTimeout;
         for (const auto &job : mCompilingJobs) {
             if (!job->process && job->compiler->sha256() == message->sha256()) {
+                printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
                 bool reschedule = true;
                 for (const auto &remoteConn : job->remoteConnections) {
+                    printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
                     const auto &remoteData = mJobsByRemoteConnection[remoteConn];
+                    printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
                     assert(remoteData);
                     if (remoteData) {
+                        printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
                         const uint64_t id = remoteData->byJob.value(job);
                         if (id) {
+                            printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
                             const auto &remoteJob = remoteData->byId[id];
                             if (remoteJob.startTime < threshold) {
+                                printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
                                 reschedule = false;
+                                printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
                                 break;
                             }
                         }
                     }
                 }
                 if (reschedule) {
+                    printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
                     send(job);
                 }
             }
         }
     }
 
+    printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
     assert(mPeersByConnection.contains(connection));
+    printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
     mPeersByConnection[connection]->announced.remove(message->sha256());
     connection->send(JobMessage(message->id(), message->sha256())); // tell connection that we don't have jobs for this compiler
 }
@@ -882,9 +909,8 @@ void Daemon::handleConsoleCommand(const String &string)
             if (!lists[i].list->isEmpty()) {
                 printf("%s: %d\n", lists[i].name, lists[i].list->size());
                 for (const auto &job : *lists[i].list) {
-                    printf("Job: %s Received: %s\n",
-                           String::join(job->arguments->sourceFiles(), ", ").constData(),
-                           String::formatTime(job->received).constData());
+                    printf("Job: %s Received: %llu\n",
+                           String::join(job->arguments->sourceFiles(), ", ").constData(), job->received);
                 }
             }
         }
@@ -893,6 +919,16 @@ void Daemon::handleConsoleCommand(const String &string)
     } else if (str == "peers") {
         for (const auto &peer : mPeersByHost) {
             printf("Peer: %s\n", peer.first.toString().constData());
+            auto jobs = [](const char *name, const Set<String> &j) {
+                if (j.isEmpty()) {
+                    printf("%s: None\n", name);
+                } else {
+                    for (const String &sha : j)
+                        printf("%s\n", sha.constData());
+                }
+            };
+            jobs("Announced", peer.second->announced);
+            jobs("Available", peer.second->jobsAvailable);
         }
     } else if (str.startsWith("monitor ")) {
         sendMonitorMessage(str.mid(8));
