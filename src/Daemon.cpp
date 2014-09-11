@@ -215,27 +215,20 @@ void Daemon::handleCompilerRequestMessage(const CompilerRequestMessage *message,
 void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std::shared_ptr<Connection> &connection)
 {
     auto send = [connection, message, this](const std::shared_ptr<Job> &job) {
-        printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
         debug() << "Sending job request to" << connection->client()->peerString() << job->arguments->commandLine << job->arguments->sourceFiles();
         if (connection->send(JobMessage(message->id(), message->sha256(), job->preprocessed, job->arguments))) {
-            printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
             warning() << "Sent job request to" << connection->client()->peerString();
-            printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
             removeJob(job);
-            printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
             job->remoteConnections.insert(connection);
-            printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
             std::shared_ptr<RemoteData> &data = mJobsByRemoteConnection[connection];
             if (!data)
-                printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
-            data.reset(new RemoteData);
-            printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
+                data.reset(new RemoteData);
             data->byJob[job] = message->id();
-            printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
-            data->byId[message->id()] = { job, Rct::monoMs() };
-            printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
+            RemoteJob &remoteJob = data->byId[message->id()];
+            remoteJob.job = job;
+            remoteJob.startTime = Rct::monoMs();
+            // data->byId[message->id()] = { job, Rct::monoMs() };
             job->flags |= Job::Remote;
-            printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
             addJob(Job::Compiling, job);
             sendMonitorMessage(String::format<128>("{\"type\":\"start\","
                                                    "\"host\":\"%s:%d\","
@@ -248,63 +241,46 @@ void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std
                                                    job->arguments->sourceFile().constData(),
                                                    String::join(job->arguments->commandLine, ' ').constData(),
                                                    job.get()));
-            printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
             return true;
         }
-        printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
         return false;
-        printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
     };
 
-    printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
     error() << "Got job request" << message->id() << message->sha256();
     for (const auto &job : mPendingCompileJobs) {
         if (job->compiler->sha256() == message->sha256()) {
-            printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
             send(job);
-            printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
             return;
         }
     }
 
     if (mOptions.rescheduleTimeout > 0) {
-        printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
         const uint64_t threshold = Rct::monoMs() + mOptions.rescheduleTimeout;
         for (const auto &job : mCompilingJobs) {
             if (!job->process && job->compiler->sha256() == message->sha256()) {
-                printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
                 bool reschedule = true;
                 for (const auto &remoteConn : job->remoteConnections) {
-                    printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
                     const auto &remoteData = mJobsByRemoteConnection[remoteConn];
-                    printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
                     assert(remoteData);
                     if (remoteData) {
-                        printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
                         const uint64_t id = remoteData->byJob.value(job);
                         if (id) {
-                            printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
                             const auto &remoteJob = remoteData->byId[id];
                             if (remoteJob.startTime < threshold) {
-                                printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
                                 reschedule = false;
-                                printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
                                 break;
                             }
                         }
                     }
                 }
                 if (reschedule) {
-                    printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
                     send(job);
                 }
             }
         }
     }
 
-    printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
     assert(mPeersByConnection.contains(connection));
-    printf("[%s:%d]: \n", __FILE__, __LINE__); fflush(stdout);
     mPeersByConnection[connection]->announced.remove(message->sha256());
     connection->send(JobMessage(message->id(), message->sha256())); // tell connection that we don't have jobs for this compiler
 }
