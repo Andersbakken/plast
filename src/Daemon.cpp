@@ -283,7 +283,7 @@ void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std
 
 void Daemon::handleJobMessage(const JobMessage *message, const std::shared_ptr<Connection> &connection)
 {
-    warning() << "Got job message" << message->sha256() << message->preprocessed.size();
+    warning() << "Got job message" << message->sha256() << message->preprocessed().size();
     if (message->preprocessed().isEmpty()) {
         Peer *peer = mPeersByConnection.value(connection);
         assert(peer);
