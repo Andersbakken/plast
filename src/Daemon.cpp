@@ -17,7 +17,8 @@
 #include <rct/SHA256.h>
 
 Daemon::Daemon()
-    : mNextJobId(1), mExplicitServer(false), mServerConnection(std::make_shared<Connection>()), mHostName(Rct::hostName())
+    : mNextJobId(1), mExplicitServer(false), mServerConnection(std::make_shared<Connection>()),
+      mHostName(Rct::hostName()), mAnnouncementDirty(false)
 {
     Console::init("plastd> ",
                   std::bind(&Daemon::handleConsoleCommand, this, std::placeholders::_1),
@@ -703,9 +704,10 @@ void Daemon::startJobs()
 void Daemon::announceJobs(Peer *peer)
 {
     // debug() << "Announcing" << mPeersByConnection.size();
-    if (mPeersByConnection.isEmpty()) {
+    if (!mAnnouncementDirty || mPeersByConnection.isEmpty()) {
         return;
     }
+    mAnnouncementDirty = false;
 
     const int shaCount = mCompilerCache->count();
     Set<String> jobs;
@@ -923,6 +925,14 @@ void Daemon::addJob(Job::Flag flag, const std::shared_ptr<Job> &job)
         job->position = mPreprocessingJobs.insert(mPreprocessingJobs.end(), job);
         break;
     case Job::PendingCompiling:
+        if (!mAnnouncementDirty) {
+            for (const auto &otherJob : mPendingCompileJobs) {
+                if (!(otherJob->flags & Job::FromRemote) && otherJob->compiler != job->compiler) {
+                    mAnnouncementDirty = true;
+                    break;
+                }
+            }
+        }
         job->position = mPendingCompileJobs.insert(mPendingCompileJobs.end(), job);
         break;
     case Job::Compiling:
@@ -951,6 +961,14 @@ void Daemon::removeJob(const std::shared_ptr<Job> &job)
         break;
     case Job::Compiling:
         mCompilingJobs.erase(job->position);
+        if (!mAnnouncementDirty) {
+            for (const auto &otherJob : mPendingCompileJobs) {
+                if (!(otherJob->flags & Job::FromRemote) && otherJob->compiler != job->compiler) {
+                    mAnnouncementDirty = true;
+                    break;
+                }
+            }
+        }
         break;
     default:
         assert(0);

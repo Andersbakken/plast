@@ -77,13 +77,12 @@ private:
         Process *process;
         enum Flag {
             None = 0x00,
-            Announced = 0x01,
-            PendingPreprocessing = 0x02,
-            Preprocessing = 0x04,
-            PendingCompiling = 0x08,
-            Compiling = 0x10,
-            FromRemote = 0x20, // this job originated elsewhere
-            Remote = 0x40, // remote machine is handling it
+            PendingPreprocessing = 0x01,
+            Preprocessing = 0x02,
+            PendingCompiling = 0x04,
+            Compiling = 0x08,
+            FromRemote = 0x10, // this job originated elsewhere
+            Remote = 0x20, // remote machine is handling it
             StateMask = Preprocessing|PendingPreprocessing|PendingCompiling|Compiling
         };
 
@@ -102,6 +101,7 @@ private:
         Host host;
         Set<String> announced, jobsAvailable;
     };
+    bool mAnnouncementDirty;
 
     void handleConsoleCommand(const String &string);
     void handleConsoleCompletion(const String &string, int start, int end, String &common, List<String> &candidates);
