@@ -220,8 +220,8 @@ void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std
             removeJob(job);
             job->remoteConnections.insert(connection);
             std::shared_ptr<RemoteData> &data = mJobsByRemoteConnection[connection];
-            assert(!data);
-            data.reset(new RemoteData);
+            if (!data)
+                data.reset(new RemoteData);
             data->byJob[job] = message->id();
             data->byId[message->id()] = { job, Rct::monoMs() };
             job->flags |= Job::Remote;
@@ -283,7 +283,7 @@ void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std
 
 void Daemon::handleJobMessage(const JobMessage *message, const std::shared_ptr<Connection> &connection)
 {
-    warning() << "Got job message" << message->preprocessed().size();
+    warning() << "Got job message" << message->sha256() << message->preprocessed.size();
     if (message->preprocessed().isEmpty()) {
         Peer *peer = mPeersByConnection.value(connection);
         assert(peer);
@@ -848,7 +848,8 @@ void Daemon::onConnectionDisconnected(Connection *conn)
         if (remoteData) {
             for (const auto &remoteJob : remoteData->byJob) {
                 remoteJob.first->remoteConnections.remove(c);
-                if (!job->process) {
+                if (!job->process && remoteJob.first->remoteConnections.isEmpty()) {
+                    // move back to pending
                     removeJob(remoteJob.first);
                     addJob(Job::PendingCompiling, remoteJob.first);
                 }
@@ -973,8 +974,12 @@ std::shared_ptr<Daemon::Job> Daemon::removeRemoteJob(const std::shared_ptr<Conne
     if (!data)
         return std::shared_ptr<Job>();
     std::shared_ptr<Job> job = data->byId.take(id).job;
-    if (job)
+    if (job) {
         data->byJob.remove(job);
+        if (data->byJob.isEmpty() && data->byId.isEmpty()) {
+            data.reset();
+        }
+    }
     return job;
 }
 
