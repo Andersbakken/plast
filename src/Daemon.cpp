@@ -299,8 +299,8 @@ void Daemon::handleJobMessage(const JobMessage *message, const std::shared_ptr<C
         job->source = connection;
         job->id = message->id();
         std::shared_ptr<RemoteData> &data = mJobsByRemoteConnection[connection];
-        assert(!data);
-        data.reset(new RemoteData);
+        if (!data)
+            data.reset(new RemoteData);
         data->byJob[job] = message->id();
         data->byId[message->id()] = { job, Rct::monoMs() };
         addJob(Job::PendingCompiling, job);
@@ -702,7 +702,7 @@ void Daemon::startJobs()
 
 void Daemon::announceJobs(Peer *peer)
 {
-    debug() << "Announcing" << mPeersByConnection.size();
+    // debug() << "Announcing" << mPeersByConnection.size();
     if (mPeersByConnection.isEmpty()) {
         return;
     }
@@ -716,7 +716,9 @@ void Daemon::announceJobs(Peer *peer)
         }
     }
 
-    warning() << "Announcing jobs" << mPeersByConnection.size() << jobs;
+    warning("Announcing jobs to %d peers. %s. Pending compile: %d Pending preprocess: %d",
+            peer ? 1 : mPeersByConnection.size(), Log::toString(jobs).constData(),
+            mPendingCompileJobs.size(), mPendingPreprocessJobs.size());
 
     if (peer) {
         if (peer->announced != jobs) {
