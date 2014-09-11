@@ -962,11 +962,15 @@ void Daemon::addJob(Job::Flag flag, const std::shared_ptr<Job> &job)
         break;
     case Job::PendingCompiling:
         if (!mAnnouncementDirty) {
+            bool found = false;
             for (const auto &otherJob : mPendingCompileJobs) {
-                if (!(otherJob->flags & Job::FromRemote) && otherJob->compiler != job->compiler) {
-                    mAnnouncementDirty = true;
+                if (!(otherJob->flags & Job::FromRemote) && otherJob->compiler == job->compiler) {
+                    found = true;
                     break;
                 }
+            }
+            if (!found) {
+                mAnnouncementDirty = true;
             }
         }
         job->position = mPendingCompileJobs.insert(mPendingCompileJobs.end(), job);
