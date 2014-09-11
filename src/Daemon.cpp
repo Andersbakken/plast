@@ -488,7 +488,7 @@ void Daemon::onCompileProcessFinished(Process *process)
             job->source->send(JobResponseMessage(job->id, process->returnCode(), objectFile, job->output));
         } else {
             sendMonitorMessage(String::format<128>("{\"type\":\"end\",\"id\":\"%p\"}", job.get()));
-            
+
             job->localConnection->send(ClientJobResponseMessage(process->returnCode(), job->output));
             mJobsByLocalConnection.remove(job->localConnection);
             if (job->flags & Job::Remote) {
@@ -581,6 +581,27 @@ void Daemon::startJobs()
         case CompilerArgs::C: lang = CompilerArgs::CPreprocessed; break;
         default: break;
         }
+        int i=0;
+        while (i<args.size()) {
+            const String &arg = args.at(i);
+            // error() << "considering" << i << arg;
+            if (arg == "-MF") {
+                args.remove(i, 2);
+            } else if (arg == "-MT") {
+                args.remove(i, 2);
+            } else if (arg == "-MMD") {
+                args.removeAt(i);
+            } else if (arg.startsWith("-I")) {
+                if (arg.size() == 2) {
+                    args.remove(i, 2);
+                } else {
+                    args.removeAt(i);
+                }
+            } else {
+                ++i;
+            }
+        }
+
         if (!(job->arguments->flags & CompilerArgs::HasDashX)) {
             args << "-x";
             args << CompilerArgs::languageName(lang);
@@ -600,26 +621,6 @@ void Daemon::startJobs()
             // error() << errno << strerror(errno) << job->tempOutput;
             assert(fd != -1);
             close(fd);
-            int i=0;
-            while (i<args.size()) {
-                const String &arg = args.at(i);
-                // error() << "considering" << i << arg;
-                if (arg == "-MF") {
-                    args.remove(i, 2);
-                } else if (arg == "-MT") {
-                    args.remove(i, 2);
-                } else if (arg == "-MMD") {
-                    args.removeAt(i);
-                } else if (arg.startsWith("-I")) {
-                    if (arg.size() == 2) {
-                        args.remove(i, 2);
-                    } else {
-                        args.removeAt(i);
-                    }
-                } else {
-                    ++i;
-                }
-            }
             // error() << "Args are now" << args;
         } else {
             sendMonitorMessage(String::format<128>("{\"type\":\"start\","
@@ -746,7 +747,6 @@ void Daemon::fetchJobs(Peer *peer)
     if (available <= 0)
         return;
 
-    warning() << "About to fetch jobs" << (peer ? peer->host.toString() : String()) << available;
     List<std::pair<Peer *, String> > candidates;
     Set<String> compilerRequests;
     auto process = [&candidates, &compilerRequests, this, available](Peer *p) {
