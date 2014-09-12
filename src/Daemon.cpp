@@ -851,14 +851,17 @@ void Daemon::onConnectionDisconnected(Connection *conn)
         removeJob(job);
         assert(job.use_count() == 1);
         // ### need to tell remote connection that we're no longer interested
-    } else if (Peer *peer = mPeersByConnection.take(c)) {
+        return;
+    }
+
+    if (Peer *peer = mPeersByConnection.take(c)) {
         error() << "Lost peer" << peer->host.friendlyName;
         mPeersByHost.remove(peer->host);
         auto remoteData = mJobsByRemoteConnection.take(c);
         if (remoteData) {
             for (const auto &remoteJob : remoteData->byJob) {
                 remoteJob.first->remoteConnections.remove(c);
-                if (!job->process && remoteJob.first->remoteConnections.isEmpty()) {
+                if (!remoteJob.first->process && remoteJob.first->remoteConnections.isEmpty()) {
                     // move back to pending
                     removeJob(remoteJob.first);
                     addJob(Job::PendingCompiling, remoteJob.first);
