@@ -219,8 +219,8 @@ void Daemon::handleCompilerRequestMessage(const CompilerRequestMessage *message,
 
 void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std::shared_ptr<Connection> &connection)
 {
-    auto send = [connection, message, this](const std::shared_ptr<Job> &job) {
-        debug() << "Sending job request to" << connection->client()->peerString() << job->arguments->commandLine << job->arguments->sourceFiles();
+    auto send = [connection, message, this](std::shared_ptr<Job> job) { // not a reference since the reference would get invalidated inside removeJob
+        debug() << "Sending job to" << connection->client()->peerString() << job->arguments->commandLine << job->arguments->sourceFiles();
         if (connection->send(JobMessage(message->id(), message->sha256(), job->preprocessed, job->arguments))) {
             warning() << "Sent job request to" << connection->client()->peerString();
             removeJob(job);
