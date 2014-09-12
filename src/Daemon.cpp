@@ -114,6 +114,11 @@ bool Daemon::init(const Options &options)
     mOptions = options;
     mCompilerCache.reset(new CompilerCache(mOptions.cacheDir + "compilers/"));
 
+    const Path dir = mOptions.cacheDir + "output/";
+    for (const Path &file : dir.files(Path::Directory)) {
+        file.rm();
+    }
+
     mExplicitServer = !mOptions.serverHost.isEmpty();
     reconnectToServer();
 
