@@ -58,7 +58,12 @@ CompilerCache::CompilerCache(const Path &path, int cacheSize)
             Path::rmdir(p);
         } else {
             bool ok;
-            const Path exec = (p + Path(p + "COMPILER").followLink(&ok));
+            Path exec = (p + Path(p + "COMPILER").followLink(&ok));
+            if (ok && exec.isSymLink()) {
+                exec = exec.followLink(&ok);
+                // We want the local ones to be available by their real path,
+                // not ~/.plastd/compilers/.../g++
+            }
             if (!ok || !exec.isFile()) {
                 error() << "Can't find COMPILER symlink";
             } else {
@@ -174,8 +179,6 @@ std::shared_ptr<Compiler> CompilerCache::create(const Path &compiler)
         mByPath[compiler] = c;
         if (!resolvedCompiler)
             resolvedCompiler = c;
-#warning this doesnt quite work
-#if 0
         warning() << "Created package" << compiler << c->mFiles << c->mSha256;
         const Path root = mPath + c->mSha256 + '/';
         Path::mkdir(root, Path::Recursive);
@@ -184,7 +187,8 @@ std::shared_ptr<Compiler> CompilerCache::create(const Path &compiler)
         for (const Path &file : c->mFiles) {
             error() << "Linking" << file << (root + file.fileName());
             if (symlink(file.constData(), (root + file.fileName()).constData())) {
-                error() << "Failed to create symlink" << errno << strerror(errno) << (root + file.fileName()) << file;
+                error() << "Failed to create symlink" << errno << strerror(errno)
+                        << (root + file.fileName()) << file;
                 ok = false;
                 break;
             }
@@ -195,14 +199,12 @@ std::shared_ptr<Compiler> CompilerCache::create(const Path &compiler)
             ok = false;
         }
 
-
-        error() << "SHIT" << ok;
         if (!ok) {
+            c.reset();
             for (const Path &f : root.files(Path::File))
                 Path::rm(f);
             rmdir(root.constData());
         }
-#endif
     }
     return c;
 }
