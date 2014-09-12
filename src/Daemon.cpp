@@ -222,26 +222,19 @@ void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std
     auto send = [connection, message, this](std::shared_ptr<Job> job) { // not a reference since the reference would get invalidated inside removeJob
         debug() << "Sending job to" << connection->client()->peerString() << job->arguments->commandLine << job->arguments->sourceFiles();
         if (connection->send(JobMessage(message->id(), message->sha256(), job->preprocessed, job->arguments))) {
-            warning() << "Sent job request to" << connection->client()->peerString();
-            removeJob(job);
+            warning() << "Sent job to" << connection->client()->peerString();
             job->remoteConnections.insert(connection);
             std::shared_ptr<RemoteData> &data = mJobsByRemoteConnection[connection];
             if (!data)
                 data.reset(new RemoteData);
             data->byJob[job] = message->id();
-            printf("SHIT %d\n", __LINE__); fflush(stdout);
             RemoteJob &remoteJob = data->byId[message->id()];
-            printf("SHIT %d\n", __LINE__); fflush(stdout);
             remoteJob.job = job;
-            printf("SHIT %d\n", __LINE__); fflush(stdout);
             remoteJob.startTime = Rct::monoMs();
-            printf("SHIT %d\n", __LINE__); fflush(stdout);
             // data->byId[message->id()] = { job, Rct::monoMs() };
-            printf("SHIT %d\n", __LINE__); fflush(stdout);
             job->flags |= Job::Remote;
-            printf("SHIT %d\n", __LINE__); fflush(stdout);
+            removeJob(job);
             addJob(Job::Compiling, job);
-            printf("SHIT %d\n", __LINE__); fflush(stdout);
             sendMonitorMessage(String::format<128>("{\"type\":\"start\","
                                                    "\"host\":\"%s:%d\","
                                                    "\"peer\":\"%s\","
@@ -253,70 +246,46 @@ void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std
                                                    job->arguments->sourceFile().constData(),
                                                    String::join(job->arguments->commandLine, ' ').constData(),
                                                    job.get()));
-            printf("SHIT %d\n", __LINE__); fflush(stdout);
             return true;
         }
         return false;
     };
 
     error() << "Got job request" << message->id() << message->sha256();
-    printf("SHIT %d\n", __LINE__); fflush(stdout);
     for (const auto &job : mPendingCompileJobs) {
-        printf("SHIT %d\n", __LINE__); fflush(stdout);
         if (job->compiler->sha256() == message->sha256()) {
-            printf("SHIT %d\n", __LINE__); fflush(stdout);
             send(job);
-            printf("SHIT %d\n", __LINE__); fflush(stdout);
             return;
         }
     }
 
-    printf("SHIT %d\n", __LINE__); fflush(stdout);
     if (mOptions.rescheduleTimeout > 0) {
-        printf("SHIT %d\n", __LINE__); fflush(stdout);
         const uint64_t threshold = Rct::monoMs() + mOptions.rescheduleTimeout;
-        printf("SHIT %d\n", __LINE__); fflush(stdout);
         for (const auto &job : mCompilingJobs) {
-            printf("SHIT %d\n", __LINE__); fflush(stdout);
             if (!job->process && job->compiler->sha256() == message->sha256()) {
-                printf("SHIT %d\n", __LINE__); fflush(stdout);
                 bool reschedule = true;
-                printf("SHIT %d\n", __LINE__); fflush(stdout);
                 for (const auto &remoteConn : job->remoteConnections) {
-                    printf("SHIT %d\n", __LINE__); fflush(stdout);
                     const auto &remoteData = mJobsByRemoteConnection[remoteConn];
-                    printf("SHIT %d\n", __LINE__); fflush(stdout);
-                    printf("SHIT %d\n", __LINE__); fflush(stdout);
                     if (remoteData) {
-                        printf("SHIT %d\n", __LINE__); fflush(stdout);
                         const uint64_t id = remoteData->byJob.value(job);
-                        printf("SHIT %d\n", __LINE__); fflush(stdout);
                         if (id) {
-                            printf("SHIT %d\n", __LINE__); fflush(stdout);
                             const auto &remoteJob = remoteData->byId[id];
-                            printf("SHIT %d\n", __LINE__); fflush(stdout);
                             if (remoteJob.startTime < threshold) {
-                                printf("SHIT %d\n", __LINE__); fflush(stdout);
                                 reschedule = false;
-                                printf("SHIT %d\n", __LINE__); fflush(stdout);
                                 break;
                             }
                         }
                     }
                 }
                 if (reschedule) {
-                    printf("SHIT %d\n", __LINE__); fflush(stdout);
                     send(job);
                 }
             }
         }
     }
 
-    printf("SHIT %d\n", __LINE__); fflush(stdout);
     assert(mPeersByConnection.contains(connection));
-    printf("SHIT %d\n", __LINE__); fflush(stdout);
     mPeersByConnection[connection]->announced.remove(message->sha256());
-    printf("SHIT %d\n", __LINE__); fflush(stdout);
     connection->send(JobMessage(message->id(), message->sha256())); // tell connection that we don't have jobs for this compiler
 }
 
@@ -355,8 +324,10 @@ void Daemon::handleJobResponseMessage(const JobResponseMessage *message, const s
     debug() << "Got job response" << message->id() << message->objectFileContents().size();
 
     std::shared_ptr<Job> job = removeRemoteJob(connection, message->id());
-    if (!job)
+    if (!job) {
+        error() << "Couldn't find job with this id" << message->id();
         return;
+    }
 
     Path output = job->arguments->output();
     if (!output.startsWith('/'))
@@ -373,7 +344,6 @@ void Daemon::handleJobResponseMessage(const JobResponseMessage *message, const s
     job->remoteConnections.remove(connection);
     if (!job->remoteConnections.isEmpty())
         sendJobDiscardedMessage(job);
-    error() << "Couldn't find job with this id" << message->id();
 }
 
 void Daemon::handleJobDiscardedMessage(const JobDiscardedMessage *message, const std::shared_ptr<Connection> &connection)
