@@ -55,6 +55,7 @@ Daemon::Daemon()
     mServerConnection->error().connect(std::bind(&Daemon::restartServerTimer, this));
 
     mServerTimer.timeout().connect(std::bind(&Daemon::reconnectToServer, this));
+    mJobRequestTimer.timeout().connect(std::bind(&Daemon::respondToJobRequests, this));
     mOutstandingJobRequestsTimer.timeout().connect(std::bind(&Daemon::checkJobRequestTimeout, this));
 }
 
@@ -219,19 +220,27 @@ void Daemon::handleCompilerRequestMessage(const CompilerRequestMessage *message,
 
 void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std::shared_ptr<Connection> &connection)
 {
-    auto send = [connection, message, this](std::shared_ptr<Job> job) { // not a reference since the reference would get invalidated inside removeJob
-        debug() << "Sending job to" << connection->client()->peerString() << job->arguments->commandLine << job->arguments->sourceFiles();
-        if (connection->send(JobMessage(message->id(), message->sha256(), job->preprocessed, job->arguments))) {
+    warning() << "Got job request" << message->id() << message->sha256();
+    mJobRequests[connection].append({ message->id(), message->sha256(), 0 });
+    mJobRequestTimer.stop();
+    respondToJobRequests();
+}
+
+void Daemon::respondToJobRequests()
+{
+    auto send = [this](const std::shared_ptr<Connection> &connection,
+                       uint64_t id, const String &sha256, std::shared_ptr<Job> job) { // not a reference since the reference would get invalidated inside removeJob
+        error() << "Sending job to" << connection->client()->peerString() << job->arguments->sourceFile();
+        if (connection->send(JobMessage(id, sha256, job->preprocessed, job->arguments))) {
             warning() << "Sent job to" << connection->client()->peerString();
             job->remoteConnections.insert(connection);
             std::shared_ptr<RemoteData> &data = mJobsByRemoteConnection[connection];
             if (!data)
                 data.reset(new RemoteData);
-            data->byJob[job] = message->id();
-            RemoteJob &remoteJob = data->byId[message->id()];
+            data->byJob[job] = id;
+            RemoteJob &remoteJob = data->byId[id];
             remoteJob.job = job;
             remoteJob.startTime = Rct::monoMs();
-            // data->byId[message->id()] = { job, Rct::monoMs() };
             job->flags |= Job::Remote;
             removeJob(job);
             addJob(Job::Compiling, job);
@@ -251,13 +260,20 @@ void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std
         return false;
     };
 
-    error() << "Got job request" << message->id() << message->sha256();
-    for (const auto &job : mPendingCompileJobs) {
-        if (job->compiler->sha256() == message->sha256()) {
-            send(job);
-            return;
+    for (const auto &peer : mJobRequests) {
+        auto it = peer.second.begin();
+        while (it != peer.second.end()) {
+            for (const auto &job : mPendingCompileJobs) {
+                if (job->compiler->sha256() == message->sha256()) {
+                    send(job);
+                    return;
+                }
+            }
+            if (
         }
     }
+    for (
+
 
     if (mOptions.rescheduleTimeout > 0) {
         const uint64_t threshold = Rct::monoMs() + mOptions.rescheduleTimeout;
@@ -286,8 +302,10 @@ void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std
 
     assert(mPeersByConnection.contains(connection));
     mPeersByConnection[connection]->announced.remove(message->sha256());
+    error() << "Refused jobs for host" << mPendingCompileJobs.size() << mPreprocessingJobs.size() << mPendingPreprocessJobs.size();
     connection->send(JobMessage(message->id(), message->sha256())); // tell connection that we don't have jobs for this compiler
 }
+
 
 void Daemon::handleJobMessage(const JobMessage *message, const std::shared_ptr<Connection> &connection)
 {
@@ -733,6 +751,7 @@ void Daemon::announceJobs(Peer *peer)
 
     if (peer) {
         if (peer->announced != jobs) {
+            error() << "Announcing to peer" << peer->announced << "=>" << jobs;
             const JobAnnouncementMessage msg(jobs);
             peer->announced = jobs;
             peer->connection->send(msg);
@@ -743,6 +762,7 @@ void Daemon::announceJobs(Peer *peer)
         std::shared_ptr<JobAnnouncementMessage> msg;
         for (auto peer : mPeersByConnection) {
             if (peer.second->announced != jobs) {
+                error() << "Announcing to peer" << peer.second->announced << "=>" << jobs;
                 peer.second->announced = jobs;
                 if (!msg)
                     msg.reset(new JobAnnouncementMessage(jobs));
@@ -792,6 +812,7 @@ void Daemon::fetchJobs(Peer *peer)
         }
     }
     if (!candidates.isEmpty()) {
+        error() << "About to request" << available << "jobs";
         int idx = 0;
         assert(candidates.size() <= available);
         while (available-- > 0) {
@@ -858,6 +879,7 @@ void Daemon::onConnectionDisconnected(Connection *conn)
     if (Peer *peer = mPeersByConnection.take(c)) {
         error() << "Lost peer" << peer->host.friendlyName;
         mPeersByHost.remove(peer->host);
+        mJobRequests.remove(c);
         auto remoteData = mJobsByRemoteConnection.take(c);
         if (remoteData) {
             for (const auto &remoteJob : remoteData->byJob) {
@@ -958,10 +980,12 @@ void Daemon::addJob(Job::Flag flag, const std::shared_ptr<Job> &job)
                 }
                 if (!found) {
                     mAnnouncementDirty = true;
+                    error() << "We're dirty again";
                 }
             }
         }
         job->position = mPendingCompileJobs.insert(mPendingCompileJobs.end(), job);
+        error() << "pendingCompiling is now" << mPendingCompileJobs.size() << job->arguments->sourceFile();
         break;
     case Job::Compiling:
         job->position = mCompilingJobs.insert(mCompilingJobs.end(), job);

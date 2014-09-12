@@ -136,6 +136,8 @@ private:
     std::shared_ptr<Job> removeRemoteJob(const std::shared_ptr<Connection> &conn, uint64_t id);
     uint64_t removeRemoteJob(const std::shared_ptr<Connection> &conn, const std::shared_ptr<Job> &job);
 
+    void respondToJobRequests();
+
     LinkedList<std::shared_ptr<Job> > mPendingPreprocessJobs, mPendingCompileJobs, mPreprocessingJobs, mCompilingJobs;
 
     Hash<std::shared_ptr<Connection>, std::shared_ptr<Job> > mJobsByLocalConnection;
@@ -152,6 +154,16 @@ private:
     Hash<uint64_t, uint64_t> mOutstandingJobRequests; // jobid: Rct::monoMs
     Timer mOutstandingJobRequestsTimer;
     uint64_t mNextJobId;
+
+    struct JobRequest {
+        uint64_t id;
+        String sha256;
+        int attempts;
+        enum { MaxAttempts = 5 };
+    };
+
+    Hash<std::shared_ptr<Connection>, List<JobRequest> > mJobRequests;
+    Timer mJobRequestTimer;
 
     Hash<Host, Peer*> mPeersByHost;
     Hash<std::shared_ptr<Connection>, Peer*> mPeersByConnection;
