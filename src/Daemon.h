@@ -68,7 +68,7 @@ private:
         {
         }
 
-        uint64_t received;
+        unsigned long long received;
         std::shared_ptr<CompilerArgs> arguments;
         Path resolvedCompiler;
         List<String> environ;
