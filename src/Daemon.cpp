@@ -291,7 +291,8 @@ void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std
 
 void Daemon::handleJobMessage(const JobMessage *message, const std::shared_ptr<Connection> &connection)
 {
-    warning() << "Got job message" << message->sha256() << message->preprocessed().size();
+    warning() << "Got job message" << message->sha256()
+              << (message->args() ? message->args()->sourceFile() : Path());
     if (message->preprocessed().isEmpty()) {
         Peer *peer = mPeersByConnection.value(connection);
         assert(peer);
@@ -889,6 +890,7 @@ void Daemon::handleConsoleCommand(const String &string)
             { &mPreprocessingJobs, "Compiling" },
             { 0, 0 }
         };
+        printf("Job capacity: %d Preprocessing capacity: %d\n", mOptions.jobCount, mOptions.preprocessCount);
         for (int i=0; lists[i].list; ++i) {
             if (!lists[i].list->isEmpty()) {
                 printf("%s: %d\n", lists[i].name, lists[i].list->size());
