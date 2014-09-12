@@ -1003,7 +1003,7 @@ void Daemon::removeJob(const std::shared_ptr<Job> &job)
 
 void Daemon::sendJobDiscardedMessage(const std::shared_ptr<Job> &job)
 {
-    assert(job->remoteConnections.isEmpty());
+    assert(!job->remoteConnections.isEmpty());
     assert(job->flags & Job::Remote);
     for (const auto &remoteConnection : job->remoteConnections) {
         if (uint64_t id = removeRemoteJob(remoteConnection, job)) {
