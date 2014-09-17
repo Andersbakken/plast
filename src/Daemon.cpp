@@ -230,6 +230,9 @@ void Daemon::handleJobRequestMessage(const std::shared_ptr<JobRequestMessage> &m
 
 void Daemon::processPendingJobRequests()
 {
+    if (mPendingJobRequests.isEmpty())
+        return;
+
     // not a reference since the reference would get invalidated inside removeJob
     auto send = [this](const std::shared_ptr<Connection> &connection,
                        const std::shared_ptr<JobRequestMessage> &message,
