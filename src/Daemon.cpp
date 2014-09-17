@@ -125,43 +125,43 @@ bool Daemon::init(const Options &options)
     return true;
 }
 
-void Daemon::onNewMessage(Message *message, Connection *conn)
+void Daemon::onNewMessage(const std::shared_ptr<Message> &message, Connection *conn)
 {
     auto connection = conn->shared_from_this();
     switch (message->messageId()) {
     case Plast::ClientJobMessageId:
-        handleClientJobMessage(static_cast<ClientJobMessage*>(message), connection);
+        handleClientJobMessage(std::static_pointer_cast<ClientJobMessage>(message), connection);
         break;
     case Plast::QuitMessageId:
         warning() << "Quitting by request";
         EventLoop::eventLoop()->quit();
         break;
     case Plast::JobAnnouncementMessageId:
-        handleJobAnnouncementMessage(static_cast<JobAnnouncementMessage*>(message), connection);
+        handleJobAnnouncementMessage(std::static_pointer_cast<JobAnnouncementMessage>(message), connection);
         break;
     case Plast::CompilerMessageId:
-        handleCompilerMessage(static_cast<CompilerMessage*>(message), connection);
+        handleCompilerMessage(std::static_pointer_cast<CompilerMessage>(message), connection);
         break;
     case Plast::CompilerRequestMessageId:
-        handleCompilerRequestMessage(static_cast<CompilerRequestMessage*>(message), connection);
+        handleCompilerRequestMessage(std::static_pointer_cast<CompilerRequestMessage>(message), connection);
         break;
     case Plast::JobRequestMessageId:
-        handleJobRequestMessage(static_cast<JobRequestMessage*>(message), connection);
+        handleJobRequestMessage(std::static_pointer_cast<JobRequestMessage>(message), connection);
         break;
     case Plast::JobMessageId:
-        handleJobMessage(static_cast<JobMessage*>(message), connection);
+        handleJobMessage(std::static_pointer_cast<JobMessage>(message), connection);
         break;
     case Plast::JobResponseMessageId:
-        handleJobResponseMessage(static_cast<JobResponseMessage*>(message), connection);
+        handleJobResponseMessage(std::static_pointer_cast<JobResponseMessage>(message), connection);
         break;
     case Plast::JobDiscardedMessageId:
-        handleJobDiscardedMessage(static_cast<JobDiscardedMessage*>(message), connection);
+        handleJobDiscardedMessage(std::static_pointer_cast<JobDiscardedMessage>(message), connection);
         break;
     case Plast::DaemonListMessageId:
-        handleDaemonListMessage(static_cast<DaemonListMessage*>(message), connection);
+        handleDaemonListMessage(std::static_pointer_cast<DaemonListMessage>(message), connection);
         break;
     case Plast::HandshakeMessageId:
-        handleHandshakeMessage(static_cast<HandshakeMessage*>(message), connection);
+        handleHandshakeMessage(std::static_pointer_cast<HandshakeMessage>(message), connection);
         break;
     default:
         error() << "Unexpected message" << message->messageId();
@@ -169,7 +169,8 @@ void Daemon::onNewMessage(Message *message, Connection *conn)
     }
 }
 
-void Daemon::handleClientJobMessage(const ClientJobMessage *msg, const std::shared_ptr<Connection> &conn)
+void Daemon::handleClientJobMessage(const std::shared_ptr<ClientJobMessage> &msg,
+                                    const std::shared_ptr<Connection> &conn)
 {
     debug() << "Got local job" << msg->arguments() << msg->cwd();
 
@@ -195,7 +196,8 @@ void Daemon::handleClientJobMessage(const ClientJobMessage *msg, const std::shar
     startJobs();
 }
 
-void Daemon::handleCompilerMessage(const CompilerMessage *message, const std::shared_ptr<Connection> &connection)
+void Daemon::handleCompilerMessage(const std::shared_ptr<CompilerMessage> &message,
+                                   const std::shared_ptr<Connection> &connection)
 {
     assert(message->isValid());
     if (mCompilerCache->create(message->compiler().fileName(), message->sha256(), message->contents())) {
@@ -203,7 +205,8 @@ void Daemon::handleCompilerMessage(const CompilerMessage *message, const std::sh
     }
 }
 
-void Daemon::handleCompilerRequestMessage(const CompilerRequestMessage *message, const std::shared_ptr<Connection> &connection)
+void Daemon::handleCompilerRequestMessage(const std::shared_ptr<CompilerRequestMessage> &message,
+                                          const std::shared_ptr<Connection> &connection)
 {
     std::shared_ptr<Compiler> compiler = mCompilerCache->findBySha256(message->sha256());
     if (compiler) {
@@ -217,7 +220,8 @@ void Daemon::handleCompilerRequestMessage(const CompilerRequestMessage *message,
     }
 }
 
-void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std::shared_ptr<Connection> &connection)
+void Daemon::handleJobRequestMessage(const std::shared_ptr<JobRequestMessage> &message,
+                                     const std::shared_ptr<Connection> &connection)
 {
     auto send = [connection, message, this](std::shared_ptr<Job> job) { // not a reference since the reference would get invalidated inside removeJob
         debug() << "Sending job to" << connection->client()->peerString() << job->arguments->commandLine << job->arguments->sourceFiles();
@@ -289,7 +293,8 @@ void Daemon::handleJobRequestMessage(const JobRequestMessage *message, const std
     connection->send(JobMessage(message->id(), message->sha256())); // tell connection that we don't have jobs for this compiler
 }
 
-void Daemon::handleJobMessage(const JobMessage *message, const std::shared_ptr<Connection> &connection)
+void Daemon::handleJobMessage(const std::shared_ptr<JobMessage> &message,
+                              const std::shared_ptr<Connection> &connection)
 {
     warning() << "Got job message" << message->sha256()
               << (message->args() ? message->args()->sourceFile() : Path());
@@ -320,7 +325,8 @@ void Daemon::handleJobMessage(const JobMessage *message, const std::shared_ptr<C
     startJobs();
 }
 
-void Daemon::handleJobResponseMessage(const JobResponseMessage *message, const std::shared_ptr<Connection> &connection)
+void Daemon::handleJobResponseMessage(const std::shared_ptr<JobResponseMessage> &message,
+                                      const std::shared_ptr<Connection> &connection)
 {
     debug() << "Got job response" << message->id() << message->objectFileContents().size();
 
@@ -347,7 +353,8 @@ void Daemon::handleJobResponseMessage(const JobResponseMessage *message, const s
         sendJobDiscardedMessage(job);
 }
 
-void Daemon::handleJobDiscardedMessage(const JobDiscardedMessage *message, const std::shared_ptr<Connection> &connection)
+void Daemon::handleJobDiscardedMessage(const std::shared_ptr<JobDiscardedMessage> &message,
+                                       const std::shared_ptr<Connection> &connection)
 {
     auto job = removeRemoteJob(connection, message->id());
     if (job) {
@@ -359,7 +366,8 @@ void Daemon::handleJobDiscardedMessage(const JobDiscardedMessage *message, const
     }
 }
 
-void Daemon::handleDaemonListMessage(const DaemonListMessage *message, const std::shared_ptr<Connection> &connection)
+void Daemon::handleDaemonListMessage(const std::shared_ptr<DaemonListMessage> &message,
+                                     const std::shared_ptr<Connection> &connection)
 {
     warning() << "Got daemon-list" << message->hosts().size();
     for (const auto &host : message->hosts()) {
@@ -384,7 +392,8 @@ void Daemon::handleDaemonListMessage(const DaemonListMessage *message, const std
     }
 }
 
-void Daemon::handleHandshakeMessage(const HandshakeMessage *message, const std::shared_ptr<Connection> &connection)
+void Daemon::handleHandshakeMessage(const std::shared_ptr<HandshakeMessage> &message,
+                                    const std::shared_ptr<Connection> &connection)
 {
     Peer *&peer = mPeersByConnection[connection];
     Host host { connection->client()->peerName(), message->port(), message->friendlyName() };
@@ -397,7 +406,8 @@ void Daemon::handleHandshakeMessage(const HandshakeMessage *message, const std::
     warning() << "Got handshake from" << peer->host.friendlyName;
 }
 
-void Daemon::handleJobAnnouncementMessage(const JobAnnouncementMessage *message, const std::shared_ptr<Connection> &connection)
+void Daemon::handleJobAnnouncementMessage(const std::shared_ptr<JobAnnouncementMessage> &message,
+                                          const std::shared_ptr<Connection> &connection)
 {
     warning() << "Got announcement" << message->announcement() << "from" << connection->client()->peerString();
     Peer *peer = mPeersByConnection.value(connection);

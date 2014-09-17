@@ -105,10 +105,10 @@ int main(int argc, char** argv)
 
     int returnValue = -1;
     Connection connection;
-    connection.newMessage().connect([&returnValue, loop](Message *message, Connection *conn) {
+    connection.newMessage().connect([&returnValue, loop](const std::shared_ptr<Message> &message, Connection *conn) {
             switch (message->messageId()) {
             case ClientJobResponseMessage::MessageId: {
-                ClientJobResponseMessage *msg = static_cast<ClientJobResponseMessage*>(message);
+                std::shared_ptr<ClientJobResponseMessage> msg = std::static_pointer_cast<ClientJobResponseMessage>(message);
                 for (const auto &output : msg->output()) {
                     switch (output.type) {
                     case Output::StdOut:

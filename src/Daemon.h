@@ -107,17 +107,27 @@ private:
     void handleConsoleCompletion(const String &string, int start, int end, String &common, List<String> &candidates);
 
     void restartServerTimer();
-    void onNewMessage(Message *message, Connection *connection);
-    void handleClientJobMessage(const ClientJobMessage *msg, const std::shared_ptr<Connection> &conn);
-    void handleCompilerMessage(const CompilerMessage* message, const std::shared_ptr<Connection> &connection);
-    void handleCompilerRequestMessage(const CompilerRequestMessage *message, const std::shared_ptr<Connection> &connection);
-    void handleJobRequestMessage(const JobRequestMessage *message, const std::shared_ptr<Connection> &connection);
-    void handleJobMessage(const JobMessage *message, const std::shared_ptr<Connection> &connection);
-    void handleJobResponseMessage(const JobResponseMessage *message, const std::shared_ptr<Connection> &connection);
-    void handleJobDiscardedMessage(const JobDiscardedMessage *message, const std::shared_ptr<Connection> &connection);
-    void handleDaemonListMessage(const DaemonListMessage *message, const std::shared_ptr<Connection> &connection);
-    void handleHandshakeMessage(const HandshakeMessage *message, const std::shared_ptr<Connection> &connection);
-    void handleJobAnnouncementMessage(const JobAnnouncementMessage *message, const std::shared_ptr<Connection> &connection);
+    void onNewMessage(const std::shared_ptr<Message> &message, Connection *connection);
+    void handleClientJobMessage(const std::shared_ptr<ClientJobMessage> &msg,
+                                const std::shared_ptr<Connection> &conn);
+    void handleCompilerMessage(const std::shared_ptr<CompilerMessage> &message,
+                               const std::shared_ptr<Connection> &connection);
+    void handleCompilerRequestMessage(const std::shared_ptr<CompilerRequestMessage> &message,
+                                      const std::shared_ptr<Connection> &connection);
+    void handleJobRequestMessage(const std::shared_ptr<JobRequestMessage> &message,
+                                 const std::shared_ptr<Connection> &connection);
+    void handleJobMessage(const std::shared_ptr<JobMessage> &message,
+                          const std::shared_ptr<Connection> &connection);
+    void handleJobResponseMessage(const std::shared_ptr<JobResponseMessage> &message,
+                                  const std::shared_ptr<Connection> &connection);
+    void handleJobDiscardedMessage(const std::shared_ptr<JobDiscardedMessage> &message,
+                                   const std::shared_ptr<Connection> &connection);
+    void handleDaemonListMessage(const std::shared_ptr<DaemonListMessage> &message,
+                                 const std::shared_ptr<Connection> &connection);
+    void handleHandshakeMessage(const std::shared_ptr<HandshakeMessage> &message,
+                                const std::shared_ptr<Connection> &connection);
+    void handleJobAnnouncementMessage(const std::shared_ptr<JobAnnouncementMessage> &message,
+                                      const std::shared_ptr<Connection> &connection);
     void reconnectToServer();
     void onDiscoverySocketReadyRead(Buffer &&data, const String &ip);
 

@@ -82,7 +82,7 @@ bool Server::init()
         return false;
     }
 
-    mHttpServer.newConnection().connect([this](SocketServer*) {
+    mHttpServer.newConnection().connect([this](SocketServer *) {
             while (std::shared_ptr<SocketClient> client = mHttpServer.nextConnection()) {
                 mHttpClients[client] = HttpConnection({ String(), false });
                 EventLoop::eventLoop()->callLater([client, this] {
@@ -98,7 +98,7 @@ bool Server::init()
             }
         });
 
-    mServer.newConnection().connect([this](SocketServer*) {
+    mServer.newConnection().connect([this](SocketServer *) {
             while (true) {
                 auto socket = mServer.nextConnection();
                 if (!socket)
@@ -114,7 +114,7 @@ bool Server::init()
     return true;
 }
 
-void Server::onNewMessage(Message *message, Connection *connection)
+void Server::onNewMessage(const std::shared_ptr<Message> &message, Connection *connection)
 {
     switch (message->messageId()) {
     case Plast::QuitMessageId:
@@ -130,7 +130,7 @@ void Server::onNewMessage(Message *message, Connection *connection)
                 nodes.insert(it.second->host);
             }
         }
-        HandshakeMessage *handShake = static_cast<HandshakeMessage*>(message);
+        std::shared_ptr<HandshakeMessage> handShake = std::static_pointer_cast<HandshakeMessage>(message);
         String peerName = connection->client()->peerName();
         if (peerName == "127.0.0.1")
             peerName = handShake->friendlyName();
@@ -140,7 +140,7 @@ void Server::onNewMessage(Message *message, Connection *connection)
         break; }
     case Plast::MonitorMessageId:
         if (!mHttpClients.isEmpty()) {
-            MonitorMessage *monitor = static_cast<MonitorMessage*>(message);
+            std::shared_ptr<MonitorMessage> monitor = std::static_pointer_cast<MonitorMessage>(message);
             const String &msg = monitor->message();
             error() << mHttpClients.size();
             for (const auto &client : mHttpClients) {

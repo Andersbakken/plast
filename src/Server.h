@@ -35,7 +35,7 @@ private:
     void handleConsoleCommand(const String &string);
     void handleConsoleCompletion(const String& string, int start, int end, String& common, List<String>& candidates);
 
-    void onNewMessage(Message *message, Connection *connection);
+    void onNewMessage(const std::shared_ptr<Message> &message, Connection *connection);
     void onConnectionDisconnected(Connection *connection);
     void onHttpClientReadyRead(const std::shared_ptr<SocketClient> &socket, Buffer &&buffer);
 
