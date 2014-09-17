@@ -55,6 +55,7 @@ Daemon::Daemon()
     mServerConnection->error().connect(std::bind(&Daemon::restartServerTimer, this));
 
     mServerTimer.timeout().connect(std::bind(&Daemon::reconnectToServer, this));
+    mProcessPendingJobRequestsTimer.timeout().connect(std::bind(&Daemon::processPendingJobRequests, this));
     mOutstandingJobRequestsTimer.timeout().connect(std::bind(&Daemon::checkJobRequestTimeout, this));
 }
 
@@ -223,7 +224,16 @@ void Daemon::handleCompilerRequestMessage(const std::shared_ptr<CompilerRequestM
 void Daemon::handleJobRequestMessage(const std::shared_ptr<JobRequestMessage> &message,
                                      const std::shared_ptr<Connection> &connection)
 {
-    auto send = [connection, message, this](std::shared_ptr<Job> job) { // not a reference since the reference would get invalidated inside removeJob
+    mPendingJobRequests.append(new PendingJobRequest{ Rct::monoMs(), connection, message });
+    processPendingJobRequests();
+}
+
+void Daemon::processPendingJobRequests()
+{
+    // not a reference since the reference would get invalidated inside removeJob
+    auto send = [this](const std::shared_ptr<Connection> &connection,
+                       const std::shared_ptr<JobRequestMessage> &message,
+                       std::shared_ptr<Job> job) {
         debug() << "Sending job to" << connection->client()->peerString() << job->arguments->commandLine << job->arguments->sourceFiles();
         if (connection->send(JobMessage(message->id(), message->sha256(), job->preprocessed, job->arguments))) {
             warning() << "Sent job to" << connection->client()->peerString();
@@ -255,42 +265,85 @@ void Daemon::handleJobRequestMessage(const std::shared_ptr<JobRequestMessage> &m
         return false;
     };
 
-    error() << "Got job request" << message->id() << message->sha256();
-    for (const auto &job : mPendingCompileJobs) {
-        if (job->compiler->sha256() == message->sha256()) {
-            send(job);
-            return;
+    Hash<String, List<std::shared_ptr<Job> > > compileJobs;
+
+    // error() << "Got job request" << message->id() << message->sha256();
+    for (const auto &job : mPendingCompileJobs)
+        compileJobs[job->compiler->sha256()].append(job);
+    Set<String> preprocessingJobs;
+
+    for (const auto &job : mPreprocessingJobs) {
+        if (preprocessingJobs.insert(job->compiler->sha256())
+            && preprocessingJobs.size() == mCompilerCache->count()) {
+            break;
         }
     }
 
-    if (mOptions.rescheduleTimeout > 0) {
-        const uint64_t threshold = Rct::monoMs() + mOptions.rescheduleTimeout;
-        for (const auto &job : mCompilingJobs) {
-            if (!job->process && job->compiler->sha256() == message->sha256()) {
-                bool reschedule = true;
-                for (const auto &remoteConn : job->remoteConnections) {
-                    const auto &remoteData = mJobsByRemoteConnection[remoteConn];
-                    if (remoteData) {
-                        const uint64_t id = remoteData->byJob.value(job);
-                        if (id) {
-                            const auto &remoteJob = remoteData->byId[id];
-                            if (remoteJob.startTime < threshold) {
-                                reschedule = false;
-                                break;
+    auto next = [this](PendingJobRequest *&req) {
+        PendingJobRequest *tmp = req;
+        req = req->next;
+        mPendingJobRequests.remove(tmp);
+        delete tmp;
+    };
+
+    PendingJobRequest *request = mPendingJobRequests.first();
+    const uint64_t now = Rct::monoMs();
+    while (request) {
+        std::shared_ptr<JobRequestMessage> &message = request->message;
+        std::shared_ptr<Connection> &connection = request->connection;
+        List<std::shared_ptr<Job> > &jobs = compileJobs[message->sha256()];
+        if (!jobs.isEmpty()) {
+            std::shared_ptr<Job> job = jobs.takeFirst();
+            send(connection, message, job);
+            next(request);
+            continue;
+        }
+
+        if (request->received + 10000 >= now) {
+            assert(mPeersByConnection.contains(connection));
+            mPeersByConnection[connection]->announced.remove(message->sha256());
+            connection->send(JobMessage(message->id(), message->sha256()));
+            // tell connection that we don't have jobs for this compiler
+            next(request);
+            continue;
+        }
+
+        if (mOptions.rescheduleTimeout > 0) {
+            const uint64_t threshold = Rct::monoMs() + mOptions.rescheduleTimeout;
+            for (const auto &job : mCompilingJobs) {
+                if (!job->process && job->compiler->sha256() == message->sha256()) {
+                    bool reschedule = true;
+                    for (const auto &remoteConn : job->remoteConnections) {
+                        const auto &remoteData = mJobsByRemoteConnection[remoteConn];
+                        if (remoteData) {
+                            const uint64_t id = remoteData->byJob.value(job);
+                            if (id) {
+                                const auto &remoteJob = remoteData->byId[id];
+                                if (remoteJob.startTime < threshold) {
+                                    reschedule = false;
+                                    break;
+                                }
                             }
                         }
                     }
-                }
-                if (reschedule) {
-                    send(job);
+                    if (reschedule) {
+                        send(connection, message, job);
+                        next(request);
+                        continue;
+                    }
                 }
             }
         }
+        if (preprocessingJobs.contains(message->sha256())) {
+            request = request->next;
+        } else {
+            assert(mPeersByConnection.contains(connection));
+            mPeersByConnection[connection]->announced.remove(message->sha256());
+            connection->send(JobMessage(message->id(), message->sha256()));
+            // tell connection that we don't have jobs for this compiler
+            next(request);
+        }
     }
-
-    assert(mPeersByConnection.contains(connection));
-    mPeersByConnection[connection]->announced.remove(message->sha256());
-    connection->send(JobMessage(message->id(), message->sha256())); // tell connection that we don't have jobs for this compiler
 }
 
 void Daemon::handleJobMessage(const std::shared_ptr<JobMessage> &message,
@@ -955,6 +1008,8 @@ void Daemon::addJob(Job::Flag flag, const std::shared_ptr<Job> &job)
         break;
     case Job::Preprocessing:
         job->position = mPreprocessingJobs.insert(mPreprocessingJobs.end(), job);
+        if (!mProcessPendingJobRequestsTimer.isRunning())
+            mProcessPendingJobRequestsTimer.restart(0, Timer::SingleShot);
         break;
     case Job::PendingCompiling:
         if (!(job->flags & Job::FromRemote)) {
@@ -969,6 +1024,8 @@ void Daemon::addJob(Job::Flag flag, const std::shared_ptr<Job> &job)
                 if (!found) {
                     mAnnouncementDirty = true;
                 }
+                if (!mProcessPendingJobRequestsTimer.isRunning())
+                    mProcessPendingJobRequestsTimer.restart(0, Timer::SingleShot);
             }
         }
         job->position = mPendingCompileJobs.insert(mPendingCompileJobs.end(), job);

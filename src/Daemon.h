@@ -22,6 +22,7 @@
 #include <rct/Timer.h>
 #include <rct/Hash.h>
 #include <rct/Process.h>
+#include <rct/EmbeddedLinkedList.h>
 #include "Plast.h"
 #include "Console.h"
 #include "ClientJobMessage.h"
@@ -145,8 +146,17 @@ private:
     void sendJobDiscardedMessage(const std::shared_ptr<Job> &job);
     std::shared_ptr<Job> removeRemoteJob(const std::shared_ptr<Connection> &conn, uint64_t id);
     uint64_t removeRemoteJob(const std::shared_ptr<Connection> &conn, const std::shared_ptr<Job> &job);
+    void processPendingJobRequests();
 
     LinkedList<std::shared_ptr<Job> > mPendingPreprocessJobs, mPendingCompileJobs, mPreprocessingJobs, mCompilingJobs;
+
+    struct PendingJobRequest {
+        uint64_t received;
+        std::shared_ptr<Connection> connection;
+        std::shared_ptr<JobRequestMessage> message;
+        PendingJobRequest *next, *prev;
+    };
+    EmbeddedLinkedList<PendingJobRequest*> mPendingJobRequests;
 
     Hash<std::shared_ptr<Connection>, std::shared_ptr<Job> > mJobsByLocalConnection;
     struct RemoteJob {
@@ -174,6 +184,7 @@ private:
     std::shared_ptr<Connection> mServerConnection;
     std::shared_ptr<CompilerCache> mCompilerCache;
     String mHostName;
+    Timer mProcessPendingJobRequestsTimer;
     Timer mServerTimer;
 };
 
