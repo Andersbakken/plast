@@ -48,7 +48,7 @@ Daemon::Daemon()
     mServerConnection->newMessage().connect(std::bind(&Daemon::onNewMessage, this, std::placeholders::_1, std::placeholders::_2));
     mServerConnection->disconnected().connect(std::bind(&Daemon::restartServerTimer, this));
     mServerConnection->connected().connect([this](Connection *conn) {
-            warning() << "Connected to" << conn->client()->peerString() << "Sending handshake";
+            warning() << "Connected to server:" << conn->client()->peerString() << "Sending handshake";
             sendHandshake(mServerConnection);
         });
 
@@ -192,6 +192,7 @@ void Daemon::handleClientJobMessage(const std::shared_ptr<ClientJobMessage> &msg
         }
     }
     std::shared_ptr<Job> job = std::make_shared<Job>(msg->arguments(), resolvedCompiler, env, msg->cwd(), compiler, conn);
+    error() << "Got local job" << job->arguments->sourceFile();
     mJobsByLocalConnection[conn] = job;
     addJob(Job::PendingPreprocessing, job);
     startJobs();
@@ -239,7 +240,7 @@ void Daemon::processPendingJobRequests()
                        std::shared_ptr<Job> job) {
         debug() << "Sending job to" << connection->client()->peerString() << job->arguments->commandLine << job->arguments->sourceFiles();
         if (connection->send(JobMessage(message->id(), message->sha256(), job->preprocessed, job->arguments))) {
-            warning() << "Sent job to" << connection->client()->peerString();
+            error() << "Sent job to" << connection->client()->peerString();
             job->remoteConnections.insert(connection);
             std::shared_ptr<RemoteData> &data = mJobsByRemoteConnection[connection];
             if (!data)
@@ -384,7 +385,7 @@ void Daemon::handleJobMessage(const std::shared_ptr<JobMessage> &message,
 void Daemon::handleJobResponseMessage(const std::shared_ptr<JobResponseMessage> &message,
                                       const std::shared_ptr<Connection> &connection)
 {
-    debug() << "Got job response" << message->id() << message->objectFileContents().size();
+    error() << "Got job response" << message->id() << message->objectFileContents().size();
 
     std::shared_ptr<Job> job = removeRemoteJob(connection, message->id());
     if (!job) {
@@ -431,17 +432,17 @@ void Daemon::handleDaemonListMessage(const std::shared_ptr<DaemonListMessage> &m
         Peer *&peer = mPeersByHost[host];
         if (!peer) {
             auto conn = std::make_shared<Connection>();
-            warning() << "Trying to connect to" << host.address << host.port;
+            warning() << "Trying to connect to peer:" << host.address << host.port;
             if (conn->connectTcp(host.address, host.port)) {
                 peer = new Peer({ conn, host });
                 mPeersByConnection[conn] = peer;
                 mConnections.insert(conn);
                 conn->disconnected().connect(std::bind(&Daemon::onConnectionDisconnected, this, std::placeholders::_1));
                 conn->newMessage().connect(std::bind(&Daemon::onNewMessage, this, std::placeholders::_1, std::placeholders::_2));
-                warning() << "Sending handshake to" << host.toString();
+                warning() << "Sending handshake to peer:" << host.toString();
                 sendHandshake(conn);
             } else {
-                error() << "Failed to connect to host" << host.toString();
+                error() << "Failed to connect to pper" << host.toString();
                 mPeersByHost.remove(host);
             }
         }
@@ -487,7 +488,7 @@ void Daemon::reconnectToServer()
         }
     }
 
-    warning() << "Trying to connect" << mOptions.serverHost << mOptions.serverPort;
+    warning() << "Trying to connect to server:" << mOptions.serverHost << mOptions.serverPort;
     if (mOptions.serverHost.isEmpty()) {
         mDiscoverySocket->writeTo("255.255.255.255", mOptions.discoveryPort, "?");
     } else if (!mServerConnection->connectTcp(mOptions.serverHost, mOptions.serverPort)) {
@@ -916,6 +917,8 @@ void Daemon::onConnectionDisconnected(Connection *conn)
             job->process->kill();
         }
         removeJob(job);
+        if (job.use_count() > 1)
+            error() << "job.use_count() ==" << job.use_count();
         assert(job.use_count() == 1);
         // ### need to tell remote connection that we're no longer interested
         return;
