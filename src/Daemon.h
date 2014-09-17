@@ -135,6 +135,8 @@ private:
     void onConnectionDisconnected(Connection *conn);
     void onCompileProcessFinished(Process *process);
     void startJobs();
+    int startPreprocessingJobs();
+    int startCompileJobs();
     void sendHandshake(const std::shared_ptr<Connection> &conn);
     void announceJobs(Peer *peer = 0);
     void fetchJobs(Peer *peer = 0);
