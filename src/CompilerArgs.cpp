@@ -98,6 +98,7 @@ std::shared_ptr<CompilerArgs> CompilerArgs::create(const List<String> &args)
                         const Flag flag;
                     } static const suffixes[] = {
                         { "C", CPlusPlus },
+                        { "cc", CPlusPlus },
                         { "cxx", CPlusPlus },
                         { "cpp", CPlusPlus },
                         { "c", C },
