@@ -96,11 +96,13 @@ int main(int argc, char** argv)
     std::shared_ptr<CompilerArgs> args = CompilerArgs::create(commandLine);
     if (!args || args->mode != CompilerArgs::Compile || !checkFlags(args->flags)) {
         const char *reason = "noargs";
-        if (args)
-            if (args->mode != CompilerArgs::Compile)
+        if (args) {
+            if (args->mode != CompilerArgs::Compile) {
                 reason = "not compile";
-            else
+            } else {
                 reason = "bad flags";
+            }
+        }
 
         return buildLocal(resolvedCompiler, argc, argv, reason);
     }
