@@ -306,6 +306,7 @@ void Daemon::processPendingJobRequests()
         if (request->received + 10000 >= now) {
             assert(mPeersByConnection.contains(connection));
             mPeersByConnection[connection]->announced.remove(message->sha256());
+            printf("[%s:%d]: ------------ REMOVING ANNOUNCED FROM peer\n", __FILE__, __LINE__); fflush(stdout);
             connection->send(JobMessage(message->id(), message->sha256()));
             // tell connection that we don't have jobs for this compiler
             next(request);
@@ -359,6 +360,7 @@ void Daemon::handleJobMessage(const std::shared_ptr<JobMessage> &message,
         Peer *peer = mPeersByConnection.value(connection);
         assert(peer);
         peer->jobsAvailable.remove(message->sha256());
+        printf("[%s:%d]: REMOVING JOBS FROM jobsAvailable\n", __FILE__, __LINE__); fflush(stdout);
     } else {
         auto compiler = mCompilerCache->findBySha256(message->sha256());
         assert(compiler);
@@ -472,6 +474,7 @@ void Daemon::handleJobAnnouncementMessage(const std::shared_ptr<JobAnnouncementM
     Peer *peer = mPeersByConnection.value(connection);
     assert(peer);
     peer->jobsAvailable = message->announcement();
+    printf("[%s:%d]: SETTING jobsAvailable to %d\n", __FILE__, __LINE__, peer->jobsAvailable.size()); fflush(stdout);
     fetchJobs(peer);
 }
 
@@ -840,6 +843,7 @@ void Daemon::announceJobs(Peer *peer)
 
     if (peer) {
         if (peer->announced != jobs) {
+            printf("[%s:%d]: UPDATING PEERS ANNOUNCED %d\n", __FILE__, __LINE__, jobs.size()); fflush(stdout);
             const JobAnnouncementMessage msg(jobs);
             peer->announced = jobs;
             peer->connection->send(msg);
@@ -851,6 +855,7 @@ void Daemon::announceJobs(Peer *peer)
         for (auto peer : mPeersByConnection) {
             if (peer.second->announced != jobs) {
                 peer.second->announced = jobs;
+                printf("[%s:%d]: UPDATING PEERS ANNOUNCED %d\n", __FILE__, __LINE__, jobs.size()); fflush(stdout);
                 if (!msg)
                     msg.reset(new JobAnnouncementMessage(jobs));
                 peer.first->send(*msg);
