@@ -159,5 +159,5 @@ int main(int argc, char** argv)
     loop->exec();
     Console::cleanup();
     cleanupLogging();
-    return 0;
+    return daemon.exitCode();
 }

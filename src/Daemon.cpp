@@ -18,7 +18,7 @@
 
 Daemon::Daemon()
     : mNextJobId(1), mExplicitServer(false), mServerConnection(std::make_shared<Connection>()),
-      mHostName(Rct::hostName())
+      mHostName(Rct::hostName()), mExitCode(0)
 {
     Console::init("plastd> ",
                   std::bind(&Daemon::handleConsoleCommand, this, std::placeholders::_1),
@@ -134,6 +134,8 @@ void Daemon::onNewMessage(const std::shared_ptr<Message> &message, Connection *c
         break;
     case Plast::QuitMessageId:
         warning() << "Quitting by request";
+        if (static_cast<const QuitMessage*>(message.get())->mode() == QuitMessage::Rebuild)
+            mExitCode = 200;
         EventLoop::eventLoop()->quit();
         break;
     case Plast::JobAnnouncementMessageId:

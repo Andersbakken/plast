@@ -23,9 +23,21 @@ class QuitMessage : public Message
 {
 public:
     enum { MessageId = Plast::QuitMessageId };
-    QuitMessage()
-        : Message(MessageId)
+    enum Mode {
+        Quit,
+        Rebuild
+    };
+    QuitMessage(Mode mode = Quit)
+        : Message(MessageId), mMode(mode)
     {}
+
+    Mode mode() const { return mMode; }
+
+    virtual void encode(Serializer &serializer) const { serializer << static_cast<uint8_t>(mMode); }
+    virtual void decode(Deserializer &deserializer) { uint8_t mode; deserializer >> mode; mMode = static_cast<Mode>(mode); }
+
+private:
+    Mode mMode;
 };
 
 

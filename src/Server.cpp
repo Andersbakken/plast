@@ -178,13 +178,19 @@ void Server::handleConsoleCommand(const String &string)
         }
     } else if (str == "quit") {
         EventLoop::eventLoop()->quit();
+    } else if (str == "rebuild") {
+        const QuitMessage msg(QuitMessage::Rebuild);
+        for (const auto &hosts : mNodes) {
+            hosts.first->send(msg);
+        }
+        // should server quit?
     }
 }
 
 void Server::handleConsoleCompletion(const String& string, int, int,
                                      String &common, List<String> &candidates)
 {
-    static const List<String> cands = List<String>() << "hosts" << "quit";
+    static const List<String> cands = List<String>() << "hosts" << "quit" << "rebuild";
     auto res = Console::tryComplete(string, cands);
     // error() << res.text << res.candidates;
     common = res.text;

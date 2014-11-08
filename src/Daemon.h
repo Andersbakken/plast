@@ -60,6 +60,7 @@ public:
     bool init(const Options &options);
     const Options &options() const { return mOptions; }
 
+    uint8_t exitCode() const { return mExitCode; }
 private:
     struct Job {
         Job(const std::shared_ptr<CompilerArgs> &args, const Path &resolved, const List<String> &env, const Path &dir,
@@ -178,6 +179,8 @@ private:
     std::shared_ptr<CompilerCache> mCompilerCache;
     String mHostName;
     Timer mServerTimer;
+
+    uint8_t mExitCode;
 };
 
 #endif
