@@ -302,7 +302,8 @@ void Daemon::handleJobResponseMessage(const std::shared_ptr<JobResponseMessage> 
         error() << "Couldn't find job with this id" << message->id();
         return;
     }
-    warning() << "Got job response" << message->id() << job->arguments->sourceFile();
+    error() << "Got job response" << message->id() << job->arguments->sourceFile()
+            << (Rct::monoMs() - job->received);
 
     Path output = job->arguments->output();
     if (!output.startsWith('/'))
