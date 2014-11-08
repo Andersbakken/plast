@@ -23,7 +23,12 @@
 
 static inline int buildLocal(const Path &path, int argc, char **argv)
 {
-    debug() << "Building local" << path;
+    List<String> foo;
+    for (int i=0; i<10; ++i) {
+        foo << argv[i];
+    }
+
+    error() << "Building local" << String::join(foo, ' ');
     if (!path.isEmpty()) {
         argv[0] = strdup(path.constData());
         execv(path.constData(), argv); // execute without resolving symlink
