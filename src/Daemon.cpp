@@ -574,6 +574,8 @@ int Daemon::startPreprocessingJobs()
 
 int Daemon::startCompileJobs()
 {
+    if (!mPreprocessJobsByProcess.isEmpty())
+        return 0;
     auto startJob = [this](const std::shared_ptr<Job> &job) {
         List<String> args = job->arguments->commandLine.mid(1);
         assert(job->arguments->sourceFileIndexes.size() == 1);
@@ -661,7 +663,7 @@ int Daemon::startCompileJobs()
                 mCompileJobsByProcess[process]->output.append(Output({Output::StdErr, process->readAllStdErr()}));
             });
 
-        if (!job->process->start(job->resolvedCompiler, args, job->environ)) {
+        if (!job->process->start(String("/usr/bin/") + job->resolvedCompiler.fileName(), args, job->environ)) {
             delete job->process;
             removeJob(job);
             job->localConnection->send(ClientJobResponseMessage());
