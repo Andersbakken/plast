@@ -56,6 +56,7 @@ static inline int conf(const char *env, int defaultValue)
 static inline bool checkFlags(unsigned int flags)
 {
     if (flags & (CompilerArgs::StdinInput|CompilerArgs::MultiSource)) {
+        printf("[%s:%d]: if (flags & (CompilerArgs::StdinInput|CompilerArgs::MultiSource)) {\n", __FILE__, __LINE__); fflush(stdout);
         return false;
     }
     switch (flags & CompilerArgs::LanguageMask) {
@@ -67,6 +68,7 @@ static inline bool checkFlags(unsigned int flags)
     default:
         break;
     }
+    printf("[%s:%d]: return false;\n", __FILE__, __LINE__); fflush(stdout);
     return false;
 }
 
@@ -93,7 +95,14 @@ int main(int argc, char** argv)
 
     std::shared_ptr<CompilerArgs> args = CompilerArgs::create(commandLine);
     if (!args || args->mode != CompilerArgs::Compile || !checkFlags(args->flags)) {
-        return buildLocal(resolvedCompiler, argc, argv, "flags or args or something");
+        const char *reason = "noargs";
+        if (args)
+            if (args->mode != CompilerArgs::Compile)
+                reason = "not compile";
+            else
+                reason = "bad flags";
+
+        return buildLocal(resolvedCompiler, argc, argv, reason);
     }
 
     Plast::init();
