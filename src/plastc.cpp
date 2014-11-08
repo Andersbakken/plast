@@ -24,7 +24,7 @@
 static inline int buildLocal(const Path &path, int argc, char **argv, const char *reason)
 {
     List<String> foo;
-    for (int i=0; i<10; ++i) {
+    for (int i=0; i<argc; ++i) {
         foo << argv[i];
     }
 
