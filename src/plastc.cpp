@@ -21,14 +21,14 @@
 #include "CompilerArgs.h"
 #include "Compiler.h"
 
-static inline int buildLocal(const Path &path, int argc, char **argv)
+static inline int buildLocal(const Path &path, int argc, char **argv, const char *reason)
 {
     List<String> foo;
     for (int i=0; i<10; ++i) {
         foo << argv[i];
     }
 
-    error() << "Building local" << String::join(foo, ' ');
+    error() << "Building local" << reason << String::join(foo, ' ');
     if (!path.isEmpty()) {
         argv[0] = strdup(path.constData());
         execv(path.constData(), argv); // execute without resolving symlink
@@ -93,7 +93,7 @@ int main(int argc, char** argv)
 
     std::shared_ptr<CompilerArgs> args = CompilerArgs::create(commandLine);
     if (!args || args->mode != CompilerArgs::Compile || !checkFlags(args->flags)) {
-        return buildLocal(resolvedCompiler, argc, argv);
+        return buildLocal(resolvedCompiler, argc, argv, "flags or args or something");
     }
 
     Plast::init();
@@ -139,7 +139,7 @@ int main(int argc, char** argv)
     connection.disconnected().connect(std::bind([](){ EventLoop::eventLoop()->quit(); }));
     if (!connection.connectUnix(socket, connectTimeout)) {
         debug() << "Couldn't connect to daemon";
-        return buildLocal(resolvedCompiler, argc, argv);
+        return buildLocal(resolvedCompiler, argc, argv, "connection failure");
     }
 
     List<String> env;
@@ -149,7 +149,7 @@ int main(int argc, char** argv)
     connection.send(ClientJobMessage(args, resolvedCompiler, env, Path::pwd()));
     loop->exec(jobTimeout);
     if (returnValue == -1) {
-        return buildLocal(resolvedCompiler, argc, argv);
+        return buildLocal(resolvedCompiler, argc, argv, "Compile failure");
     }
     return returnValue;
 }
