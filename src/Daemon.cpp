@@ -748,6 +748,9 @@ void Daemon::announceJobs(Peer *peer)
         }
     }
 
+    if (jobs.isEmpty())
+        return;
+
     warning("Announcing jobs to %d peers. %s. Pending compile: %d Pending preprocess: %d",
             peer ? 1 : mPeersByConnection.size(), Log::toString(jobs).constData(),
             mPendingCompileJobs.size(), mPendingPreprocessJobs.size());
