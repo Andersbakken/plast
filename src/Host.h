@@ -18,6 +18,10 @@
 
 struct Host
 {
+    Host(const String &a = String(), uint16_t p = 0, const String &f = String())
+        : address(a), port(p), friendlyName(f)
+    {}
+
     String address;
     uint16_t port;
     String friendlyName;

@@ -17,8 +17,8 @@
 #include <rct/SHA256.h>
 
 Daemon::Daemon()
-    : mAnnouncementDirty(false), mNextJobId(1), mExplicitServer(false),
-      mServerConnection(std::make_shared<Connection>()), mHostName(Rct::hostName())
+    : mNextJobId(1), mExplicitServer(false), mServerConnection(std::make_shared<Connection>()),
+      mHostName(Rct::hostName())
 {
     Console::init("plastd> ",
                   std::bind(&Daemon::handleConsoleCommand, this, std::placeholders::_1),
@@ -55,7 +55,6 @@ Daemon::Daemon()
     mServerConnection->error().connect(std::bind(&Daemon::restartServerTimer, this));
 
     mServerTimer.timeout().connect(std::bind(&Daemon::reconnectToServer, this));
-    mProcessPendingJobRequestsTimer.timeout().connect(std::bind(&Daemon::processPendingJobRequests, this));
     mOutstandingJobRequestsTimer.timeout().connect(std::bind(&Daemon::checkJobRequestTimeout, this));
 }
 
@@ -225,130 +224,42 @@ void Daemon::handleCompilerRequestMessage(const std::shared_ptr<CompilerRequestM
 void Daemon::handleJobRequestMessage(const std::shared_ptr<JobRequestMessage> &message,
                                      const std::shared_ptr<Connection> &connection)
 {
-    mPendingJobRequests.append(new PendingJobRequest{ Rct::monoMs(), connection, message });
-    processPendingJobRequests();
-}
-
-void Daemon::processPendingJobRequests()
-{
-    if (mPendingJobRequests.isEmpty())
-        return;
-
-    // not a reference since the reference would get invalidated inside removeJob
-    auto send = [this](const std::shared_ptr<Connection> &connection,
-                       const std::shared_ptr<JobRequestMessage> &message,
-                       std::shared_ptr<Job> job) {
-        debug() << "Sending job to" << connection->client()->peerString() << job->arguments->commandLine << job->arguments->sourceFiles();
-        if (connection->send(JobMessage(message->id(), message->sha256(), job->preprocessed, job->arguments))) {
-            error() << "Sent job" << job->arguments->sourceFile() << "to" << connection->client()->peerString();
-            job->remoteConnections.insert(connection);
-            std::shared_ptr<RemoteData> &data = mJobsByRemoteConnection[connection];
-            if (!data)
-                data.reset(new RemoteData);
-            data->byJob[job] = message->id();
-            RemoteJob &remoteJob = data->byId[message->id()];
-            remoteJob.job = job;
-            remoteJob.startTime = Rct::monoMs();
-            // data->byId[message->id()] = { job, Rct::monoMs() };
-            job->flags |= Job::Remote;
-            removeJob(job);
-            addJob(Job::Compiling, job);
-            sendMonitorMessage(String::format<128>("{\"type\":\"start\","
-                                                   "\"host\":\"%s:%d\","
-                                                   "\"peer\":\"%s\","
-                                                   "\"path\":\"%s\","
-                                                   "\"arguments\":\"%s\","
-                                                   "\"id\":\"%p\"}",
-                                                   mHostName.constData(), mOptions.port,
-                                                   connection->client()->peerString().constData(),
-                                                   job->arguments->sourceFile().constData(),
-                                                   String::join(job->arguments->commandLine, ' ').constData(),
-                                                   job.get()));
-            return true;
-        }
-        return false;
-    };
-
-    Hash<String, List<std::shared_ptr<Job> > > compileJobs;
-
-    // error() << "Got job request" << message->id() << message->sha256();
-    for (const auto &job : mPendingCompileJobs)
-        compileJobs[job->compiler->sha256()].append(job);
-    Set<String> preprocessingJobs;
-
-    for (const auto &job : mPreprocessingJobs) {
-        if (preprocessingJobs.insert(job->compiler->sha256())
-            && preprocessingJobs.size() == mCompilerCache->count()) {
-            break;
-        }
-    }
-
-    auto next = [this](PendingJobRequest *&req) {
-        PendingJobRequest *tmp = req;
-        req = req->next;
-        mPendingJobRequests.remove(tmp);
-        delete tmp;
-    };
-
-    PendingJobRequest *request = mPendingJobRequests.first();
-    const uint64_t now = Rct::monoMs();
-    while (request) {
-        std::shared_ptr<JobRequestMessage> &message = request->message;
-        std::shared_ptr<Connection> &connection = request->connection;
-        List<std::shared_ptr<Job> > &jobs = compileJobs[message->sha256()];
-        if (!jobs.isEmpty()) {
-            std::shared_ptr<Job> job = jobs.takeFirst();
-            send(connection, message, job);
-            next(request);
-            continue;
-        }
-
-        if (request->received + 10000 >= now) {
-            assert(mPeersByConnection.contains(connection));
-            mPeersByConnection[connection]->announced.remove(message->sha256());
-            error("[%s:%d]: ------------ REMOVING ANNOUNCED FROM peer", __FILE__, __LINE__);
-            connection->send(JobMessage(message->id(), message->sha256()));
-            // tell connection that we don't have jobs for this compiler
-            next(request);
-            continue;
-        }
-
-        if (mOptions.rescheduleTimeout > 0) {
-            const uint64_t threshold = Rct::monoMs() + mOptions.rescheduleTimeout;
-            for (const auto &job : mCompilingJobs) {
-                if (!job->process && job->compiler->sha256() == message->sha256()) {
-                    bool reschedule = true;
-                    for (const auto &remoteConn : job->remoteConnections) {
-                        const auto &remoteData = mJobsByRemoteConnection[remoteConn];
-                        if (remoteData) {
-                            const uint64_t id = remoteData->byJob.value(job);
-                            if (id) {
-                                const auto &remoteJob = remoteData->byId[id];
-                                if (remoteJob.startTime < threshold) {
-                                    reschedule = false;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if (reschedule) {
-                        send(connection, message, job);
-                        next(request);
-                        continue;
-                    }
-                }
+    for (auto job : mPendingCompileJobs) {
+        if (!(job->flags & Job::FromRemote) && job->compiler->sha256() == message->sha256()) {
+            debug() << "Sending job to" << connection->client()->peerString() << job->arguments->commandLine << job->arguments->sourceFiles();
+            if (connection->send(JobMessage(message->id(), message->sha256(), job->preprocessed, job->arguments))) {
+                error() << "Sent job" << job->arguments->sourceFile() << "to" << connection->client()->peerString();
+                job->remoteConnections.insert(connection);
+                std::shared_ptr<RemoteData> &data = mJobsByRemoteConnection[connection];
+                if (!data)
+                    data.reset(new RemoteData);
+                data->byJob[job] = message->id();
+                RemoteJob &remoteJob = data->byId[message->id()];
+                remoteJob.job = job;
+                remoteJob.startTime = Rct::monoMs();
+                // data->byId[message->id()] = { job, Rct::monoMs() };
+                job->flags |= Job::Remote;
+                removeJob(job);
+                addJob(Job::Compiling, job);
+                sendMonitorMessage(String::format<128>("{\"type\":\"start\","
+                                                       "\"host\":\"%s:%d\","
+                                                       "\"peer\":\"%s\","
+                                                       "\"path\":\"%s\","
+                                                       "\"arguments\":\"%s\","
+                                                       "\"id\":\"%p\"}",
+                                                       mHostName.constData(), mOptions.port,
+                                                       connection->client()->peerString().constData(),
+                                                       job->arguments->sourceFile().constData(),
+                                                       String::join(job->arguments->commandLine, ' ').constData(),
+                                                       job.get()));
+            } else {
+#warning what to do here?
             }
-        }
-        if (preprocessingJobs.contains(message->sha256())) {
-            request = request->next;
-        } else {
-            assert(mPeersByConnection.contains(connection));
-            mPeersByConnection[connection]->announced.remove(message->sha256());
-            connection->send(JobMessage(message->id(), message->sha256()));
-            // tell connection that we don't have jobs for this compiler
-            next(request);
+            return;
         }
     }
+    assert(mPeersByConnection.contains(connection));
+    connection->send(JobMessage(message->id(), message->sha256()));
 }
 
 void Daemon::handleJobMessage(const std::shared_ptr<JobMessage> &message,
@@ -642,8 +553,8 @@ int Daemon::startPreprocessingJobs()
                         mJobsByLocalConnection.remove(job->localConnection);
                     } else {
                         job->preprocessed = proc->readAllStdOut();
-                        warning() << "Preprocessing finished" << compiler << args << job->preprocessed.size();
                         addJob(Job::PendingCompiling, job);
+                        error() << "Preprocessing finished" << job->arguments->sourceFiles().first() << mPendingCompileJobs.size();
                         startJobs();
                     }
                 }
@@ -823,10 +734,10 @@ void Daemon::startJobs()
 void Daemon::announceJobs(Peer *peer)
 {
     // debug() << "Announcing" << mPeersByConnection.size();
-    if (!mAnnouncementDirty || mPeersByConnection.isEmpty()) {
+    assert(!peer || mPeersByConnection.contains(peer->connection));
+    if (mPeersByConnection.isEmpty()) {
         return;
     }
-    mAnnouncementDirty = false;
 
     const int shaCount = mCompilerCache->count();
     Set<String> jobs;
@@ -841,27 +752,15 @@ void Daemon::announceJobs(Peer *peer)
             peer ? 1 : mPeersByConnection.size(), Log::toString(jobs).constData(),
             mPendingCompileJobs.size(), mPendingPreprocessJobs.size());
 
+    const JobAnnouncementMessage msg(jobs);
     if (peer) {
-        if (peer->announced != jobs) {
-            error("[%s:%d]: UPDATING PEERS ANNOUNCED %d", __FILE__, __LINE__, jobs.size());
-            const JobAnnouncementMessage msg(jobs);
-            peer->announced = jobs;
-            peer->connection->send(msg);
-        } else {
-            warning() << peer->host.toString() << "already knows about these jobs";
-        }
+        peer->connection->send(msg);
+        warning() << "Announcing" << jobs.size() << "to" << peer->host.toString();
+#warning handle send error?
     } else {
-        std::shared_ptr<JobAnnouncementMessage> msg;
         for (auto peer : mPeersByConnection) {
-            if (peer.second->announced != jobs) {
-                peer.second->announced = jobs;
-                error("[%s:%d]: UPDATING PEERS ANNOUNCED %d", __FILE__, __LINE__, jobs.size());
-                if (!msg)
-                    msg.reset(new JobAnnouncementMessage(jobs));
-                peer.first->send(*msg);
-            } else {
-                warning() << peer.second->host.toString() << "already knows about these jobs";
-            }
+            peer.first->send(msg);
+            warning() << "Announcing" << jobs.size() << "to" << peer.second->host.toString();
         }
     }
 }
@@ -908,9 +807,9 @@ void Daemon::fetchJobs(Peer *peer)
         assert(candidates.size() <= available);
         while (available-- > 0) {
             auto cand = candidates.at(idx++ % candidates.size());
-            mOutstandingJobRequests[mNextJobId] = Rct::monoMs();
             warning() << "Requesting a job" << mNextJobId << "from" << cand.first->host.toString();
-            cand.first->connection->send(JobRequestMessage(mNextJobId++, cand.second));
+            if (cand.first->connection->send(JobRequestMessage(mNextJobId++, cand.second)))
+                mOutstandingJobRequests[mNextJobId] = Rct::monoMs();
         }
         checkJobRequestTimeout();
     }
@@ -1056,26 +955,8 @@ void Daemon::addJob(Job::Flag flag, const std::shared_ptr<Job> &job)
         break;
     case Job::Preprocessing:
         job->position = mPreprocessingJobs.insert(mPreprocessingJobs.end(), job);
-        if (!mProcessPendingJobRequestsTimer.isRunning())
-            mProcessPendingJobRequestsTimer.restart(0, Timer::SingleShot);
         break;
     case Job::PendingCompiling:
-        if (!(job->flags & Job::FromRemote)) {
-            if (!mAnnouncementDirty) {
-                bool found = false;
-                for (const auto &otherJob : mPendingCompileJobs) {
-                    if (!(otherJob->flags & Job::FromRemote) && otherJob->compiler == job->compiler) {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
-                    mAnnouncementDirty = true;
-                }
-                if (!mProcessPendingJobRequestsTimer.isRunning())
-                    mProcessPendingJobRequestsTimer.restart(0, Timer::SingleShot);
-            }
-        }
         job->position = mPendingCompileJobs.insert(mPendingCompileJobs.end(), job);
         break;
     case Job::Compiling:
