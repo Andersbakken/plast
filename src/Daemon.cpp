@@ -271,7 +271,6 @@ void Daemon::handleJobMessage(const std::shared_ptr<JobMessage> &message,
         Peer *peer = mPeersByConnection.value(connection);
         assert(peer);
         peer->jobsAvailable.remove(message->sha256());
-        error("[%s:%d]: REMOVING JOBS FROM jobsAvailable", __FILE__, __LINE__);
     } else {
         auto compiler = mCompilerCache->findBySha256(message->sha256());
         assert(compiler);
@@ -385,7 +384,6 @@ void Daemon::handleJobAnnouncementMessage(const std::shared_ptr<JobAnnouncementM
     Peer *peer = mPeersByConnection.value(connection);
     assert(peer);
     peer->jobsAvailable = message->announcement();
-    error("[%s:%d]: SETTING jobsAvailable to %d", __FILE__, __LINE__, peer->jobsAvailable.size());
     fetchJobs(peer);
 }
 
@@ -486,8 +484,11 @@ void Daemon::onCompileProcessFinished(Process *process)
             job->localConnection->send(ClientJobResponseMessage(process->returnCode(), job->output));
             mJobsByLocalConnection.remove(job->localConnection);
             if (job->flags & Job::Remote) {
+                error() << "Remote job finished" << job->arguments->sourceFiles().first() << Rct::monoMs() - job->received;
                 assert(!job->remoteConnections.isEmpty());
                 sendJobDiscardedMessage(job);
+            } else {
+                error() << "Local job finished" << job->arguments->sourceFiles().first() << Rct::monoMs() - job->received;
             }
         }
 
