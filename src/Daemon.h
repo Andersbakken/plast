@@ -88,7 +88,6 @@ private:
             StateMask = Preprocessing|PendingPreprocessing|PendingCompiling|Compiling
         };
 
-        Path tempObjectFile;
         String preprocessed;
         uint32_t flags;
         uint64_t id; // only set if flags & FromRemote
