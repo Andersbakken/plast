@@ -6,9 +6,12 @@ while [ true ]; do
         break
     fi
     pushd "$(git rev-parse --git-dir)/.."
-    git stash
+    if git stash; then
+        stashed=1
     git pull
-    git stash pop
+    if [ -n "$stashed" ]; then
+        git stash pop
+    fi
     if [ -e "build.ninja" ]; then
         ninja
     else
