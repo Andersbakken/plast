@@ -30,7 +30,8 @@ public:
     Path path() const { return mPath; }
     std::shared_ptr<Compiler> findByPath(const Path &executable) const { return mByPath.value(executable); }
     std::shared_ptr<Compiler> findBySha256(const String &sha256) const { return mBySha256.value(sha256); }
-    std::shared_ptr<Compiler> create(const Path &executable);
+    std::shared_ptr<Compiler> createLocal(const Path &executable);
+    std::shared_ptr<Compiler> createEmpty(const String &sha256);
     std::shared_ptr<Compiler> create(const Path &executable, const String &sha256, const Hash<Path, std::pair<String, uint32_t> > &files);
     int count() const { return mBySha256.size(); }
     String dump() const;

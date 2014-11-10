@@ -192,7 +192,7 @@ void Daemon::handleClientJobMessage(const std::shared_ptr<ClientJobMessage> &msg
     std::shared_ptr<Compiler> compiler = mCompilerCache->findByPath(resolvedCompiler);
     if (!compiler) {
         warning() << "I haven't seen this compiler before. Lets see if we can load it" << resolvedCompiler;
-        compiler = mCompilerCache->create(resolvedCompiler);
+        compiler = mCompilerCache->createLocal(resolvedCompiler);
         if (!compiler) {
             warning() << "Can't create compiler for" << resolvedCompiler;
             conn->send(ClientJobResponseMessage());
@@ -822,8 +822,7 @@ void Daemon::fetchJobs(Peer *peer)
         return;
 
     List<std::pair<Peer *, String> > candidates;
-    Set<String> compilerRequests;
-    auto process = [&candidates, &compilerRequests, this, available](Peer *p) {
+    auto process = [&candidates, this, available](Peer *p) {
         for (const String &sha : p->jobsAvailable) {
             warning() << p->host.toString() << "has jobs for" << sha;
             if (auto compiler = mCompilerCache->findBySha256(sha)) {
@@ -834,12 +833,11 @@ void Daemon::fetchJobs(Peer *peer)
                         return false;
                     assert(candidates.size() < available);
                 } else {
-                    debug() << "We want no part of that compiler. It's BAD for us";
+                    debug() << "We want no part of that compiler. It's BAD for us or it's being fetched";
                 }
             } else {
-                if (compilerRequests.insert(sha)) {
-                    p->connection->send(CompilerRequestMessage(sha));
-                }
+                mCompilerCache->createEmpty(sha);
+                p->connection->send(CompilerRequestMessage(sha));
             }
         }
         return true;

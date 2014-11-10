@@ -102,7 +102,16 @@ static inline bool printProgName(const Path &path, const String &prog, Set<Path>
     return true;
 }
 
-std::shared_ptr<Compiler> CompilerCache::create(const Path &compiler)
+std::shared_ptr<Compiler> CompilerCache::createEmpty(const String &sha256)
+{
+    assert(!mBySha256.contains(sha256));
+    std::shared_ptr<Compiler> compiler(new Compiler);
+    compiler->mSha256 = sha256;
+    mBySha256[sha256] = compiler;
+    return compiler;
+}
+
+std::shared_ptr<Compiler> CompilerCache::createLocal(const Path &compiler)
 {
     assert(!mByPath.contains(compiler));
     std::shared_ptr<Compiler> &c = mByPath[compiler];
