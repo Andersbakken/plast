@@ -8,6 +8,7 @@ while [ true ]; do
     pushd "$(git rev-parse --git-dir)/.."
     if git stash; then
         stashed=1
+    fi
     git pull
     if [ -n "$stashed" ]; then
         git stash pop
