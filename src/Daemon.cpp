@@ -833,8 +833,9 @@ void Daemon::checkJobRequestTimeout()
 
 void Daemon::sendMonitorMessage(const MonitorMessage &message)
 {
-    if (mServerConnection)
+    if (mServerConnection) {
         mServerConnection->send(MonitorMessage(message));
+    }
 }
 
 void Daemon::onConnectionDisconnected(Connection *conn)
