@@ -53,6 +53,10 @@ static Path::VisitResult visitor(const Path &path, void *)
     for (const Path &file : path.files(Path::File)) {
         Path::rm(file);
     }
+    for (const Path &dir : path.files(Path::Directory)) {
+        visitor(dir, 0);
+    }
+
     rmdir(path.constData());
     return Path::Continue;
 }
@@ -120,7 +124,8 @@ int main(int argc, char** argv)
     };
 
     if (Config::isEnabled("clear-cache") && !options.cacheDir.isSameFile(Path::home())) {
-        options.cacheDir.visit(::visitor, 0);
+        const Path compilers = options.cacheDir + "/compilers/";
+        compilers.visit(::visitor, 0);
         warning() << "Cleared cache dir" << options.cacheDir;
     }
 
