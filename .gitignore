@@ -22,3 +22,4 @@
 /bin/gcc
 /bin/.gdb_history
 /bin/cc
+/compile_commands.json
