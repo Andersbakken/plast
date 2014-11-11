@@ -17,22 +17,77 @@
 #define MonitorMessage_h
 
 #include <rct/Message.h>
+#include "Host.h"
 #include "Plast.h"
 
 class MonitorMessage : public Message
 {
 public:
     enum { MessageId = Plast::MonitorMessageId };
-    MonitorMessage(const String &message = String())
-        : Message(MessageId), mMessage(message)
+    enum Type {
+        Start,
+        End
+    };
+    MonitorMessage(Type type = Start, const Host &peer = Host(), void *id = 0,
+                   const String &arguments = String(), const Path &path = Path())
+        : Message(MessageId), mType(type), mPeer(peer), mId(id), mArguments(arguments), mPath(path)
     {
     }
 
-    const String &message() const { return mMessage; }
-    virtual void encode(Serializer &serializer) const { serializer << mMessage; }
-    virtual void decode(Deserializer &deserializer) { deserializer >> mMessage; }
+    static MonitorMessage createStart(const Host &peer, void *id, const String &arguments, const Path &path)
+    {
+        return MonitorMessage(Start, peer, id, arguments, path);
+    }
+
+    static MonitorMessage createEnd(void *id)
+    {
+        return MonitorMessage(End, Host(), id);
+    }
+
+    Type type() const { return mType; }
+    Host peer() const { return mPeer; }
+    void *id() const { return mId; }
+    String arguments() const { return mArguments; }
+    Path path() const { return mPath; }
+
+    String toString() const
+    {
+        switch (mType) {
+        case Start:
+            return String::format<128>("{\"type\":\"start\","
+                                       "\"peer\":\"%s\","
+                                       "\"path\":\"%s\","
+                                       "\"arguments\":\"%s\","
+                                       "\"id\":\"%p\"}",
+                                       mPeer.toString().constData(),
+                                       mPath.constData(),
+                                       mArguments.constData(),
+                                       mId);
+        case End:
+            return String::format<128>("{\"type\":\"end\",\"id\":\"%p\"}", mId);
+        }
+        return String();
+    }
+
+    virtual void encode(Serializer &serializer) const
+    {
+        serializer << static_cast<uint8_t>(mType) << mPeer
+                   << mArguments << reinterpret_cast<unsigned long long>(mId) << mPath;
+    }
+    virtual void decode(Deserializer &deserializer)
+    {
+        uint8_t type;
+        unsigned long long id;
+        deserializer >> type >> mPeer >> mArguments >> id >> mPath;
+        mType = static_cast<Type>(type);
+        mId = reinterpret_cast<void*>(mId);
+    }
 private:
-    String mMessage;
+    Type mType;
+    Host mPeer;
+    void *mId;
+    String mArguments;
+    Path mPath;
 };
 
 #endif

@@ -43,8 +43,9 @@ private:
 
     struct Node {
         Host host;
-        int capacity, jobsSent, jobsReceived;
+        int capacity, jobsSent, jobsReceived, selfJobs;
     };
+    Hash<Host, Node*> mNodesByHost;
     Hash<std::shared_ptr<Connection>, Node*> mNodes;
     std::shared_ptr<SocketClient> mDiscoverySocket;
 

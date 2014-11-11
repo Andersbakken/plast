@@ -243,17 +243,10 @@ void Daemon::handleJobRequestMessage(const std::shared_ptr<JobRequestMessage> &m
                 job->flags |= Job::Remote;
                 removeJob(job);
                 addJob(Job::Compiling, job);
-                sendMonitorMessage(String::format<128>("{\"type\":\"start\","
-                                                       "\"host\":\"%s:%d\","
-                                                       "\"peer\":\"%s\","
-                                                       "\"path\":\"%s\","
-                                                       "\"arguments\":\"%s\","
-                                                       "\"id\":\"%p\"}",
-                                                       mHostName.constData(), mOptions.port,
-                                                       connection->client()->peerString().constData(),
-                                                       job->arguments->sourceFile().constData(),
-                                                       String::join(job->arguments->commandLine, ' ').constData(),
-                                                       job.get()));
+                sendMonitorMessage(MonitorMessage::createStart(mPeersByConnection.value(connection)->host,
+                                                               job.get(),
+                                                               String::join(job->arguments->commandLine, ' '),
+                                                               job->arguments->sourceFile()));
             } else {
 #warning what to do here?
             }
@@ -316,7 +309,7 @@ void Daemon::handleJobResponseMessage(const std::shared_ptr<JobResponseMessage> 
             << message->output();
 #warning do we need to fflush this before notifying plastc?
     removeJob(job);
-    sendMonitorMessage(String::format<128>("{\"type\":\"end\",\"id\":\"%p\"}", job.get()));
+    sendMonitorMessage(MonitorMessage::createEnd(job.get()));
     job->localConnection->send(ClientJobResponseMessage(message->status(), message->output()));
     mJobsByLocalConnection.remove(job->localConnection);
 
@@ -483,7 +476,7 @@ void Daemon::onCompileProcessFinished(Process *process)
             error() << "Sending job response" << process->returnCode() << job->arguments->sourceFile();
             job->source->send(JobResponseMessage(job->id, process->returnCode(), objectFile, job->output));
         } else {
-            sendMonitorMessage(String::format<128>("{\"type\":\"end\",\"id\":\"%p\"}", job.get()));
+            sendMonitorMessage(MonitorMessage::createEnd(job.get()));
 
             job->localConnection->send(ClientJobResponseMessage(process->returnCode(), job->output));
             mJobsByLocalConnection.remove(job->localConnection);
@@ -633,15 +626,9 @@ int Daemon::startCompileJobs()
             close(fd);
             // error() << "Args are now" << args;
         } else {
-            sendMonitorMessage(String::format<128>("{\"type\":\"start\","
-                                                   "\"host\":\"%s:%d\","
-                                                   "\"path\":\"%s\","
-                                                   "\"arguments\":\"%s\","
-                                                   "\"id\":\"%p\"}",
-                                                   mHostName.constData(), mOptions.port,
-                                                   job->arguments->sourceFile().constData(),
-                                                   String::join(job->arguments->commandLine, ' ').constData(),
-                                                   job.get()));
+            sendMonitorMessage(MonitorMessage::createStart(Host(), job.get(),
+                                                           String::join(job->arguments->commandLine, ' '),
+                                                           job->arguments->sourceFile()));
         }
         if (!(job->arguments->flags & CompilerArgs::HasDashO)) {
             args << "-o";
@@ -844,7 +831,7 @@ void Daemon::checkJobRequestTimeout()
 }
 
 
-void Daemon::sendMonitorMessage(const String &message)
+void Daemon::sendMonitorMessage(const MonitorMessage &message)
 {
     if (mServerConnection)
         mServerConnection->send(MonitorMessage(message));
@@ -934,8 +921,6 @@ void Daemon::handleConsoleCommand(const String &string)
             jobs("Announced", peer.second->announced);
             jobs("Available", peer.second->jobsAvailable);
         }
-    } else if (str.startsWith("monitor ")) {
-        sendMonitorMessage(str.mid(8));
     } else if (str == "compilers") {
         printf("%s\n", mCompilerCache->dump().constData());
     }
@@ -944,7 +929,7 @@ void Daemon::handleConsoleCommand(const String &string)
 void Daemon::handleConsoleCompletion(const String &string, int, int,
                                      String &common, List<String> &candidates)
 {
-    static const List<String> cands = List<String>() << "jobs" << "quit" << "peers" << "compilers" << "monitor";
+    static const List<String> cands = List<String>() << "jobs" << "quit" << "peers" << "compilers";
     auto res = Console::tryComplete(string, cands);
     // error() << res.text << res.candidates;
     common = res.text;

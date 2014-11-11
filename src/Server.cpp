@@ -106,7 +106,7 @@ bool Server::init()
                 std::shared_ptr<Connection> conn = std::make_shared<Connection>(socket);
                 conn->disconnected().connect(std::bind(&Server::onConnectionDisconnected, this, std::placeholders::_1));
                 conn->newMessage().connect(std::bind(&Server::onNewMessage, this, std::placeholders::_1, std::placeholders::_2));
-                mNodes[conn] = new Node;
+                mNodes[conn] = new Node { Host(), 0, 0, 0, 0 };
             }
         });
 
@@ -134,23 +134,37 @@ void Server::onNewMessage(const std::shared_ptr<Message> &message, Connection *c
         String peerName = connection->client()->peerName();
         if (peerName == "127.0.0.1")
             peerName = handShake->friendlyName();
-        node = new Node({ Host({ peerName, handShake->port(), handShake->friendlyName()}), handShake->capacity(), 0, 0 });
+        node = new Node({ Host({ peerName, handShake->port(), handShake->friendlyName()}), handShake->capacity(), 0, 0, 0});
+        mNodesByHost[node->host] = node;
         connection->send(DaemonListMessage(nodes));
         error() << "Got handshake from" << connection->client()->peerName() << handShake->friendlyName() << nodes.size();
         break; }
     case Plast::MonitorMessageId:
         if (!mHttpClients.isEmpty()) {
             std::shared_ptr<MonitorMessage> monitor = std::static_pointer_cast<MonitorMessage>(message);
-            const String &msg = monitor->message();
-            error() << mHttpClients.size();
+            String msg;
             for (const auto &client : mHttpClients) {
                 if (client.second.parsed) { // /events
+                    if (msg.isEmpty())
+                        msg = monitor->toString();
                     // error() << "WRITING SHIT" << msg;
                     static const unsigned char *header = reinterpret_cast<const unsigned char*>("data:");
                     static const unsigned char *lflf = reinterpret_cast<const unsigned char*>("\n\n");
                     client.first->write(header, 5);
                     client.first->write(reinterpret_cast<const unsigned char *>(msg.constData()), msg.size());
                     client.first->write(lflf, 2);
+                }
+            }
+            if (monitor->type() == MonitorMessage::Start) {
+                Node *sender = mNodes.value(connection->shared_from_this());
+                assert(sender);
+                if (monitor->peer().port) {
+                    ++sender->jobsSent;
+                    Node *receiver = mNodesByHost.value(monitor->peer());
+                    assert(receiver);
+                    ++receiver->jobsReceived;
+                } else {
+                    ++sender->selfJobs;
                 }
             }
         }
@@ -161,6 +175,8 @@ void Server::onNewMessage(const std::shared_ptr<Message> &message, Connection *c
 void Server::onConnectionDisconnected(Connection *connection)
 {
     Node *node = mNodes.take(connection->shared_from_this());
+    if (node)
+        mNodesByHost.remove(node->host);
     error() << "Lost connection to" << (node ? node->host.toString().constData() : "someone");
     delete node;
 }

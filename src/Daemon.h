@@ -142,7 +142,7 @@ private:
     void announceJobs(Peer *peer = 0);
     void fetchJobs(Peer *peer = 0);
     void checkJobRequestTimeout();
-    void sendMonitorMessage(const String &message);
+    void sendMonitorMessage(const MonitorMessage &message);
 
     void addJob(Job::Flag flag, const std::shared_ptr<Job> &job);
     void removeJob(const std::shared_ptr<Job> &job);
