@@ -475,7 +475,7 @@ void Daemon::onCompileProcessFinished(Process *process)
         if (job->flags & Job::FromRemote) {
             assert(job->source);
             removeRemoteJob(job->source, job->id);
-            const String objectFile = process->readAllStdOut();
+            const String objectFile = job->process->readAllStdOut();
 #warning what to do if file fails to load? Try again locally? Also, what if the job produced other output (separate debug info)
             error() << "Sending job response" << process->returnCode() << job->arguments->sourceFile();
             job->source->send(JobResponseMessage(job->id, process->returnCode(), objectFile, job->output));
