@@ -12,7 +12,7 @@ while [ true ]; do
     if git stash; then
         stashed=1
     fi
-    git pull
+    git pull --recurse-submodules=yes
     if [ -n "$stashed" ]; then
         git stash pop
     fi
