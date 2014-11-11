@@ -651,10 +651,6 @@ int Daemon::startCompileJobs()
             job->process->setCwd(job->cwd);
         }
         job->process->finished().connect(std::bind(&Daemon::onCompileProcessFinished, this, std::placeholders::_1));
-#warning I hope this wont keep the shared_ptr alive for ever more?
-        job->process->readyReadStdOut().connect([this](Process *process) {
-                mCompileJobsByProcess[process]->output.append(Output({Output::StdOut, process->readAllStdOut()}));
-            });
         job->process->readyReadStdErr().connect([this](Process *process) {
                 mCompileJobsByProcess[process]->output.append(Output({Output::StdErr, process->readAllStdErr()}));
             });
