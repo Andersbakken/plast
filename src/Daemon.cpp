@@ -475,8 +475,11 @@ void Daemon::onCompileProcessFinished(Process *process)
         if (job->flags & Job::FromRemote) {
             assert(job->source);
             removeRemoteJob(job->source, job->id);
-            const String objectFile = job->process->readAllStdOut();
+            assert(!job->tempObjectFile.isEmpty());
+            String objectFile;
 #warning what to do if file fails to load? Try again locally? Also, what if the job produced other output (separate debug info)
+            Rct::readFile(job->tempObjectFile, objectFile);
+            Path::rm(job->tempObjectFile);
             error() << "Sending job response" << process->returnCode() << job->arguments->sourceFile();
             job->source->send(JobResponseMessage(job->id, process->returnCode(), objectFile, job->output));
         } else {
@@ -619,7 +622,17 @@ int Daemon::startCompileJobs()
             args[idx + 1] = CompilerArgs::languageName(lang);
         }
         args << "-";
-        if (!(job->flags & Job::FromRemote)) {
+        if (job->flags & Job::FromRemote) {
+            assert(job->tempObjectFile.isEmpty());
+            const Path dir = mOptions.cacheDir + "output/";
+            Path::mkdir(dir, Path::Recursive);
+            job->tempObjectFile = dir + job->arguments->sourceFile().fileName() + ".XXXXXX";
+            const int fd = mkstemp(&job->tempObjectFile[0]);
+            // error() << errno << strerror(errno) << job->tempOutput;
+            assert(fd != -1);
+            close(fd);
+            // error() << "Args are now" << args;
+        } else {
             sendMonitorMessage(String::format<128>("{\"type\":\"start\","
                                                    "\"host\":\"%s:%d\","
                                                    "\"path\":\"%s\","
@@ -635,12 +648,12 @@ int Daemon::startCompileJobs()
             if (!(job->flags & Job::FromRemote)) {
                 args << job->arguments->output();
             } else {
-                args << "/dev/stdout";
+                args << job->tempObjectFile;
             }
         } else if (job->flags & Job::FromRemote) {
             const int idx = args.indexOf("-o");
             assert(idx != -1);
-            args[idx + 1] = "/dev/stdout";
+            args[idx + 1] = job->tempObjectFile;
         }
         debug() << "Starting process" << args;
         assert(!args.isEmpty());
