@@ -15,14 +15,6 @@
 
 #include "Daemon.h"
 #include <rct/SHA256.h>
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-
-#define eintrwrap(VAR, BLOCK)                   \
-    do {                                        \
-        VAR = BLOCK;                            \
-    } while (VAR == -1 && errno == EINTR)
 
 Daemon::Daemon()
     : mNextJobId(1), mExplicitServer(false), mServerConnection(std::make_shared<Connection>()),
@@ -483,14 +475,7 @@ void Daemon::onCompileProcessFinished(Process *process)
         if (job->flags & Job::FromRemote) {
             assert(job->source);
             removeRemoteJob(job->source, job->id);
-            assert(!job->tempObjectFile.isEmpty());
-            assert(job->tempObjectFd != -1);
-            const String objectFile = std::move(job->objectCode);
-            EventLoop::eventLoop()->unregisterSocket(job->tempObjectFd);
-            close(job->tempObjectFd);
-            job->tempObjectFd = -1;
-            Path::rm(job->tempObjectFile);
-
+            const String objectFile = process->readAllStdOut();
 #warning what to do if file fails to load? Try again locally? Also, what if the job produced other output (separate debug info)
             error() << "Sending job response" << process->returnCode() << job->arguments->sourceFile();
             job->source->send(JobResponseMessage(job->id, process->returnCode(), objectFile, job->output));
@@ -634,52 +619,7 @@ int Daemon::startCompileJobs()
             args[idx + 1] = CompilerArgs::languageName(lang);
         }
         args << "-";
-        if (job->flags & Job::FromRemote) {
-            assert(job->tempObjectFile.isEmpty());
-            const Path dir = mOptions.cacheDir + "output/";
-            Path::mkdir(dir, Path::Recursive);
-            // create a fifo with a unique name
-            static unsigned int cnt = 0;
-            int ret;
-            do {
-                job->tempObjectFile = dir + String::format<32>("%s_%u", job->arguments->sourceFile().fileName(), ++cnt);
-                ret = mkfifo(job->tempObjectFile.constData(), 0666);
-                if (ret == -1 && errno != EEXIST) {
-                    // bad
-                    break;
-                }
-            } while (ret == -1);
-            if (ret == -1) {
-                error() << "Unable to make fifo" << errno;
-            } else {
-                job->tempObjectFd = open(job->tempObjectFile.constData(), O_RDONLY);
-                if (job->tempObjectFd == -1) {
-                    error() << "Unable to open fifo" << errno;
-                } else {
-                    int flags;
-                    eintrwrap(flags, fcntl(job->tempObjectFd, F_GETFL, 0));
-                    if (flags != -1) {
-                        int err;
-                        eintrwrap(err, fcntl(job->tempObjectFd, F_SETFL, flags | O_NONBLOCK));
-                    }
-                    EventLoop::eventLoop()->registerSocket(job->tempObjectFd, EventLoop::SocketRead,
-                                                           [job](int fd, unsigned int) {
-                                                               char buf[8192];
-                                                               int rd;
-                                                               do {
-                                                                   rd = read(fd, buf, 8192);
-                                                                   if (rd != -1) {
-                                                                       job->objectCode.append(buf, rd);
-                                                                   }
-                                                               } while (rd > 0);
-                                                               if (rd == -1 && (errno != EAGAIN && errno != EWOULDBLOCK)) {
-                                                                   error() << "Unable to read from fifo" << errno;
-                                                               }
-                                                           });
-                }
-            }
-            // error() << "Args are now" << args;
-        } else {
+        if (!(job->flags & Job::FromRemote)) {
             sendMonitorMessage(String::format<128>("{\"type\":\"start\","
                                                    "\"host\":\"%s:%d\","
                                                    "\"path\":\"%s\","
@@ -695,12 +635,12 @@ int Daemon::startCompileJobs()
             if (!(job->flags & Job::FromRemote)) {
                 args << job->arguments->output();
             } else {
-                args << job->tempObjectFile;
+                args << "/dev/stdout";
             }
         } else if (job->flags & Job::FromRemote) {
             const int idx = args.indexOf("-o");
             assert(idx != -1);
-            args[idx + 1] = job->tempObjectFile;
+            args[idx + 1] = "/dev/stdout";
         }
         debug() << "Starting process" << args;
         assert(!args.isEmpty());
