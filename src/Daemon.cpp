@@ -652,10 +652,16 @@ int Daemon::startCompileJobs()
             if (ret == -1) {
                 error() << "Unable to make fifo" << errno;
             } else {
-                eintrwrap(job->tempObjectFd, open(job->tempObjectFile.constData(), O_RDONLY|O_NONBLOCK));
+                job->tempObjectFd = open(job->tempObjectFile.constData(), O_RDONLY);
                 if (job->tempObjectFd == -1) {
                     error() << "Unable to open fifo" << errno;
                 } else {
+                    int flags;
+                    eintrwrap(flags, fcntl(job->tempObjectFd, F_GETFL, 0));
+                    if (flags != -1) {
+                        int err;
+                        eintrwrap(err, fcntl(job->tempObjectFd, F_SETFL, flags | O_NONBLOCK));
+                    }
                     EventLoop::eventLoop()->registerSocket(job->tempObjectFd, EventLoop::SocketRead,
                                                            [job](int fd, unsigned int) {
                                                                char buf[8192];
