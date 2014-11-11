@@ -1,10 +1,13 @@
 #!/bin/bash
 
 while [ true ]; do
-    `dirname ${BASH_SOURCE[0]}`/plastd $@
+    dir=`dirname ${BASH_SOURCE[0]}`
+    "$dir/plastd" $@
     if [ $? -ne 200 ]; then
         break
     fi
+
+    pushd "$dir"
     pushd "$(git rev-parse --git-dir)/.."
     if git stash; then
         stashed=1
@@ -18,5 +21,6 @@ while [ true ]; do
     else
         make
     fi
+    popd
     popd
 done
