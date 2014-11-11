@@ -79,14 +79,15 @@ CompilerCache::CompilerCache(const Path &path, int cacheSize)
     }
 }
 
-static inline bool printProgName(const Path &path, const String &prog, Set<Path> &files, List<String> &shaList)
+static inline bool printFileName(const Path &path, const String &prog, Set<Path> &files, List<String> &shaList)
 {
     Process process;
-    if (!process.exec(path, List<String>() << "-print-prog-name=" + prog)) {
+    if (!process.exec(path, List<String>() << "-print-file-name=" + prog)) {
         error() << "Couldn't invoke compiler" << path;
         return false;
     }
     const List<String> lines = process.readAllStdOut().split('\n');
+    // error() << path << lines;
     for (const Path &path : lines) {
         if (path.isFile()) {
             shaList.append(path.fileName());
@@ -113,7 +114,6 @@ std::shared_ptr<Compiler> CompilerCache::createEmpty(const String &sha256)
 
 std::shared_ptr<Compiler> CompilerCache::createLocal(const Path &compiler)
 {
-    assert(!mByPath.contains(compiler));
     std::shared_ptr<Compiler> &c = mByPath[compiler];
     const Path resolved = compiler.resolved();
     std::shared_ptr<Compiler> &resolvedCompiler = mByPath[resolved];
@@ -125,9 +125,9 @@ std::shared_ptr<Compiler> CompilerCache::createLocal(const Path &compiler)
     c.reset(new Compiler);
     c->mFiles.insert(compiler);
     List<String> shaList;
-    const char *progNames[] = { "as", "cc1", "cc1plus" };
+    const char *progNames[] = { "as", "cc1", "cc1plus", "liblto_plugin.so", "libopcodes-2.24-system.so", "libbfd-2.24-system.so" };
     for (size_t i=0; i < sizeof(progNames) / sizeof(progNames[0]); ++i) {
-        if (!printProgName(resolved, progNames[i], c->mFiles, shaList)) {
+        if (!printFileName(resolved, progNames[i], c->mFiles, shaList)) {
             c.reset();
             return c;
         }

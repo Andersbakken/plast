@@ -286,6 +286,7 @@ void Daemon::handleJobMessage(const std::shared_ptr<JobMessage> &message,
         assert(compiler);
         List<String> env;
         env << ("PATH=" + compiler->path().parentDir());
+        env << ("LD_LIBRARY_PATH=" + compiler->path().parentDir());
         std::shared_ptr<Job> job(new Job(message->args(), compiler->path(), env, Path(), compiler));
         job->preprocessed = message->preprocessed();
         job->flags |= Job::FromRemote;
