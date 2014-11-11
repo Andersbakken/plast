@@ -668,7 +668,7 @@ int Daemon::startCompileJobs()
                 mCompileJobsByProcess[process]->output.append(Output({Output::StdErr, process->readAllStdErr()}));
             });
 
-        if (!job->process->start(job->resolvedCompiler.fileName(), args, job->environ)) {
+        if (!job->process->start(job->resolvedCompiler, args, job->environ)) {
             delete job->process;
             removeJob(job);
             job->localConnection->send(ClientJobResponseMessage());
