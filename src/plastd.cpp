@@ -124,8 +124,7 @@ int main(int argc, char** argv)
     };
 
     if (Config::isEnabled("clear-cache") && !options.cacheDir.isSameFile(Path::home())) {
-        const Path compilers = options.cacheDir + "/compilers/";
-        compilers.visit(::visitor, 0);
+        options.cacheDir.visit(::visitor, 0);
         warning() << "Cleared cache dir" << options.cacheDir;
     }
 
