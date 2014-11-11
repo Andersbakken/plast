@@ -699,7 +699,11 @@ int Daemon::startCompileJobs()
         debug() << "Starting process" << args;
         assert(!args.isEmpty());
         job->process = new Process;
-        job->process->setCwd(job->cwd);
+        if (job->flags & Job::FromRemote) {
+            job->process->setCwd(job->resolvedCompiler.parentDir());
+        } else {
+            job->process->setCwd(job->cwd);
+        }
         job->process->finished().connect(std::bind(&Daemon::onCompileProcessFinished, this, std::placeholders::_1));
 #warning I hope this wont keep the shared_ptr alive for ever more?
         job->process->readyReadStdOut().connect([this](Process *process) {
@@ -709,7 +713,7 @@ int Daemon::startCompileJobs()
                 mCompileJobsByProcess[process]->output.append(Output({Output::StdErr, process->readAllStdErr()}));
             });
 
-        if (!job->process->start(String("/usr/bin/") + job->resolvedCompiler.fileName(), args, job->environ)) {
+        if (!job->process->start(job->resolvedCompiler.fileName(), args, job->environ)) {
             delete job->process;
             removeJob(job);
             job->localConnection->send(ClientJobResponseMessage());

@@ -194,7 +194,7 @@ std::shared_ptr<Compiler> CompilerCache::createLocal(const Path &compiler)
         bool ok = true;
         error() << root;
         for (const Path &file : c->mFiles) {
-            error() << "Linking" << file << (root + file.fileName());
+            warning() << "Linking" << file << (root + file.fileName());
             if (symlink(file.constData(), (root + file.fileName()).constData())) {
                 error() << "Failed to create symlink" << errno << strerror(errno)
                         << (root + file.fileName()) << file;
