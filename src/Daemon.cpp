@@ -23,24 +23,34 @@ Daemon::Daemon()
     Console::init("plastd> ",
                   std::bind(&Daemon::handleConsoleCommand, this, std::placeholders::_1),
                   std::bind(&Daemon::handleConsoleCompletion, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5));
-    mLocalServer.newConnection().connect([this](SocketServer *server) {
+#ifndef NDEBUG
+    auto onSendFinished = [](Connection *conn) { warning() << conn->client()->peerString() << "send finished"; };
+
+#endif
+    mLocalServer.newConnection().connect([this, onSendFinished](SocketServer *server) {
             while (true) {
                 auto socket = server->nextConnection();
                 if (!socket)
                     break;
                 std::shared_ptr<Connection> conn = std::make_shared<Connection>(socket);
                 mConnections.insert(conn);
+#ifndef NDEBUG
+                conn->sendFinished().connect(onSendFinished);
+#endif
                 conn->disconnected().connect(std::bind(&Daemon::onConnectionDisconnected, this, std::placeholders::_1));
                 conn->newMessage().connect(std::bind(&Daemon::onNewMessage, this, std::placeholders::_1, std::placeholders::_2));
             }
         });
-    mRemoteServer.newConnection().connect([this](SocketServer *server) {
+    mRemoteServer.newConnection().connect([this, onSendFinished](SocketServer *server) {
             while (true) {
                 auto socket = server->nextConnection();
                 if (!socket)
                     break;
                 std::shared_ptr<Connection> conn = std::make_shared<Connection>(socket);
                 mConnections.insert(conn);
+#ifndef NDEBUG
+                conn->sendFinished().connect(onSendFinished);
+#endif
                 conn->disconnected().connect(std::bind(&Daemon::onConnectionDisconnected, this, std::placeholders::_1));
                 conn->newMessage().connect(std::bind(&Daemon::onNewMessage, this, std::placeholders::_1, std::placeholders::_2));
             }
