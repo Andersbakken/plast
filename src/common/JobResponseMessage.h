@@ -24,6 +24,7 @@ public:
     String data() const { return mData; }
     int serial() const { return mSerial; }
 
+    virtual int encodedSize() const;
     virtual void encode(Serializer& serializer) const;
     virtual void decode(Deserializer& deserializer);
 
@@ -33,6 +34,11 @@ private:
     int mSerial;
     String mData;
 };
+
+inline int JobResponseMessage::encodedSize() const
+{
+    return sizeof(int) + sizeof(mId) + sizeof(mSerial) + sizeof(int) + mData.size();
+}
 
 inline void JobResponseMessage::encode(Serializer& serializer) const
 {
