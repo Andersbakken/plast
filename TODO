@@ -1,7 +1,3 @@
-- Job availability needs to be synced between peers
-- Remotes need to limit how many jobs they ask for
-- Remotes need to keep track of how many pending job requests they
-  have outstanding to calculate the size of the request.
 - Race condition with peer discovery if both peers are unknown to each
   other and announces jobs at the same time.
 - process deescalation for compile jobs (sandbox?)
