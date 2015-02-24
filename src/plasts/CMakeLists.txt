@@ -12,3 +12,7 @@ set(SOURCES
 
 add_executable(plasts ${SOURCES})
 target_link_libraries(plasts rct common)
+
+add_custom_command(TARGET plasts POST_BUILD
+  COMMAND ln -sf ${CMAKE_CURRENT_LIST_DIR}/stats ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/stats
+)
