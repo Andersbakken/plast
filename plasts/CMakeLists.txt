@@ -6,9 +6,9 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
 
 set(SOURCES
-    main.cpp
+    plasts.cpp
     Peer.cpp
     Scheduler.cpp)
 
-add_executable(scheduler ${SOURCES})
-target_link_libraries(scheduler rct common)
+add_executable(plasts ${SOURCES})
+target_link_libraries(plasts rct common)

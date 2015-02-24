@@ -5,9 +5,12 @@ set(RCT_STATIC 1)
 include(rct/rct.cmake)
 include(common/common.cmake)
 
-add_subdirectory(scheduler)
-add_subdirectory(daemon)
-add_subdirectory(client)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
+
+add_subdirectory(plasts)
+add_subdirectory(plastd)
+add_subdirectory(plastc)
 
 include(ExternalProject)
 ExternalProject_Add(
@@ -20,8 +23,8 @@ ExternalProject_Add(
   )
 
 add_dependencies(common wslay)
-add_dependencies(scheduler rct common)
-add_dependencies(daemon rct common)
+add_dependencies(plasts rct common)
+add_dependencies(plastd rct common)
 add_dependencies(plastc rct common)
 
 if (EXISTS "rules.ninja")

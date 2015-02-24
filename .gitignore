@@ -10,11 +10,6 @@
 /bin/plasts
 /build.ninja
 build.ninja
-/client/c++
-/client/cc
-/client/g++
-/client/gcc
-client/plastc
 /CMakeCache.txt
 CMakeCache.txt
 CMakeFiles
