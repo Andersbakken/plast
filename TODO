@@ -5,3 +5,5 @@
 - Race condition with peer discovery if both peers are unknown to each
   other and announces jobs at the same time.
 - process deescalation for compile jobs (sandbox?)
+- should use hostname for identifying peers, not ip
+- Should avoid External_Project for wslay
