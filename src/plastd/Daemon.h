@@ -48,6 +48,7 @@ private:
     Remote mRemote;
     Options mOptions;
     int mExitCode;
+    String mHostName;
 
 private:
     static WeakPtr sInstance;

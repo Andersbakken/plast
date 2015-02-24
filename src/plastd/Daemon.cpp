@@ -53,6 +53,14 @@ bool Daemon::init()
     messages::init();
     mLocal.init();
     mRemote.init();
+
+    mHostName.resize(sysconf(_SC_HOST_NAME_MAX));
+    if (gethostname(mHostName.data(), mHostName.size()) == 0) {
+        mHostName.resize(strlen(mHostName.constData()));
+    } else {
+        mHostName.clear();
+    }
+
     return true;
 }
 
@@ -64,16 +72,7 @@ void Daemon::handleJobMessage(const JobMessage::SharedPtr& msg, Connection* conn
 {
     error() << "handling job message";
 
-    String hn;
-    hn.resize(sysconf(_SC_HOST_NAME_MAX));
-#warning cache hn
-    if (gethostname(hn.data(), hn.size()) == 0) {
-        hn.resize(strlen(hn.constData()));
-    } else {
-        hn.clear();
-    }
-
-    Job::SharedPtr job = Job::create(msg->path(), msg->args(), Job::LocalJob, hn);
+    Job::SharedPtr job = Job::create(msg->path(), msg->args(), Job::LocalJob, mHostName);
     Job::WeakPtr weak = job;
     conn->disconnected().connect([weak](Connection *) {
             if (Job::SharedPtr job = weak.lock())
