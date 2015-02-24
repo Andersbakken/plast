@@ -4,6 +4,6 @@
 [submodule "wslay"]
 	path = src/wslay
 	url = https://github.com/tatsuhiro-t/wslay.git
-[submodule "json11"]
-	path = src/json11
-	url = https://github.com/dropbox/json11.git
+[submodule "src/json"]
+	path = src/json
+	url = https://github.com/nlohmann/json.git

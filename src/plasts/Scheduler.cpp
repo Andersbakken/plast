@@ -1,9 +1,9 @@
 #include "Scheduler.h"
-#include <json11.hpp>
+#include <json.hpp>
 #include <rct/Log.h>
 #include <string.h>
 
-using namespace json11;
+using nlohmann::json;
 
 Scheduler::WeakPtr Scheduler::sInstance;
 
@@ -134,11 +134,11 @@ void Scheduler::sendToAll(const String& msg)
 void Scheduler::sendAllPeers(const WebSocket::SharedPtr& socket)
 {
     for (const Peer::SharedPtr& peer : mPeers) {
-        const Json peerj = Json::object({
-                { "type", "peer" },
-                { "id", peer->id() },
-                { "name", peer->name().ref() }
-            });
+        const json peerj = {
+            { "type", "peer" },
+            { "id", peer->id() },
+            { "name", peer->name().ref() }
+        };
         const WebSocket::Message msg(WebSocket::Message::TextFrame, peerj.dump());
         socket->write(msg);
     }
@@ -147,12 +147,12 @@ void Scheduler::sendAllPeers(const WebSocket::SharedPtr& socket)
 void Scheduler::addPeer(const Peer::SharedPtr& peer)
 {
     mPeers.insert(peer);
-    peer->event().connect([this](const Peer::SharedPtr& peer, Peer::Event event, const Json& json) {
+    peer->event().connect([this](const Peer::SharedPtr& peer, Peer::Event event, const json& value) {
             switch (event) {
             case Peer::JobsAvailable: {
-                HasJobsMessage msg(json["count"].number_value(),
-                                   json["port"].number_value());
-                msg.setPeer(json["peer"].string_value());
+                HasJobsMessage msg(value["count"].get<int>(),
+                                   value["port"].get<int>());
+                msg.setPeer(value["peer"].get<std::string>());
                 for (const Peer::SharedPtr& other : mPeers) {
                     if (other != peer) {
                         other->connection()->send(msg);
@@ -160,26 +160,26 @@ void Scheduler::addPeer(const Peer::SharedPtr& peer)
                 }
                 break; }
             case Peer::NameChanged: {
-                const Json peerj = Json::object({
-                        { "type", "peer" },
-                        { "id", peer->id() },
-                        { "name", peer->name().ref() }
-                    });
+                const json peerj = {
+                    { "type", "peer" },
+                    { "id", peer->id() },
+                    { "name", peer->name().ref() }
+                };
                 const WebSocket::Message msg(WebSocket::Message::TextFrame, peerj.dump());
                 sendToAll(msg);
                 break; }
             case Peer::Disconnected: {
-                const Json peerj = Json::object({
-                        { "type", "peer" },
-                        { "id", peer->id() },
-                        { "delete", true }
-                    });
+                const json peerj = {
+                    { "type", "peer" },
+                    { "id", peer->id() },
+                    { "delete", true }
+                };
                 const WebSocket::Message msg(WebSocket::Message::TextFrame, peerj.dump());
                 sendToAll(msg);
                 mPeers.erase(peer);
                 break; }
             case Peer::Websocket: {
-                const WebSocket::Message msg(WebSocket::Message::TextFrame, json.dump());
+                const WebSocket::Message msg(WebSocket::Message::TextFrame, value.dump());
                 sendToAll(msg);
                 break; }
             }

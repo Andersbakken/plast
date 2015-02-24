@@ -4,7 +4,7 @@
 #include <rct/Connection.h>
 #include <rct/SocketClient.h>
 #include <rct/SignalSlot.h>
-#include <json11.hpp>
+#include <json.hpp>
 #include <memory>
 
 class Peer : public std::enable_shared_from_this<Peer>
@@ -27,13 +27,13 @@ public:
         Disconnected,
         JobsAvailable
     };
-    Signal<std::function<void(const Peer::SharedPtr&, Event, const json11::Json&)> >& event() { return mEvent; }
+    Signal<std::function<void(const Peer::SharedPtr&, Event, const nlohmann::json&)> >& event() { return mEvent; }
 
 private:
     int mId;
     Connection mConnection;
     String mName;
-    Signal<std::function<void(const Peer::SharedPtr&, Event, const json11::Json&)> > mEvent;
+    Signal<std::function<void(const Peer::SharedPtr&, Event, const nlohmann::json&)> > mEvent;
 
     static int sId;
 };
