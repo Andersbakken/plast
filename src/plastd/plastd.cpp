@@ -4,6 +4,17 @@
 #include <rct/Config.h>
 #include <rct/ThreadPool.h>
 #include <stdio.h>
+#include <signal.h>
+
+static void sigSegvHandler(int signal)
+{
+    unlink(Config::value<String>("socket").constData());
+    fprintf(stderr, "Caught signal %d\n", signal);
+    const String trace = Rct::backtrace();
+    fprintf(stderr, "%s\n", trace.constData());
+    fflush(stderr);
+    _exit(1);
+}
 
 template<typename T>
 inline bool validate(int64_t c, const char* name, String& err)
@@ -26,6 +37,7 @@ int main(int argc, char** argv)
     const String socketPath = plast::defaultSocketFile();
 
     Config::registerOption<bool>("help", "Display this page", 'h');
+    Config::registerOption<bool>("no-sighandler", "Don't use a signal handler", 'S');
     Config::registerOption<int>("job-count", String::format<128>("Job count (defaults to %d)", idealThreadCount), 'j', idealThreadCount,
                                 [](const int &count, String &err) { return validate<int>(count, "job-count", err); });
     Config::registerOption<int>("preprocess-count", String::format<128>("Preprocess count (defaults to %d)", idealThreadCount * 5), 'E', idealThreadCount * 5,
@@ -54,6 +66,12 @@ int main(int argc, char** argv)
         return 1;
     }
 
+    if (!Config::isEnabled("no-sighandler")) {
+        signal(SIGSEGV, sigSegvHandler);
+        signal(SIGILL, sigSegvHandler);
+        signal(SIGABRT, sigSegvHandler);
+    }
+
     Daemon::Options options = {
         Config::value<int>("job-count"),
         Config::value<int>("preprocess-count"),
@@ -79,7 +97,10 @@ int main(int argc, char** argv)
     }
 
     EventLoop::SharedPtr loop(new EventLoop);
-    loop->init(EventLoop::MainEventLoop|EventLoop::EnableSigIntHandler);
+    unsigned int flags = EventLoop::MainEventLoop;
+    if (!Config::isEnabled("no-sighandler"))
+        flags |= EventLoop::EnableSigIntHandler;
+    loop->init(flags);
 
     Daemon::SharedPtr daemon = std::make_shared<Daemon>(options);
     if (!daemon->init())
