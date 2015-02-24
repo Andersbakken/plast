@@ -11,26 +11,27 @@ public:
 
     enum { MessageId = plast::LastJobMessageId };
 
-    LastJobMessage() : Message(MessageId), mCount(0) {}
-    LastJobMessage(int count) : Message(MessageId), mCount(count) {}
+    LastJobMessage() : Message(MessageId), mCount(0), mHasMore(false) {}
+    LastJobMessage(int count, bool hasMore) : Message(MessageId), mCount(count), mHasMore(hasMore) {}
 
     int count() const { return mCount; }
+    bool hasMore() const { return mHasMore; }
 
     virtual void encode(Serializer& serializer) const;
     virtual void decode(Deserializer& deserializer);
 
 private:
-    int mCount;
+    int mCount, mHasMore;
 };
 
 inline void LastJobMessage::encode(Serializer& serializer) const
 {
-    serializer << mCount;
+    serializer << mCount << mHasMore;
 }
 
 inline void LastJobMessage::decode(Deserializer& deserializer)
 {
-    deserializer >> mCount;
+    deserializer >> mCount >> mHasMore;
 }
 
 #endif

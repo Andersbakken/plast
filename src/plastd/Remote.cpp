@@ -155,7 +155,7 @@ void Remote::handleRequestJobsMessage(const RequestJobsMessage::SharedPtr& msg, 
                 break;
         }
     }
-    conn->send(LastJobMessage(msg->count() - rem));
+    conn->send(LastJobMessage(msg->count() - rem, !mPending.empty()));
 
 }
 
@@ -190,13 +190,7 @@ void Remote::handleHasJobsMessage(const HasJobsMessage::SharedPtr& msg, Connecti
         return;
     }
 
-    const unsigned int idle = Daemon::instance()->local().availableCount();
-    if (idle > mRequestedCount) {
-        const int count = std::min<int>(idle - mRequestedCount, 5);
-        mRequestedCount += count;
-        mRequested[remoteConn] = count;
-        remoteConn->send(RequestJobsMessage(idle));
-    }
+    requestMore(remoteConn);
 }
 
 void Remote::handleHandshakeMessage(const HandshakeMessage::SharedPtr& msg, Connection* conn)
@@ -270,6 +264,36 @@ void Remote::handleLastJobMessage(const LastJobMessage::SharedPtr& msg, Connecti
     it->second -= msg->count();
     if (!it->second)
         mRequested.erase(it);
+
+    if (msg->hasMore()) {
+        mHasMore.insert(conn);
+    } else {
+        mHasMore.erase(conn);
+        requestMore();
+    }
+}
+
+void Remote::requestMore()
+{
+    if (!Daemon::instance()->local().isAvailable())
+        return;
+    for (auto it : mHasMore) {
+        if (!mRequested.contains(it)) {
+            requestMore(it);
+            return;
+        }
+    }
+}
+
+void Remote::requestMore(Connection* conn)
+{
+    const unsigned int idle = Daemon::instance()->local().availableCount();
+    if (idle > mRequestedCount) {
+        const int count = std::min<int>(idle - mRequestedCount, 5);
+        mRequestedCount += count;
+        mRequested[conn] = count;
+        conn->send(RequestJobsMessage(idle));
+    }
 }
 
 void Remote::removeJob(uint64_t id)
@@ -349,6 +373,7 @@ Connection* Remote::addClient(const SocketClient::SharedPtr& client)
                 mRequestedCount -= itr->second;
                 mRequested.erase(itr);
             }
+            mHasMore.erase(conn);
 
             auto itc = mPeersByConn.find(conn);
             if (itc == mPeersByConn.end())

@@ -252,4 +252,6 @@ void Local::takeRemoteJobs()
             break;
         post(job);
     }
+    if (mPool.isIdle())
+        Daemon::instance()->remote().requestMore();
 }

@@ -5,6 +5,7 @@
 #include "Preprocessor.h"
 #include <rct/Hash.h>
 #include <rct/Map.h>
+#include <rct/Set.h>
 #include <rct/List.h>
 #include <rct/Connection.h>
 #include <rct/SocketClient.h>
@@ -25,6 +26,8 @@ public:
     void post(const Job::SharedPtr& job);
     Job::SharedPtr take();
 
+    void requestMore();
+
     Connection& scheduler() { return mConnection; }
 
 private:
@@ -36,6 +39,7 @@ private:
     void handleJobResponseMessage(const JobResponseMessage::SharedPtr& msg, Connection* conn);
     void handleLastJobMessage(const LastJobMessage::SharedPtr& msg, Connection* conn);
     void removeJob(uint64_t id);
+    void requestMore(Connection* conn);
 
 private:
     SocketServer mServer;
@@ -63,6 +67,7 @@ private:
     Map<uint64_t, std::shared_ptr<Building> > mBuildingByTime;
     Hash<uint64_t, std::shared_ptr<Building> > mBuildingById;
     Hash<Connection*, int> mRequested;
+    Set<Connection*> mHasMore;
     int mRequestedCount;
 
     struct Peer
