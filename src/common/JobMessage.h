@@ -34,6 +34,7 @@ public:
     int serial() const { return mSerial; }
     String remoteName() const { return mRemoteName; }
 
+    virtual int encodedSize() const;
     virtual void encode(Serializer& serializer) const;
     virtual void decode(Deserializer& deserializer);
 
@@ -46,6 +47,24 @@ private:
     String mRemoteName;
 };
 
+inline int JobMessage::encodedSize() const
+{
+    int size = 0;
+    auto addString = [&size](const String &str) {
+        size += sizeof(int) + str.size();
+    };
+
+    addString(mPath);
+    size += sizeof(int);
+    for (const auto &arg : mArgs) {
+        addString(arg);
+    }
+    size += sizeof(mId);
+    addString(mPreprocessed);
+    size += sizeof(mSerial);
+    addString(mRemoteName);
+    return size;
+}
 inline void JobMessage::encode(Serializer& serializer) const
 {
     serializer << mPath << mArgs << mId << mPreprocessed << mSerial << mRemoteName;
