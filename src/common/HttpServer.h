@@ -38,14 +38,18 @@ public:
     class Headers
     {
     public:
+        typedef Map<String, List<String>, LowerLess<String> > StringMap;
+
+        Headers() { }
+        Headers(const Headers& headers) : mHeaders(headers.mHeaders) { }
+        Headers(const StringMap& headers) : mHeaders(headers) { }
+
         void add(const String& key, const String& value);
         void set(const String& key, const List<String>& values);
 
         bool has(const String& key) const;
         String value(const String& key) const;
         List<String> values(const String& key) const;
-
-        typedef Map<String, List<String>, LowerLess<String> > StringMap;
 
         StringMap headers() const;
 

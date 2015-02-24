@@ -84,9 +84,11 @@ Scheduler::Scheduler(const Options& opts)
                     error() << "Don't want to serve" << path;
                     const String data = "No.";
                     HttpServer::Response response(req->protocol(), 404);
-                    response.headers().add("Content-Length", String::number(data.size()));
-                    response.headers().add("Content-Type", "text/plain");
-                    response.headers().add("Connection", "close");
+                    response.headers() = HttpServer::Headers::StringMap {
+                        { "Content-Length", { String::number(data.size()) } },
+                        { "Content-Type", { "text/plain" } },
+                        { "Connection", { "close" } }
+                    };
                     response.setBody(data);
                     req->write(response, HttpServer::Response::Incomplete);
                     req->close();
@@ -95,17 +97,21 @@ Scheduler::Scheduler(const Options& opts)
                     if (path.isFile()) {
                         const String data = path.readAll();
                         HttpServer::Response response(req->protocol(), 200);
-                        response.headers().add("Content-Length", String::number(data.size()));
-                        response.headers().add("Content-Type", guessMime(file));
-                        response.headers().add("Connection", "keep-alive");
+                        response.headers() = HttpServer::Headers::StringMap {
+                            { "Content-Length", { String::number(data.size()) } },
+                            { "Content-Type", { guessMime(file) } },
+                            { "Connection", { "keep-alive" } }
+                        };
                         response.setBody(data);
                         req->write(response);
                     } else {
                         const String data = "Unable to open " + file;
                         HttpServer::Response response(req->protocol(), 404);
-                        response.headers().add("Content-Length", String::number(data.size()));
-                        response.headers().add("Content-Type", "text/plain");
-                        response.headers().add("Connection", "keep-alive");
+                        response.headers() = HttpServer::Headers::StringMap {
+                            { "Content-Length", { String::number(data.size()) } },
+                            { "Content-Type", { "text/plain" } },
+                            { "Connection", { "keep-alive" } }
+                        };
                         response.setBody(data);
                         req->write(response);
                     }
