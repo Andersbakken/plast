@@ -1,9 +1,9 @@
 [submodule "rct"]
-	path = rct
+	path = src/rct
 	url = https://github.com/Andersbakken/rct.git
 [submodule "wslay"]
-	path = wslay
+	path = src/wslay
 	url = https://github.com/tatsuhiro-t/wslay.git
 [submodule "json11"]
-	path = json11
+	path = src/json11
 	url = https://github.com/dropbox/json11.git

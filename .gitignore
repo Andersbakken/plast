@@ -41,3 +41,4 @@ scheduler/scheduler
 /src/.gdb_history
 /src/libplast.a
 wslay-prefix
+/src/include/
