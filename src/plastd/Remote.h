@@ -34,6 +34,7 @@ private:
     void handleRequestJobsMessage(const RequestJobsMessage::SharedPtr& msg, Connection* conn);
     void handleHandshakeMessage(const HandshakeMessage::SharedPtr& msg, Connection* conn);
     void handleJobResponseMessage(const JobResponseMessage::SharedPtr& msg, Connection* conn);
+    void handleLastJobMessage(const LastJobMessage::SharedPtr& msg, Connection* conn);
     void removeJob(uint64_t id);
 
 private:
@@ -61,6 +62,8 @@ private:
     };
     Map<uint64_t, std::shared_ptr<Building> > mBuildingByTime;
     Hash<uint64_t, std::shared_ptr<Building> > mBuildingById;
+    Hash<Connection*, int> mRequested;
+    int mRequestedCount;
 
     struct Peer
     {

@@ -7,7 +7,7 @@
 #define RESCHEDULECHECK   5000
 
 Remote::Remote()
-    : mNextId(0), mRescheduleTimer(RESCHEDULECHECK)
+    : mNextId(0), mRescheduleTimer(RESCHEDULECHECK), mRequestedCount(0)
 {
 }
 
@@ -155,6 +155,8 @@ void Remote::handleRequestJobsMessage(const RequestJobsMessage::SharedPtr& msg, 
                 break;
         }
     }
+    conn->send(LastJobMessage(msg->count() - rem));
+
 }
 
 void Remote::handleHasJobsMessage(const HasJobsMessage::SharedPtr& msg, Connection* conn)
@@ -180,8 +182,21 @@ void Remote::handleHasJobsMessage(const HasJobsMessage::SharedPtr& msg, Connecti
             remoteConn = peer->second;
         }
     }
+
     assert(remoteConn);
-    remoteConn->send(RequestJobsMessage(1));
+
+    if (mRequested.contains(remoteConn)) {
+        // we already asked this host for jobs, wait until it gets back to us
+        return;
+    }
+
+    const unsigned int idle = Daemon::instance()->local().availableCount();
+    if (idle > mRequestedCount) {
+        const int count = std::min<int>(idle - mRequestedCount, 5);
+        mRequestedCount += count;
+        mRequested[remoteConn] = count;
+        remoteConn->send(RequestJobsMessage(idle));
+    }
 }
 
 void Remote::handleHandshakeMessage(const HandshakeMessage::SharedPtr& msg, Connection* conn)
@@ -246,6 +261,17 @@ void Remote::handleJobResponseMessage(const JobResponseMessage::SharedPtr& msg, 
     }
 }
 
+void Remote::handleLastJobMessage(const LastJobMessage::SharedPtr& msg, Connection* conn)
+{
+    auto it = mRequested.find(conn);
+    assert(it != mRequested.end());
+    assert(it->second >= msg->count());
+    mRequestedCount -= msg->count();
+    it->second -= msg->count();
+    if (!it->second)
+        mRequested.erase(it);
+}
+
 void Remote::removeJob(uint64_t id)
 {
     Hash<uint64_t, std::shared_ptr<Building> >::iterator idit = mBuildingById.find(id);
@@ -305,6 +331,9 @@ Connection* Remote::addClient(const SocketClient::SharedPtr& client)
             case JobResponseMessage::MessageId:
                 handleJobResponseMessage(std::static_pointer_cast<JobResponseMessage>(msg), conn);
                 break;
+            case LastJobMessage::MessageId:
+                handleLastJobMessage(std::static_pointer_cast<LastJobMessage>(msg), conn);
+                break;
             default:
                 error() << "Unexpected message Remote::addClient" << msg->messageId();
                 conn->finish(1);
@@ -314,6 +343,12 @@ Connection* Remote::addClient(const SocketClient::SharedPtr& client)
     conn->disconnected().connect([this](Connection* conn) {
             conn->disconnected().disconnect();
             EventLoop::deleteLater(conn);
+
+            auto itr = mRequested.find(conn);
+            if (itr != mRequested.end()) {
+                mRequestedCount -= itr->second;
+                mRequested.erase(itr);
+            }
 
             auto itc = mPeersByConn.find(conn);
             if (itc == mPeersByConn.end())

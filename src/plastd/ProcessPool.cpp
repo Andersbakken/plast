@@ -3,7 +3,7 @@
 #include <rct/Log.h>
 
 ProcessPool::ProcessPool(int count)
-    : mCount(count), mNextId(0)
+    : mCount(count), mRunning(0), mNextId(0)
 {
 }
 
@@ -30,6 +30,7 @@ bool ProcessPool::runProcess(Process*& proc, const Job& job, bool except)
                 mReadyReadStdErr(id, proc);
             });
         proc->finished().connect([this, except](Process* proc) {
+                --mRunning;
                 Hash<Process*, Id>::iterator idit = ids.find(proc);
                 assert(idit != ids.end());
                 const Id id = idit->second;
@@ -60,6 +61,7 @@ bool ProcessPool::runProcess(Process*& proc, const Job& job, bool except)
     }
     const bool ok = proc->start(job.command, job.arguments, job.environ);
     if (ok) {
+        ++mRunning;
         if (!job.stdin.isEmpty()) {
             proc->write(job.stdin);
             proc->closeStdIn();

@@ -35,6 +35,8 @@ public:
     Signal<std::function<void(Id)> >& error() { return mError; }
 
     bool isIdle() const { return !mAvail.isEmpty() || mProcs.size() < mCount; }
+    int pending() const { return mRunning + mPending.size(); }
+    int max() const { return mCount; }
 
 private:
     struct Job
@@ -49,6 +51,7 @@ private:
 
 private:
     int mCount;
+    int mRunning;
     Id mNextId;
     List<Process*> mProcs, mAvail;
     Signal<std::function<void(Id, Process*)> > mStarted, mReadyReadStdOut, mReadyReadStdErr, mFinished;

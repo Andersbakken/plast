@@ -8,6 +8,7 @@
 #include <JobResponseMessage.h>
 #include <PeerMessage.h>
 #include <BuildingMessage.h>
+#include <LastJobMessage.h>
 
 namespace messages {
 void init();

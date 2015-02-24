@@ -13,9 +13,11 @@ public:
 
     void init();
 
-    bool isAvailable() const { return mPool.isIdle(); }
     void post(const Job::SharedPtr& job);
     void run(const Job::SharedPtr& job);
+
+    bool isAvailable() const { return mPool.isIdle(); }
+    unsigned int availableCount() const { return std::max<int>(mPool.max() - mPool.pending(), 0); }
 
 private:
     void takeRemoteJobs();

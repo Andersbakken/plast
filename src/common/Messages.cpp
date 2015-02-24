@@ -11,6 +11,7 @@ void init()
     Message::registerMessage<JobResponseMessage>();
     Message::registerMessage<PeerMessage>();
     Message::registerMessage<BuildingMessage>();
+    Message::registerMessage<LastJobMessage>();
 }
 
 } // namespace messages
