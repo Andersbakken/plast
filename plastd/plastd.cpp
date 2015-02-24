@@ -82,9 +82,10 @@ int main(int argc, char** argv)
     loop->init(EventLoop::MainEventLoop|EventLoop::EnableSigIntHandler);
 
     Daemon::SharedPtr daemon = std::make_shared<Daemon>(options);
-    daemon->init();
+    if (!daemon->init())
+        return 1;
 
     loop->exec();
 
-    return 0;
+    return daemon->exitCode();
 }

@@ -1,11 +1,16 @@
 #include "Daemon.h"
 #include "Job.h"
 #include <rct/Log.h>
+#include <rct/QuitMessage.h>
 
 Daemon::WeakPtr Daemon::sInstance;
 
 Daemon::Daemon(const Options& opts)
-    : mOptions(opts)
+    : mOptions(opts), mExitCode(0)
+{
+}
+
+bool Daemon::init()
 {
     mServer.newConnection().connect([this](SocketServer* server) {
             SocketClient::SharedPtr client;
@@ -16,10 +21,39 @@ Daemon::Daemon(const Options& opts)
                 addClient(client);
             }
         });
-    if (!mServer.listen(mOptions.localUnixPath)) {
-        error() << "Unable to unix listen";
-        abort();
+
+    bool ok = false;
+    for (int i=0; i<10; ++i) {
+        warning() << "listening" << mOptions.localUnixPath;
+        if (mServer.listen(mOptions.localUnixPath)) {
+            ok = true;
+            break;
+        }
+        if (!i) {
+            enum { Timeout = 1000 };
+            Connection connection;
+            if (connection.connectUnix(mOptions.localUnixPath, Timeout)) {
+                connection.send(QuitMessage());
+                connection.disconnected().connect(std::bind([](){ EventLoop::eventLoop()->quit(); }));
+                connection.finished().connect(std::bind([](){ EventLoop::eventLoop()->quit(); }));
+                EventLoop::eventLoop()->exec(Timeout);
+            }
+            Path::rm(mOptions.localUnixPath);
+        } else {
+            sleep(1);
+        }
     }
+
+    if (!ok) {
+        error() << "Unable to unix listen" << mOptions.localUnixPath;
+        return false;
+    }
+
+    sInstance = shared_from_this();
+    messages::init();
+    mLocal.init();
+    mRemote.init();
+    return true;
 }
 
 Daemon::~Daemon()
@@ -77,6 +111,10 @@ void Daemon::addClient(const SocketClient::SharedPtr& client)
     Connection* conn = new Connection(client);
     conn->newMessage().connect([this](const std::shared_ptr<Message>& msg, Connection* conn) {
             switch (msg->messageId()) {
+            case QuitMessage::MessageId:
+                mExitCode = std::static_pointer_cast<QuitMessage>(msg)->exitCode();
+                EventLoop::eventLoop()->quit();
+                break;
             case JobMessage::MessageId:
                 handleJobMessage(std::static_pointer_cast<JobMessage>(msg), conn);
                 break;
@@ -90,12 +128,4 @@ void Daemon::addClient(const SocketClient::SharedPtr& client)
             conn->disconnected().disconnect();
             EventLoop::deleteLater(conn);
         });
-}
-
-void Daemon::init()
-{
-    sInstance = shared_from_this();
-    messages::init();
-    mLocal.init();
-    mRemote.init();
 }

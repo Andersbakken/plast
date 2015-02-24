@@ -28,7 +28,9 @@ public:
     Daemon(const Options& opts);
     ~Daemon();
 
-    void init();
+    bool init();
+
+    int exitCode() const { return mExitCode; }
 
     Local& local() { return mLocal; }
     Remote& remote() { return mRemote; }
@@ -45,6 +47,7 @@ private:
     Local mLocal;
     Remote mRemote;
     Options mOptions;
+    int mExitCode;
 
 private:
     static WeakPtr sInstance;
