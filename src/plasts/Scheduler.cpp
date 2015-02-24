@@ -77,7 +77,7 @@ Scheduler::Scheduler(const Options& opts)
                 String file = req->path();
                 if (file == "/")
                     file = "stats.html";
-                static Path base = Path(Rct::executablePath().parentDir().ensureTrailingSlash() + "stats/").resolved();
+                static Path base = Path(Rct::executablePath().parentDir().ensureTrailingSlash() + "stats/").resolved().ensureTrailingSlash();
                 const Path path = Path(base + file).resolved();
                 if (!path.startsWith(base)) {
                     // no
