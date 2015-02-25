@@ -239,6 +239,7 @@ inline HttpServer::Headers::Header& HttpServer::Headers::Header::operator=(const
 {
     clear();
     append(string);
+    return *this;
 }
 
 inline HttpServer::Response::Response()
