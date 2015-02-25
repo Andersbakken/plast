@@ -157,7 +157,7 @@ void Scheduler::addPeer(const Peer::SharedPtr& peer)
             switch (event) {
             case Peer::JobsAvailable: {
                 HasJobsMessage msg(value["count"].get<int>(),
-                                   value["port"].get<int>());
+                                   value["port"].get<uint16_t>());
                 msg.setPeer(value["peer"].get<std::string>());
                 for (const Peer::SharedPtr& other : mPeers) {
                     if (other != peer) {
