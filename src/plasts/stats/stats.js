@@ -17,7 +17,10 @@ var peers = {
         this._peers[peer.id] = peer;
     },
     remove: function(id) {
-        delete this._peers[id];
+        if (this._peers.hasOwnProperty(id)) {
+            this._peers[id].invalidate();
+            delete this._peers[id];
+        }
     },
     center: function(rel) {
         var pt = new paper.Point(this.width() / 2, this.height() / 2);
@@ -90,6 +93,12 @@ Peer.prototype = {
         this._path.insertBelow(this._text);
         return this;
     },
+    invalidate: function() {
+        if (this._path)
+            this._path.remove();
+        if (this._text)
+            this._text.remove();
+    },
     recalculate: function(pos, size) {
         this.rect = new paper.Rectangle(pos, new paper.Point(pos.x + size.width, pos.y + size.height));
     }
@@ -102,9 +111,9 @@ function handlePeer(peer)
     } else {
         var p = new Peer({ id: peer.id, name: peer.name, color: "blue" });
         peers.add(p);
-        peers.recalculate();
-        peers.draw();
     }
+    peers.recalculate();
+    peers.draw();
 }
 
 var callbacks = {
