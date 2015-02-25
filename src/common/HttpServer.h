@@ -51,7 +51,7 @@ public:
             bool operator!=(const String& string) const;
             Header& operator=(const String& string);
 
-            operator String& () { assert(size() == 1); return first(); }
+            operator String() const { if (isEmpty()) return String(); return first(); }
         };
 
         typedef Map<String, Header, LowerLess<String> > StringMap;
@@ -223,13 +223,15 @@ inline HttpServer::Headers::StringMap HttpServer::Headers::headers() const
 
 inline bool HttpServer::Headers::Header::operator==(const String& string) const
 {
-    assert(size() == 1);
+    if (size() != 1)
+        return false;
     return first() == string;
 }
 
 inline bool HttpServer::Headers::Header::operator!=(const String& string) const
 {
-    assert(size() == 1);
+    if (size() != 1)
+        return true;
     return first() != string;
 }
 
