@@ -85,9 +85,9 @@ Scheduler::Scheduler(const Options& opts)
                     const String data = "No.";
                     HttpServer::Response response(req->protocol(), 404);
                     response.headers() = HttpServer::Headers::StringMap {
-                        { "Content-Length", { String::number(data.size()) } },
-                        { "Content-Type", { "text/plain" } },
-                        { "Connection", { "close" } }
+                        { "Content-Length", String::number(data.size()) },
+                        { "Content-Type", "text/plain" },
+                        { "Connection", "close" }
                     };
                     response.setBody(data);
                     req->write(response, HttpServer::Response::Incomplete);
@@ -98,9 +98,9 @@ Scheduler::Scheduler(const Options& opts)
                         const String data = path.readAll();
                         HttpServer::Response response(req->protocol(), 200);
                         response.headers() = HttpServer::Headers::StringMap {
-                            { "Content-Length", { String::number(data.size()) } },
-                            { "Content-Type", { guessMime(file) } },
-                            { "Connection", { "keep-alive" } }
+                            { "Content-Length", String::number(data.size()) },
+                            { "Content-Type", guessMime(file) },
+                            { "Connection", "keep-alive" }
                         };
                         response.setBody(data);
                         req->write(response);
@@ -108,9 +108,9 @@ Scheduler::Scheduler(const Options& opts)
                         const String data = "Unable to open " + file;
                         HttpServer::Response response(req->protocol(), 404);
                         response.headers() = HttpServer::Headers::StringMap {
-                            { "Content-Length", { String::number(data.size()) } },
-                            { "Content-Type", { "text/plain" } },
-                            { "Connection", { "keep-alive" } }
+                            { "Content-Length", String::number(data.size()) },
+                            { "Content-Type", "text/plain" },
+                            { "Connection", "keep-alive" }
                         };
                         response.setBody(data);
                         req->write(response);

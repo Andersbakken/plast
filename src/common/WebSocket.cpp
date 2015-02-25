@@ -187,16 +187,18 @@ static inline String makeKey(const String& key)
 bool WebSocket::response(const HttpServer::Request& req, HttpServer::Response& resp)
 {
     const HttpServer::Headers& headers = req.headers();
-    if (headers.value("Connection") != "Upgrade"
-        || headers.value("Upgrade") != "websocket"
+    if (headers.header("Connection") != "Upgrade"
+        || headers.header("Upgrade") != "websocket"
         || !headers.has("Sec-WebSocket-Key"))
         return false;
 
-    const String key = headers.value("Sec-WebSocket-Key");
+    const String key = headers.header("Sec-WebSocket-Key");
 
     resp = HttpServer::Response(req.protocol(), 101);
-    resp.headers().add("Upgrade", "websocket");
-    resp.headers().add("Connection", "Upgrade");
-    resp.headers().add("Sec-WebSocket-Accept", makeKey(key));
+    resp.headers() = HttpServer::Headers::StringMap {
+        { "Upgrade", "websocket" },
+        { "Connection", "Upgrade" },
+        { "Sec-WebSocket-Accept", makeKey(key) }
+    };
     return true;
 }

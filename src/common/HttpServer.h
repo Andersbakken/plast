@@ -38,18 +38,33 @@ public:
     class Headers
     {
     public:
-        typedef Map<String, List<String>, LowerLess<String> > StringMap;
+        class Header : public List<String>
+        {
+        public:
+            Header() { }
+            Header(const String& string) { append(string); }
+            Header(const char* string) { append(String(string)); }
+
+            using List<String>::List;
+
+            bool operator==(const String& string) const;
+            bool operator!=(const String& string) const;
+            Header& operator=(const String& string);
+
+            operator String& () { assert(size() == 1); return first(); }
+        };
+
+        typedef Map<String, Header, LowerLess<String> > StringMap;
 
         Headers() { }
         Headers(const Headers& headers) : mHeaders(headers.mHeaders) { }
         Headers(const StringMap& headers) : mHeaders(headers) { }
 
         void add(const String& key, const String& value);
-        void set(const String& key, const List<String>& values);
+        void set(const String& key, const Header& values);
 
         bool has(const String& key) const;
-        String value(const String& key) const;
-        List<String> values(const String& key) const;
+        Header header(const String& key) const;
 
         StringMap headers() const;
 
@@ -204,6 +219,24 @@ private:
 inline HttpServer::Headers::StringMap HttpServer::Headers::headers() const
 {
     return mHeaders;
+}
+
+inline bool HttpServer::Headers::Header::operator==(const String& string) const
+{
+    assert(size() == 1);
+    return first() == string;
+}
+
+inline bool HttpServer::Headers::Header::operator!=(const String& string) const
+{
+    assert(size() == 1);
+    return first() != string;
+}
+
+inline HttpServer::Headers::Header& HttpServer::Headers::Header::operator=(const String& string)
+{
+    clear();
+    append(string);
 }
 
 inline HttpServer::Response::Response()

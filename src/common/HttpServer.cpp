@@ -236,7 +236,7 @@ void HttpServer::addClient(const SocketClient::SharedPtr& client)
 
                             if (data.request->method() == Request::Post) {
                                 const Headers& headers = data.request->headers();
-                                String v = headers.value("Content-Length");
+                                String v = headers.header("Content-Length");
                                 if (!v.isEmpty()) {
                                     bool ok;
                                     data.bodyLength = toInteger<int64_t>(v, &ok);
@@ -256,7 +256,7 @@ void HttpServer::addClient(const SocketClient::SharedPtr& client)
                                         return;
                                     }
                                 } else {
-                                    v = headers.value("Transfer-Encoding");
+                                    v = headers.header("Transfer-Encoding");
                                     if (v == "chunked") {
                                         data.bodyMode = Data::ModeChunked;
                                     }
@@ -368,7 +368,7 @@ void HttpServer::Headers::add(const String& key, const String& value)
     mHeaders[key].push_back(value);
 }
 
-void HttpServer::Headers::set(const String& key, const List<String>& values)
+void HttpServer::Headers::set(const String& key, const Header& values)
 {
     mHeaders[key] = values;
 }
@@ -378,17 +378,7 @@ bool HttpServer::Headers::has(const String& key) const
     return mHeaders.contains(key);
 }
 
-String HttpServer::Headers::value(const String& key) const
-{
-    const auto it = mHeaders.find(key);
-    if (it == mHeaders.end())
-        return String();
-    if (it->second.isEmpty())
-        return String();
-    return it->second.front();
-}
-
-List<String> HttpServer::Headers::values(const String& key) const
+HttpServer::Headers::Header HttpServer::Headers::header(const String& key) const
 {
     const auto it = mHeaders.find(key);
     if (it == mHeaders.end())
