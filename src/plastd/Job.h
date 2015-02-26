@@ -11,7 +11,7 @@
 #include <cstdint>
 #include <stdio.h>
 
-class CompilerArgs;
+struct CompilerArgs;
 
 class Job : public std::enable_shared_from_this<Job>
 {
