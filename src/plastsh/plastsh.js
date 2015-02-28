@@ -64,14 +64,19 @@ var handlers = {
     },
     peers: function() {
         sendCommand('peers');
+    },
+    test: function(args) {
+        sendCommand('test', args);
     }
 };
 
 function handleCommand(cmd)
 {
-    var h = handlers[cmd];
-    if (typeof h === 'function')
-        h();
+    var args = cmd.split(' ');
+    var h = handlers[args.shift()];
+    if (typeof h === 'function') {
+        h(args);
+    }
 }
 
 function completer(line) {

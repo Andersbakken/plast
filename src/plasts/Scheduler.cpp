@@ -7,7 +7,7 @@ using nlohmann::json;
 
 Scheduler::WeakPtr Scheduler::sInstance;
 
-typedef std::function<void(WebSocket*, const List<String>&)> CmdHandler;
+typedef std::function<void(WebSocket*, const List<json>&)> CmdHandler;
 
 static inline const char* guessMime(const Path& file)
 {
@@ -60,12 +60,17 @@ Scheduler::Scheduler(const Options& opts)
                         mWebSockets[websocket.get()] = websocket;
 
                         Map<String, CmdHandler> cmds = {
-                            {
-                                "peers", [](WebSocket* ws, const List<String>& args) {
+                            { "peers", [](WebSocket* ws, const List<json>& args) {
                                     error() << "peers?";
                                     ws->write("peers goes here");
-                                }
-                            }
+                                } },
+                            { "test", [](WebSocket* ws, const List<json>& args) {
+                                    error() << "test?";
+                                    for (const auto& k : args) {
+                                        error() << k.dump();
+                                    }
+                                    ws->write("test goes here");
+                                } }
                         };
 
                         websocket->message().connect([this, cmds](WebSocket* websocket, const WebSocket::Message& msg) {
@@ -90,7 +95,7 @@ Scheduler::Scheduler(const Options& opts)
                                     if (args.is_array())
                                         cmd->second(websocket, args.get<json::array_t>());
                                     else
-                                        cmd->second(websocket, List<String>());
+                                        cmd->second(websocket, List<json>());
                                 }
                                 // if (msg.opcode() == WebSocket::Message::TextFrame) {
                                 //     websocket->write(msg);
