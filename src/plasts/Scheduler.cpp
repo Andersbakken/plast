@@ -92,7 +92,7 @@ Scheduler::Scheduler(const Options& opts)
                                     const auto& cmd = cmds.find(cmdname.get<std::string>());
                                     if (cmd == cmds.end()) {
                                         error() << "cmd" << cmdname.get<std::string>() << "not recognized";
-                                        websocket->write((JsonObject() << "error" << cmdname.get<std::string>()).dump());
+                                        websocket->write((JsonObject() << "error" << ("cmd " + cmdname.get<std::string>() + " not recognized")).dump());
                                         return;
                                     }
                                     const auto args = j["args"];
