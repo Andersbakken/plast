@@ -97,10 +97,6 @@ Scheduler::Scheduler(const Options& opts)
                                     else
                                         cmd->second(websocket, List<json>());
                                 }
-                                // if (msg.opcode() == WebSocket::Message::TextFrame) {
-                                //     websocket->write(msg);
-                                //     mWebSockets.erase(websocket);
-                                // }
                             });
                         websocket->error().connect([this](WebSocket* websocket) {
                                 mWebSockets.erase(websocket);
