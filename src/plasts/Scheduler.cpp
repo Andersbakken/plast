@@ -1,5 +1,6 @@
 #include "Scheduler.h"
 #include <json.hpp>
+#include <JsonUtils.h>
 #include <rct/Log.h>
 #include <string.h>
 
@@ -79,16 +80,19 @@ Scheduler::Scheduler(const Options& opts)
                                     auto j = json::parse(msg.message());
                                     if (!j.is_object()) {
                                         error() << "message not an object";
+                                        websocket->write((JsonObject() << "error" << "message is not an object").dump());
                                         return;
                                     }
                                     const auto cmdname = j["cmd"];
                                     if (!cmdname.is_string()) {
-                                        error() << "cmd is not a string";
+                                        error() << "cmd not a string";
+                                        websocket->write((JsonObject() << "error" << "cmd is not a string").dump());
                                         return;
                                     }
                                     const auto& cmd = cmds.find(cmdname.get<std::string>());
                                     if (cmd == cmds.end()) {
                                         error() << "cmd" << cmdname.get<std::string>() << "not recognized";
+                                        websocket->write((JsonObject() << "error" << cmdname.get<std::string>()).dump());
                                         return;
                                     }
                                     const auto args = j["args"];
