@@ -5,9 +5,33 @@ var opts = {
     port: 8089
 };
 
+var ws;
 var readline = require('readline');
 var websocket = require('ws');
-var ws;
+var rl = readline.createInterface({
+    completer: completer,
+    input: process.stdin,
+    output: process.stdout,
+    terminal: true
+});
+
+// wow, node should really fix their shit
+(function() {
+    var oldStdout = process.stdout;
+    var newStdout = Object.create(oldStdout);
+    newStdout.write = function() {
+        oldStdout.write('\x1b[2K\r');
+        var result = oldStdout.write.apply(
+            this,
+            Array.prototype.slice.call(arguments)
+        );
+        rl.prompt();
+        return result;
+    };
+    Object.defineProperty(process, 'stdout', {
+        get: function stdout() { return newStdout; }
+    });
+})();
 
 function setupWs()
 {
@@ -15,7 +39,6 @@ function setupWs()
 
     ws.on('message', function(data, flags) {
         console.log('ws msg', data);
-        rl.prompt();
     });
     ws.on('close', function() {
         console.log('ws socket closed');
@@ -27,12 +50,20 @@ function setupWs()
     });
 }
 
+function sendCommand(cmd, args)
+{
+    ws.send(JSON.stringify({ cmd: cmd, args: args }));
+}
+
 var handlers = {
     quit: function() {
         process.exit(0);
     },
     help: function() {
         console.log('help here');
+    },
+    peers: function() {
+        sendCommand('peers');
     }
 };
 
@@ -53,12 +84,6 @@ function completer(line) {
     return [hits.length ? hits : completions, line];
 }
 
-var rl = readline.createInterface({
-    completer: completer,
-    input: process.stdin,
-    output: process.stdout
-});
-
 (function(argv) {
     opts.host = argv.host || argv.h || opts.host;
     opts.port = parseInt(argv.port) || parseInt(argv.p) || opts.port;
@@ -72,8 +97,8 @@ rl.prompt();
 rl.on('line', function(line) {
     if (line.length > 0 && line[0] === '/')
         handleCommand(line.substr(1));
-    else
-        console.log(line);
+    // else
+    //     console.log(line);
     rl.prompt();
 }).on('close', function() {
     process.exit(0);

@@ -179,6 +179,11 @@ void WebSocket::write(const Message& msg)
     wslay_event_send(mCtx);
 }
 
+void WebSocket::write(const String& textMessage)
+{
+    write(Message(Message::TextFrame, textMessage));
+}
+
 static inline String makeKey(const String& key)
 {
     return base64(sha1(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"));

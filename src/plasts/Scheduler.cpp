@@ -7,6 +7,8 @@ using nlohmann::json;
 
 Scheduler::WeakPtr Scheduler::sInstance;
 
+typedef std::function<void(WebSocket*, const List<String>&)> CmdHandler;
+
 static inline const char* guessMime(const Path& file)
 {
     const char* ext = file.extension();
@@ -56,8 +58,40 @@ Scheduler::Scheduler(const Options& opts)
                         req->write(response);
                         WebSocket::SharedPtr websocket = std::make_shared<WebSocket>(req->takeSocket());
                         mWebSockets[websocket.get()] = websocket;
-                        websocket->message().connect([this](WebSocket* websocket, const WebSocket::Message& msg) {
-                                error() << "got message" << msg.opcode() << msg.message();
+
+                        Map<String, CmdHandler> cmds = {
+                            {
+                                "peers", [](WebSocket* ws, const List<String>& args) {
+                                    error() << "peers?";
+                                    ws->write("peers goes here");
+                                }
+                            }
+                        };
+
+                        websocket->message().connect([this, cmds](WebSocket* websocket, const WebSocket::Message& msg) {
+                                if (msg.opcode() == WebSocket::Message::TextFrame) {
+                                    error() << "got message" << msg.opcode() << msg.message();
+                                    auto j = json::parse(msg.message());
+                                    if (!j.is_object()) {
+                                        error() << "message not an object";
+                                        return;
+                                    }
+                                    const auto cmdname = j["cmd"];
+                                    if (!cmdname.is_string()) {
+                                        error() << "cmd is not a string";
+                                        return;
+                                    }
+                                    const auto& cmd = cmds.find(cmdname.get<std::string>());
+                                    if (cmd == cmds.end()) {
+                                        error() << "cmd" << cmdname.get<std::string>() << "not recognized";
+                                        return;
+                                    }
+                                    const auto args = j["args"];
+                                    if (args.is_array())
+                                        cmd->second(websocket, args.get<json::array_t>());
+                                    else
+                                        cmd->second(websocket, List<String>());
+                                }
                                 // if (msg.opcode() == WebSocket::Message::TextFrame) {
                                 //     websocket->write(msg);
                                 //     mWebSockets.erase(websocket);

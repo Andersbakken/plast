@@ -5,6 +5,7 @@
 #include <rct/LinkedList.h>
 #include <rct/SocketClient.h>
 #include <rct/SignalSlot.h>
+#include <rct/String.h>
 #include <cstdint>
 #include <memory>
 
@@ -50,6 +51,7 @@ public:
         friend class WebSocket;
     };
 
+    void write(const String& textMessage);
     void write(const Message& message);
     void close();
 
