@@ -9,7 +9,7 @@ Daemon::WeakPtr Daemon::sInstance;
 Daemon::Daemon(const Options& opts)
     : mOptions(opts), mExitCode(0)
 {
-    const Path cmp = Path::home() + ".config/plasts.compilers";
+    const Path cmp = Path::home() + ".config/plastd.compilers";
     mCompilers << cmp.readAll().split('\n', String::SkipEmpty);
     if (mCompilers.isEmpty()) {
         mCompilers << "/usr/bin/cc";
