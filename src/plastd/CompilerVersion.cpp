@@ -77,7 +77,7 @@ CompilerVersion::SharedPtr CompilerVersion::version(const Path& path, unsigned i
 
 void CompilerVersion::init(const Path& path, unsigned int flags, const String& target)
 {
-    version(path, flags);
+    version(path, flags, target);
 }
 
 CompilerVersion::SharedPtr CompilerVersion::version(plast::CompilerType compiler, int major, const String& target)
