@@ -38,6 +38,8 @@ void Local::init()
             job->mReadyReadStdErr(job.get());
         });
     mPool.started().connect([this](ProcessPool::Id id, Process*) {
+            static unsigned int count = 0;
+            error() << "started" << ++count << "jobs";
             assert(mJobs.contains(id));
             const Data& data = mJobs[id];
             Job::SharedPtr job = data.job.lock();
