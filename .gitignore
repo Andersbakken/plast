@@ -8,6 +8,7 @@
 /bin/plastc
 /bin/plastd
 /bin/plasts
+/bin/stats
 /build.ninja
 build.ninja
 /CMakeCache.txt
