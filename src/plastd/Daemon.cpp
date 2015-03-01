@@ -12,16 +12,18 @@ Daemon::Daemon(const Options& opts)
     : mOptions(opts), mExitCode(0)
 {
     const Path cmp = Path::home() + ".config/plastd.compilers";
-    mCompilers << cmp.readAll().split('\n', String::SkipEmpty);
-    if (mCompilers.isEmpty()) {
-        mCompilers << "/usr/bin/cc";
-        mCompilers << "/usr/bin/c++";
+    auto cmplist = cmp.readAll().split('\n', String::SkipEmpty);
+    if (cmplist.isEmpty()) {
+        cmplist << "/usr/bin/cc";
+        cmplist << "/usr/bin/c++";
     }
-    for (const Path& c : mCompilers) {
-        const Path r = c.resolved();
-        CompilerVersion::init(r);
+    for (const String& c : cmplist) {
+        auto entry = c.split(' '); // assume compilers don't have spaces in the file names
+        const Path r = static_cast<Path>(entry[0]).resolved();
+        const String target = (entry.size() > 1) ? entry[1] : String();
+        CompilerVersion::init(r, 0, target);
         if (Rct::is64Bit)
-            CompilerVersion::init(r, CompilerArgs::HasDashM32);
+            CompilerVersion::init(r, CompilerArgs::HasDashM32, target);
     }
 }
 

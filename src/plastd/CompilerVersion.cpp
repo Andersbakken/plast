@@ -6,9 +6,12 @@
 Map<CompilerVersion::PathKey, CompilerVersion::SharedPtr> CompilerVersion::sVersions;
 Map<plast::CompilerKey, CompilerVersion::WeakPtr> CompilerVersion::sVersionsByKey;
 
-CompilerVersion::CompilerVersion(const Path& path, unsigned int flags)
+CompilerVersion::CompilerVersion(const Path& path, unsigned int flags, const String& target)
     : mCompiler(plast::Unknown)
 {
+    if (!target.isEmpty())
+        mTarget = target;
+
     mKey = { path, flags };
     Process proc;
     List<String> args = { "-v" };
@@ -24,7 +27,7 @@ CompilerVersion::CompilerVersion(const Path& path, unsigned int flags)
     const auto list = data.split('\n');
 
     const std::regex verrx("^(Apple LLVM|clang|gcc) version (\\d+)\\.(\\d+)(\\.\\d+)?.*", std::regex_constants::ECMAScript);
-    const std::regex target("^Target: (.*)", std::regex_constants::ECMAScript);
+    const std::regex targetrx("^Target: (.*)", std::regex_constants::ECMAScript);
     std::smatch match;
     for (const auto& line : list) {
         if (std::regex_match(line.ref(), match, verrx)) {
@@ -48,7 +51,7 @@ CompilerVersion::CompilerVersion(const Path& path, unsigned int flags)
                 mVersion.patch = 0;
             }
             mVersion.str = line;
-        } else if (std::regex_match(line.ref(), match, target)) {
+        } else if (mTarget.isEmpty() && std::regex_match(line.ref(), match, targetrx)) {
             assert(match.size() == 2);
             mTarget = match[1].str();
         }
@@ -57,23 +60,24 @@ CompilerVersion::CompilerVersion(const Path& path, unsigned int flags)
         mCompiler = plast::Unknown;
 }
 
-CompilerVersion::SharedPtr CompilerVersion::version(const Path& path, unsigned int flags)
+CompilerVersion::SharedPtr CompilerVersion::version(const Path& path, unsigned int flags, const String& target)
 {
     const PathKey k = { path.resolved(), flags & FlagMask };
     auto it = sVersions.find(k);
     if (it == sVersions.end()) {
-        CompilerVersion::SharedPtr ver(new CompilerVersion(k.path, k.flags));
+        CompilerVersion::SharedPtr ver(new CompilerVersion(k.path, k.flags, target));
         if (!ver->isValid()) {
             return CompilerVersion::SharedPtr();
         }
         sVersions[k] = ver;
         sVersionsByKey[{ ver->compiler(), ver->major(), ver->target() }] = ver;
+        error() << "registered compiler" << path << ver->compiler() << ver->major() << ver->target();
         return ver;
     }
     return it->second;
 }
 
-void CompilerVersion::init(const Path& path, unsigned int flags)
+void CompilerVersion::init(const Path& path, unsigned int flags, const String& target)
 {
     version(path, flags);
 }
