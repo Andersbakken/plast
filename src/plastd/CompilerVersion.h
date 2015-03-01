@@ -14,8 +14,8 @@ public:
     typedef std::shared_ptr<CompilerVersion> SharedPtr;
     typedef std::weak_ptr<CompilerVersion> WeakPtr;
 
-    static void init(const Path& path);
-    static SharedPtr version(const Path& path);
+    static void init(const Path& path, unsigned int flags = 0);
+    static SharedPtr version(const Path& path, unsigned int flags = 0);
     static SharedPtr version(plast::CompilerType compiler, int major, const String& target);
     static bool hasCompiler(plast::CompilerType compiler, int major, const String& target);
 
@@ -47,7 +47,7 @@ private:
     static Map<plast::CompilerKey, WeakPtr> sVersionsByKey;
 
 private:
-    CompilerVersion(const Path& path);
+    CompilerVersion(const Path& path, unsigned int flags);
     CompilerVersion(const CompilerVersion&) = delete;
     CompilerVersion& operator=(const CompilerVersion&) = delete;
 };

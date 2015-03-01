@@ -1,8 +1,10 @@
 #include "Daemon.h"
 #include "Job.h"
 #include "CompilerVersion.h"
+#include "CompilerArgs.h"
 #include <rct/Log.h>
 #include <rct/QuitMessage.h>
+#include <rct/Rct.h>
 
 Daemon::WeakPtr Daemon::sInstance;
 
@@ -16,7 +18,10 @@ Daemon::Daemon(const Options& opts)
         mCompilers << "/usr/bin/c++";
     }
     for (const Path& c : mCompilers) {
-        CompilerVersion::init(c.resolved());
+        const Path r = c.resolved();
+        CompilerVersion::init(r);
+        if (Rct::is64Bit)
+            CompilerVersion::init(r, CompilerArgs::HasDashM32);
     }
 }
 

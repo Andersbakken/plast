@@ -1,4 +1,5 @@
 #include "CompilerVersion.h"
+#include "CompilerArgs.h"
 #include <rct/Process.h>
 #include <rct/Log.h>
 #include <regex>
@@ -6,11 +7,14 @@
 Hash<Path, CompilerVersion::SharedPtr> CompilerVersion::sVersions;
 Map<plast::CompilerKey, CompilerVersion::WeakPtr> CompilerVersion::sVersionsByKey;
 
-CompilerVersion::CompilerVersion(const Path& path)
+CompilerVersion::CompilerVersion(const Path& path, unsigned int flags)
     : mCompiler(plast::Unknown), mPath(path)
 {
     Process proc;
-    if (proc.exec(path, List<String>() << "-v") != Process::Done)
+    List<String> args = { "-v" };
+    if (flags & CompilerArgs::HasDashM32)
+        args.append("-m32");
+    if (proc.exec(path, args) != Process::Done)
         return;
     String data = proc.readAllStdErr();
     if (data.isEmpty())
@@ -53,12 +57,12 @@ CompilerVersion::CompilerVersion(const Path& path)
         mCompiler = plast::Unknown;
 }
 
-CompilerVersion::SharedPtr CompilerVersion::version(const Path& path)
+CompilerVersion::SharedPtr CompilerVersion::version(const Path& path, unsigned int flags)
 {
     const Path r = path.resolved();
     auto it = sVersions.find(r);
     if (it == sVersions.end()) {
-        CompilerVersion::SharedPtr ver(new CompilerVersion(r));
+        CompilerVersion::SharedPtr ver(new CompilerVersion(r, flags));
         if (!ver->isValid()) {
             return CompilerVersion::SharedPtr();
         }
@@ -69,9 +73,9 @@ CompilerVersion::SharedPtr CompilerVersion::version(const Path& path)
     return it->second;
 }
 
-void CompilerVersion::init(const Path& path)
+void CompilerVersion::init(const Path& path, unsigned int flags)
 {
-    version(path);
+    version(path, flags);
 }
 
 CompilerVersion::SharedPtr CompilerVersion::version(plast::CompilerType compiler, int major, const String& target)

@@ -16,10 +16,12 @@ Job::Job(const Path& path, const List<String>& args, Type type,
       mCompilerType(ctype), mCompilerMajor(cmajor), mCompilerTarget(ctarget)
 {
     assert(!mArgs.isEmpty());
+    mCompilerArgs = CompilerArgs::create(mArgs);
+
     if (mCompilerType == plast::Unknown) {
         mResolvedCompiler = plast::resolveCompiler(mArgs.front());
         if (!mResolvedCompiler.isEmpty()) {
-            CompilerVersion::SharedPtr version = CompilerVersion::version(mResolvedCompiler);
+            CompilerVersion::SharedPtr version = CompilerVersion::version(mResolvedCompiler, mCompilerArgs->flags);
             if (version) {
                 mCompilerType = version->compiler();
                 mCompilerMajor = version->major();
@@ -42,8 +44,6 @@ Job::Job(const Path& path, const List<String>& args, Type type,
         assert(cmajor == version->major());
         assert(ctarget == version->target());
     }
-
-    mCompilerArgs = CompilerArgs::create(mArgs);
 }
 
 Job::~Job()

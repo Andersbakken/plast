@@ -63,6 +63,8 @@ std::shared_ptr<CompilerArgs> CompilerArgs::create(const List<String> &args)
         } else if (arg == "-o") {
             ret->flags |= HasDashO;
             ret->objectFileIndex = ++i;
+        } else if (arg == "-m32") {
+            ret->flags |= HasDashM32;
         } else if (arg == "-MF") {
             ret->flags |= HasDashMF;
             ++i;
