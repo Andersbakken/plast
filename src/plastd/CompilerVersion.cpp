@@ -43,6 +43,7 @@ CompilerVersion::CompilerVersion(const Path& path)
             } else {
                 mVersion.patch = 0;
             }
+            mVersion.str = line;
         } else if (std::regex_match(line.ref(), match, target)) {
             assert(match.size() == 2);
             mTarget = match[1].str();
