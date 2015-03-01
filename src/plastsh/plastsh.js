@@ -74,11 +74,11 @@ var handlers = {
     peers: function() {
         sendCommand('peers');
     },
-    test: function(args) {
-        sendCommand('test', args);
-    },
     block: function(args) {
         sendCommand('block', args);
+    },
+    unblock: function(args) {
+        sendCommand('unblock', args);
     }
 };
 

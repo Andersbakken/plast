@@ -71,20 +71,17 @@ Scheduler::Scheduler(const Options& opts)
                                         ws->write((JsonObject() << "peer" << p->name() << "ip" << p->ip()).dump());
                                     }
                                 } },
-                            { "test", [](WebSocket* ws, const List<json>& args) {
-                                    error() << "test?";
-                                    for (const auto& k : args) {
-                                        error() << k.dump();
-                                    }
-                                    const json resp = {
-                                        { "text", {
-                                                "line 1", "line 2"
-                                            }
-                                        }
-                                    };
-                                    ws->write(resp.dump());
-                                } },
                             { "block", [this](WebSocket* ws, const List<json>& args) {
+                                    if (args.isEmpty()) {
+                                        // list all blocks
+                                        json::array_t all;
+                                        for (const String& b : mBlackList) {
+                                            all.push_back(b);
+                                        }
+                                        ws->write((JsonObject() << "blacklisted" << all).dump());
+                                        return;
+                                    }
+
                                     auto block = [this, ws](const String& peer) -> bool {
                                         if (mWhiteList.contains(peer)) {
                                             // report error
@@ -100,8 +97,8 @@ Scheduler::Scheduler(const Options& opts)
                                     // find each peer, get the address
                                     for (const json& j : args) {
                                         if (j.is_string()) {
-                                            String name = j.get<json::string_t>();
-                                            Set<Peer::SharedPtr> peers = findPeers(name);
+                                            const String name = j.get<json::string_t>();
+                                            const Set<Peer::SharedPtr> peers = findPeers(name);
                                             if (peers.isEmpty()) {
                                                 if (Rct::isIP(name))
                                                     block(name);
@@ -112,7 +109,25 @@ Scheduler::Scheduler(const Options& opts)
                                             for (const auto& p : peers) {
                                                 if (block(p->ip())) {
                                                     mPeers.erase(p);
+                                                    const json peerj = {
+                                                        { "type", "peer" },
+                                                        { "id", p->id() },
+                                                        { "delete", true }
+                                                    };
+                                                    sendToAll(peerj.dump());
                                                 }
+                                            }
+                                        }
+                                    }
+                                } },
+                            { "unblock", [this](WebSocket* ws, const List<json>& args) {
+                                    for (const json& j : args) {
+                                        if (j.is_string()) {
+                                            const String name = j.get<json::string_t>();
+                                            if (mBlackList.remove(name)) {
+                                                ws->write((JsonObject() << "unblocked" << name).dump());
+                                            } else {
+                                                ws->write((JsonObject() << "error" << (name + " not found in blacklist")).dump());
                                             }
                                         }
                                     }
