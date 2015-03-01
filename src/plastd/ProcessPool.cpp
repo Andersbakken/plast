@@ -51,6 +51,7 @@ bool ProcessPool::runProcess(Process*& proc, const Job& job, bool except)
                     }
                     // make this process available for new jobs
                     mAvail.push_back(proc);
+                    mIdle(this);
                 }
             });
     }

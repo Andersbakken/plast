@@ -105,8 +105,6 @@ void Local::init()
                 unlink(fn.constData());
             }
             Job::finish(job.get());
-
-            takeRemoteJobs();
         });
     mPool.error().connect([this](ProcessPool::Id id) {
             error() << "pool error for" << id;
@@ -126,6 +124,9 @@ void Local::init()
             job->updateStatus(Job::Error);
             Job::finish(job.get());
 
+            takeRemoteJobs();
+        });
+    mPool.idle().connect([this](ProcessPool*) {
             takeRemoteJobs();
         });
 }

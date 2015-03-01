@@ -32,6 +32,7 @@ public:
     Signal<std::function<void(Id, Process*)> >& readyReadStdOut() { return mReadyReadStdOut; }
     Signal<std::function<void(Id, Process*)> >& readyReadStdErr() { return mReadyReadStdErr; }
     Signal<std::function<void(Id, Process*)> >& finished() { return mFinished; }
+    Signal<std::function<void(ProcessPool*)> >& idle() { return mIdle; }
     Signal<std::function<void(Id)> >& error() { return mError; }
 
     bool isIdle() const { return !mAvail.isEmpty() || mProcs.size() < mCount; }
@@ -56,6 +57,7 @@ private:
     List<Process*> mProcs, mAvail;
     Signal<std::function<void(Id, Process*)> > mStarted, mReadyReadStdOut, mReadyReadStdErr, mFinished;
     Signal<std::function<void(Id)> > mError;
+    Signal<std::function<void(ProcessPool*)> > mIdle;
 
     LinkedList<Job> mPending;
     Hash<Id, Job> mPrepared;
