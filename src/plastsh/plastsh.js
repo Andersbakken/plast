@@ -1,4 +1,6 @@
-/*global require, process console*/
+#!/usr/bin/env node
+
+// var global, require, process, console
 
 var opts = {
     host: "127.0.0.1",
