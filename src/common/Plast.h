@@ -7,7 +7,6 @@ namespace plast {
 
 enum CompilerType {
     Unknown,
-    ClangApple,
     Clang,
     GCC
 };

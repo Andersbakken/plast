@@ -33,9 +33,7 @@ CompilerVersion::CompilerVersion(const Path& path, unsigned int flags, const Str
         if (std::regex_match(line.ref(), match, verrx)) {
             assert(match.size() >= 4);
             const String c = match[1].str();
-            if (c == "Apple LLVM") {
-                mCompiler = plast::ClangApple;
-            } else if (c == "clang") {
+            if (c == "Apple LLVM" || c == "clang") {
                 mCompiler = plast::Clang;
             } else if (c == "gcc") {
                 mCompiler = plast::GCC;
