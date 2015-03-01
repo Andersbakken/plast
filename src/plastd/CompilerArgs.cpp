@@ -29,8 +29,8 @@ static const char *argOptions[] = {
     "-isysroot",
     "-iwithprefix",
     "-iwithprefixbefore",
-    "-target"
-    "-wrapper",
+    "-target",
+    "-wrapper"
 };
 
 static int compare(const void *s1, const void *s2) {
