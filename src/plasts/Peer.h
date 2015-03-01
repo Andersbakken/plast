@@ -18,6 +18,7 @@ public:
 
     Connection* connection() { return &mConnection; }
 
+    String ip() const { return mConnection.client()->peerName(); }
     String name() const { return mName; }
     int id() const { return mId; }
 

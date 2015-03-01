@@ -38,7 +38,16 @@ function setupWs()
     ws = new websocket('ws://' + opts.host + ':' + opts.port + '/');
 
     ws.on('message', function(data, flags) {
-        console.log('ws msg', data);
+        try {
+            var resp = JSON.parse(data);
+        } catch (e) {
+            console.log("Unable to parse " + data + " as JSON");
+        }
+        if (resp.error) {
+            console.log("Error:", resp.error);
+        } else {
+            console.log(resp);
+        }
     });
     ws.on('close', function() {
         console.log('ws socket closed');
@@ -67,6 +76,9 @@ var handlers = {
     },
     test: function(args) {
         sendCommand('test', args);
+    },
+    block: function(args) {
+        sendCommand('block', args);
     }
 };
 

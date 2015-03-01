@@ -3,6 +3,7 @@
 #include <JsonUtils.h>
 #include <rct/Log.h>
 #include <string.h>
+#include <regex>
 
 using nlohmann::json;
 
@@ -33,13 +34,17 @@ static inline const char* guessMime(const Path& file)
 Scheduler::Scheduler(const Options& opts)
     : mOpts(opts)
 {
+    readSettings();
+
     mServer.newConnection().connect([this](SocketServer* server) {
             SocketClient::SharedPtr client;
             for (;;) {
                 client = server->nextConnection();
                 if (!client)
                     return;
-                addPeer(std::make_shared<Peer>(client));
+                const String& ip = client->peerName();
+                if (mWhiteList.contains(ip) || !mBlackList.contains(ip))
+                    addPeer(std::make_shared<Peer>(client));
             }
         });
     error() << "listening on" << mOpts.port;
@@ -61,16 +66,56 @@ Scheduler::Scheduler(const Options& opts)
                         mWebSockets[websocket.get()] = websocket;
 
                         Map<String, CmdHandler> cmds = {
-                            { "peers", [](WebSocket* ws, const List<json>& args) {
-                                    error() << "peers?";
-                                    ws->write("peers goes here");
+                            { "peers", [this](WebSocket* ws, const List<json>& args) {
+                                    for (const auto& p : mPeers) {
+                                        ws->write((JsonObject() << "peer" << p->name() << "ip" << p->ip()).dump());
+                                    }
                                 } },
                             { "test", [](WebSocket* ws, const List<json>& args) {
                                     error() << "test?";
                                     for (const auto& k : args) {
                                         error() << k.dump();
                                     }
-                                    ws->write("test goes here");
+                                    const json resp = {
+                                        { "text", {
+                                                "line 1", "line 2"
+                                            }
+                                        }
+                                    };
+                                    ws->write(resp.dump());
+                                } },
+                            { "block", [this](WebSocket* ws, const List<json>& args) {
+                                    auto block = [this, ws](const String& peer) -> bool {
+                                        if (mWhiteList.contains(peer)) {
+                                            // report error
+                                            ws->write((JsonObject() << "error" << "whitelisted").dump());
+                                            return false;
+                                        }
+                                        mBlackList.insert(peer);
+                                        writeSettings();
+                                        ws->write((JsonObject() << "blacklisted" << peer).dump());
+                                        return true;
+                                    };
+
+                                    // find each peer, get the address
+                                    for (const json& j : args) {
+                                        if (j.is_string()) {
+                                            String name = j.get<json::string_t>();
+                                            Set<Peer::SharedPtr> peers = findPeers(name);
+                                            if (peers.isEmpty()) {
+                                                if (Rct::isIP(name))
+                                                    block(name);
+                                                else
+                                                    ws->write((JsonObject() << "error" << ("peer not found: " + name)).dump());
+                                                return;
+                                            }
+                                            for (const auto& p : peers) {
+                                                if (block(p->ip())) {
+                                                    mPeers.erase(p);
+                                                }
+                                            }
+                                        }
+                                    }
                                 } }
                         };
 
@@ -92,7 +137,9 @@ Scheduler::Scheduler(const Options& opts)
                                     const auto& cmd = cmds.find(cmdname.get<std::string>());
                                     if (cmd == cmds.end()) {
                                         error() << "cmd" << cmdname.get<std::string>() << "not recognized";
-                                        websocket->write((JsonObject() << "error" << ("cmd " + cmdname.get<std::string>() + " not recognized")).dump());
+                                        websocket->write((JsonObject()
+                                                          << "cmd" << cmdname.get<std::string>()
+                                                          << "error" << "not recognized").dump());
                                         return;
                                     }
                                     const auto args = j["args"];
@@ -161,6 +208,48 @@ Scheduler::Scheduler(const Options& opts)
 
 Scheduler::~Scheduler()
 {
+}
+
+Set<Peer::SharedPtr> Scheduler::findPeers(const String& name)
+{
+    Set<Peer::SharedPtr> ret;
+
+    std::smatch match;
+    const std::regex rx(name.constData(), std::regex_constants::ECMAScript | std::regex_constants::icase);
+    for (const auto& p : mPeers) {
+        if (std::regex_match(p->name().ref(), match, rx)) {
+            if (match.position() == 0 && match.length() == p->name().size())
+                ret.insert(p);
+        } else if (std::regex_match(p->ip().ref(), match, rx)) {
+            if (match.position() == 0 && match.length() == p->ip().size())
+                ret.insert(p);
+        }
+    }
+
+    return ret;
+}
+
+void Scheduler::readSettings()
+{
+    auto readSet = [](const Path& fn, Set<String>& set) {
+        set.clear();
+        set << fn.readAll().split('\n', String::SkipEmpty);
+    };
+    readSet(Path::home() + ".config/plasts.whitelist", mWhiteList);
+    readSet(Path::home() + ".config/plasts.blacklist", mBlackList);
+}
+
+void Scheduler::writeSettings()
+{
+    auto writeSet = [](const Path& fn, const Set<String>& set) {
+        String w;
+        for (const String& k : set) {
+            w += k + "\n";
+        }
+        fn.write(w);
+    };
+    writeSet(Path::home() + ".config/plasts.whitelist", mWhiteList);
+    writeSet(Path::home() + ".config/plasts.blacklist", mBlackList);
 }
 
 void Scheduler::sendToAll(const WebSocket::Message& msg)

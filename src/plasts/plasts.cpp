@@ -19,6 +19,11 @@ inline bool validate(int64_t c, const char* name, String& err)
     return true;
 }
 
+static inline void ensurePath(const Path& p)
+{
+    p.mkdir();
+}
+
 int main(int argc, char** argv)
 {
     Rct::findExecutablePath(*argv);
@@ -36,6 +41,8 @@ int main(int argc, char** argv)
                 logLevel, logFile ? logFile : "", logFlags);
         return 1;
     }
+
+    ensurePath(Path::home() + ".config");
 
     Config::parse(argc, argv, List<Path>() << (Path::home() + ".config/plasts.rc") << "/etc/plasts.rc");
     if (Config::isEnabled("help")) {

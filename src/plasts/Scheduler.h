@@ -9,6 +9,7 @@
 #include <rct/SocketServer.h>
 #include <rct/Hash.h>
 #include <rct/Set.h>
+#include <rct/String.h>
 #include <memory>
 
 class Scheduler : public std::enable_shared_from_this<Scheduler>
@@ -37,12 +38,18 @@ private:
     void sendToAll(const WebSocket::Message& msg);
     void sendToAll(const String& msg);
 
+    void readSettings();
+    void writeSettings();
+
+    Set<Peer::SharedPtr> findPeers(const String& name);
+
 private:
     SocketServer mServer;
     HttpServer mHttpServer;
     Set<Peer::SharedPtr> mPeers;
     Options mOpts;
     Hash<WebSocket*, WebSocket::SharedPtr> mWebSockets;
+    Set<String> mBlackList, mWhiteList;
 
 private:
     static WeakPtr sInstance;
