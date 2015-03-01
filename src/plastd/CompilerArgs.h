@@ -74,7 +74,8 @@ struct CompilerArgs
         Assembler = 0x80000,
         LanguageMask = CPlusPlus|C|CPreprocessed|CPlusPlusPreprocessed|ObjectiveC|AssemblerWithCpp|Assembler
     };
-    static const char *languageName(Flag flag);
+    static Flag preprocessedFlag(Flag);
+    static const char *languageName(Flag flag, bool preprocessed = false);
     unsigned int flags;
 
     static std::shared_ptr<CompilerArgs> create(const List<String> &args);
@@ -96,6 +97,19 @@ struct CompilerArgs
         }
     }
 };
+
+inline CompilerArgs::Flag CompilerArgs::preprocessedFlag(Flag flag)
+{
+    switch (flag) {
+    case C:
+        return CPreprocessed;
+    case CPlusPlus:
+        return CPlusPlusPreprocessed;
+    default:
+        break;
+    }
+    return None;
+}
 
 inline Serializer &operator<<(Serializer &serializer, const CompilerArgs &args)
 {

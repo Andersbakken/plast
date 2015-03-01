@@ -76,7 +76,7 @@ std::shared_ptr<CompilerArgs> CompilerArgs::create(const List<String> &args)
             if (++i == args.size())
                 return std::shared_ptr<CompilerArgs>();
             const String lang = args.value(i);
-            const CompilerArgs::Flag languages[] = { CPlusPlus, C, CPreprocessed, CPlusPlusPreprocessed, ObjectiveC, AssemblerWithCpp, Assembler };
+            const CompilerArgs::Flag languages[] = { CPlusPlus, C, CPreprocessed, CPlusPlusPreprocessed, ObjectiveC, ObjectiveCPlusPlus, AssemblerWithCpp, Assembler };
             for (size_t j=0; j<sizeof(languages) / sizeof(languages[0]); ++j) {
                 if (lang == CompilerArgs::languageName(languages[j])) {
                     ret->flags &= ~LanguageMask;
@@ -125,14 +125,20 @@ std::shared_ptr<CompilerArgs> CompilerArgs::create(const List<String> &args)
     return ret;
 }
 
-const char *CompilerArgs::languageName(Flag flag)
+const char *CompilerArgs::languageName(Flag flag, bool preprocessed)
 {
+    if (preprocessed) {
+        const Flag preflag = preprocessedFlag(flag);
+        if (preflag != None)
+            flag = preflag;
+    }
     switch (flag) {
     case CPlusPlus: return "c++";
     case C: return "c";
     case CPreprocessed: return "cpp-output";
     case CPlusPlusPreprocessed: return "c++-cpp-output";
     case ObjectiveC: return "objective-c"; // ### what about ObjectiveC++?
+    case ObjectiveCPlusPlus: return "objective-c++";
     case AssemblerWithCpp: return "assembler-with-cpp";
     case Assembler: return "assembler";
     default: break;

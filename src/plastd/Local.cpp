@@ -162,16 +162,9 @@ void Local::post(const Job::SharedPtr& job)
 
         String lang;
         if (!(args->flags & CompilerArgs::HasDashX)) {
-            // need to add language, see if CompilerArgs already knows
-            if (args->flags & CompilerArgs::C) {
-                lang = "c";
-            } else if (args->flags & CompilerArgs::CPlusPlus) {
-                lang = "c++";
-            } else if (args->flags & CompilerArgs::ObjectiveC) {
-                lang = "objective-c";
-            } else if (args->flags & CompilerArgs::ObjectiveCPlusPlus) {
-                lang = "objective-c++";
-            } else {
+            CompilerArgs::Flag f = static_cast<CompilerArgs::Flag>(args->flags & CompilerArgs::LanguageMask);
+            lang = CompilerArgs::languageName(f, true);
+            if (lang.isEmpty()) {
                 error() << "Unknown language";
                 job->mError = "Unknown language for remote job";
                 job->updateStatus(Job::Error);

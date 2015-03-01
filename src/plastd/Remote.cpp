@@ -65,7 +65,7 @@ void Remote::init()
     }
 
     mRescheduleTimer.timeout().connect([this](Timer*) {
-            error() << "checking for reschedule!!!";
+            //error() << "checking for reschedule!!!";
             const uint64_t now = Rct::monoMs();
             // reschedule outstanding jobs only, local will get to pending jobs eventually
 #warning Should we reschedule pending remote jobs?
