@@ -44,7 +44,6 @@ Job::Job(const Path& path, const List<String>& args, Type type,
         assert(cmajor == version->major());
         assert(ctarget == version->target());
 
-#warning how do we tell GCC to use a specific target?
         if (version->compiler() == plast::Clang) {
             mArgs << "-target" << version->target();
         }
