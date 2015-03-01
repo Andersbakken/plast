@@ -1,15 +1,15 @@
 #include "CompilerVersion.h"
-#include "CompilerArgs.h"
 #include <rct/Process.h>
 #include <rct/Log.h>
 #include <regex>
 
-Hash<Path, CompilerVersion::SharedPtr> CompilerVersion::sVersions;
+Map<CompilerVersion::PathKey, CompilerVersion::SharedPtr> CompilerVersion::sVersions;
 Map<plast::CompilerKey, CompilerVersion::WeakPtr> CompilerVersion::sVersionsByKey;
 
 CompilerVersion::CompilerVersion(const Path& path, unsigned int flags)
-    : mCompiler(plast::Unknown), mPath(path)
+    : mCompiler(plast::Unknown)
 {
+    mKey = { path, flags };
     Process proc;
     List<String> args = { "-v" };
     if (flags & CompilerArgs::HasDashM32)
@@ -59,14 +59,14 @@ CompilerVersion::CompilerVersion(const Path& path, unsigned int flags)
 
 CompilerVersion::SharedPtr CompilerVersion::version(const Path& path, unsigned int flags)
 {
-    const Path r = path.resolved();
-    auto it = sVersions.find(r);
+    const PathKey k = { path.resolved(), flags & FlagMask };
+    auto it = sVersions.find(k);
     if (it == sVersions.end()) {
-        CompilerVersion::SharedPtr ver(new CompilerVersion(r, flags));
+        CompilerVersion::SharedPtr ver(new CompilerVersion(k.path, k.flags));
         if (!ver->isValid()) {
             return CompilerVersion::SharedPtr();
         }
-        sVersions[r] = ver;
+        sVersions[k] = ver;
         sVersionsByKey[{ ver->compiler(), ver->major(), ver->target() }] = ver;
         return ver;
     }

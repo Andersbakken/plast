@@ -1,6 +1,7 @@
 #ifndef COMPILERVERSION_H
 #define COMPILERVERSION_H
 
+#include "CompilerArgs.h"
 #include <rct/Map.h>
 #include <rct/Hash.h>
 #include <rct/Path.h>
@@ -28,7 +29,7 @@ public:
 
     String target() const { return mTarget; }
 
-    Path path() const { return mPath; }
+    Path path() const { return mKey.path; }
 
     bool isValid() { return mCompiler != plast::Unknown; }
 
@@ -41,9 +42,22 @@ private:
         String str;
     } mVersion;
     String mTarget;
-    Path mPath;
 
-    static Hash<Path, SharedPtr> sVersions;
+    enum { FlagMask = CompilerArgs::HasDashM32 };
+    struct PathKey {
+        Path path;
+        unsigned int flags;
+
+        bool operator<(const PathKey& other) const
+        {
+            if (path < other.path)
+                return true;
+            if (path > other.path)
+                return false;
+            return flags < other.flags;
+        }
+    } mKey;
+    static Map<PathKey, SharedPtr> sVersions;
     static Map<plast::CompilerKey, WeakPtr> sVersionsByKey;
 
 private:
