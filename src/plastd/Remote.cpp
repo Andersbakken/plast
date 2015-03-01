@@ -121,7 +121,8 @@ void Remote::handleJobMessage(const JobMessage::SharedPtr& msg, Connection* conn
     error() << "handle job message!";
     // let's make a job out of this
     Job::SharedPtr job = Job::create(msg->path(), msg->args(), Job::RemoteJob, msg->remoteName(),
-                                     msg->id(), msg->preprocessed(), msg->serial());
+                                     msg->id(), msg->preprocessed(), msg->serial(),
+                                     msg->compilerType(), msg->compilerMajor(), msg->compilerTarget());
     job->statusChanged().connect([conn](Job* job, Job::Status status) {
             error() << "remote job status changed" << job << status;
             switch (status) {
