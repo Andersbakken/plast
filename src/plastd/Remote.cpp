@@ -373,6 +373,7 @@ void Remote::removeJob(uint64_t id)
 
 Job::SharedPtr Remote::take()
 {
+#warning we should probably only take these after some timeout since we already paid the cost of preprocessing
     // prefer jobs that are not sent out
     while (!mPending.isEmpty()) {
         auto p = mPending.begin();
@@ -384,9 +385,11 @@ Job::SharedPtr Remote::take()
         if (job)
             return job;
     }
-    // take oldest pending jobs first
-    for (auto time : mBuildingByTime) {
-        for (auto cand : time.second) {
+    // take newest pending jobs first, the assumption is that this
+    // will be the job that will take the longest to get back to us
+    auto time = mBuildingByTime.rbegin();
+    while (time != mBuildingByTime.rend()) {
+        for (auto cand : time->second) {
             Job::SharedPtr job = cand->job.lock();
             if (job && job->status() == Job::RemotePending) {
 #warning should we take jobs we have partially received in case the connection times out?
@@ -399,6 +402,7 @@ Job::SharedPtr Remote::take()
                 return job;
             }
         }
+        ++time;
     }
     return Job::SharedPtr();
 }
