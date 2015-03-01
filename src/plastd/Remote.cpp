@@ -442,6 +442,46 @@ Connection* Remote::addClient(const SocketClient::SharedPtr& client)
                     ++ck;
                 }
             }
+            // go through all pending jobs, we'll need to hard
+            // reschedule all jobs from this connection
+            {
+                auto t = mBuildingByTime.begin();
+                while (t != mBuildingByTime.end()) {
+                    assert(!t->second.isEmpty());
+                    auto b = t->second.begin();
+                    while (b != t->second.end()) {
+                        if ((*b)->conn == conn) {
+                            Job::SharedPtr j = (*b)->job.lock();
+                            if (j) {
+                                // reschedule
+                                assert(j->status() != Job::Compiled);
+                                assert(j->id() == (*b)->jobid);
+
+                                b = t->second.erase(b);
+                                assert(mBuildingById.contains(j->id()));
+                                mBuildingById.erase(j->id());
+
+                                error() << "hard rescheduling" << j->id();
+                                j->updateStatus(Job::Idle);
+                                j->increaseSerial();
+                                j->start();
+                                continue;
+                            } else {
+                                // no job? that's strange. take it out
+                                mBuildingById.erase((*b)->jobid);
+                                b = t->second.erase(b);
+                                continue;
+                            }
+                        }
+                        ++b;
+                    }
+                    if (t->second.isEmpty()) {
+                        mBuildingByTime.erase(t++);
+                    } else {
+                        ++t;
+                    }
+                }
+            }
 
             auto itc = mPeersByConn.find(conn);
             if (itc == mPeersByConn.end())
