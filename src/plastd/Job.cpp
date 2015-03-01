@@ -16,9 +16,9 @@ Job::Job(const Path& path, const List<String>& args, Type type,
       mCompilerType(ctype), mCompilerMajor(cmajor), mCompilerTarget(ctarget)
 {
     assert(!mArgs.isEmpty());
-    mCompilerArgs = CompilerArgs::create(mArgs);
 
     if (mCompilerType == plast::Unknown) {
+        mCompilerArgs = CompilerArgs::create(mArgs);
         mResolvedCompiler = plast::resolveCompiler(mArgs.front());
         if (!mResolvedCompiler.isEmpty()) {
             CompilerVersion::SharedPtr version = CompilerVersion::version(mResolvedCompiler, mCompilerArgs->flags);
@@ -43,6 +43,12 @@ Job::Job(const Path& path, const List<String>& args, Type type,
         assert(ctype == version->compiler());
         assert(cmajor == version->major());
         assert(ctarget == version->target());
+
+#warning how do we tell GCC to use a specific target?
+        if (version->compiler() == plast::Clang) {
+            mArgs << "-target" << version->target();
+        }
+        mCompilerArgs = CompilerArgs::create(mArgs);
     }
 }
 
