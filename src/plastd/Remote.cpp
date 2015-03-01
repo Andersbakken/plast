@@ -87,6 +87,7 @@ void Remote::init()
                     if (job) {
                         error() << "job still exists" << job->status() << job->id();
                         if (job->status() != Job::RemotePending) {
+#warning should we reschedule jobs we have partially received in case the connection times out?
                             // can only reschedule remotepending jobs
                             ++it;
                             continue;
@@ -387,6 +388,7 @@ Job::SharedPtr Remote::take()
         for (auto cand : time.second) {
             Job::SharedPtr job = cand->job.lock();
             if (job && job->status() == Job::RemotePending) {
+#warning should we take jobs we have partially received in case the connection times out?
                 // we can take this job since we haven't received any data for it yet
                 job->increaseSerial();
                 job->updateStatus(Job::Idle);
