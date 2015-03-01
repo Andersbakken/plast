@@ -23,6 +23,8 @@ public:
         uint16_t serverPort;
         uint16_t localPort;
         Path localUnixPath;
+        int rescheduleTimeout;
+        int rescheduleCheck;
     };
 
     Daemon(const Options& opts);

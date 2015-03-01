@@ -3,11 +3,8 @@
 #include <rct/Log.h>
 #include <unistd.h>
 
-#define RESCHEDULETIMEOUT 15000
-#define RESCHEDULECHECK   5000
-
 Remote::Remote()
-    : mNextId(0), mRescheduleTimer(RESCHEDULECHECK), mRequestedCount(0)
+    : mNextId(0), mRequestedCount(0), mRescheduleTimeout(-1)
 {
 }
 
@@ -31,6 +28,8 @@ void Remote::init()
 
     const Daemon::Options& opts = Daemon::instance()->options();
     mPreprocessor.setCount(opts.preprocessCount);
+    mRescheduleTimer.restart(opts.rescheduleCheck);
+    mRescheduleTimeout = opts.rescheduleTimeout;
 
     if (!mServer.listen(opts.localPort)) {
         error() << "Unable to tcp listen";
@@ -72,8 +71,8 @@ void Remote::init()
             auto it = mBuildingByTime.begin();
             while (it != mBuildingByTime.end()) {
                 const uint64_t started = it->first;
-                error() << "considering" << now << started << (now - started) << RESCHEDULETIMEOUT;
-                if (now - started < RESCHEDULETIMEOUT)
+                error() << "considering" << now << started << (now - started) << mRescheduleTimeout;
+                if (now - started < mRescheduleTimeout)
                     break;
                 error() << "job has expired";
                 // reschedule

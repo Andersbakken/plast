@@ -11,7 +11,9 @@ enum {
     DefaultServerPort = 5166,
     DefaultDaemonPort = 5167,
     DefaultDiscoveryPort = 5168,
-    DefaultHttpPort = 5169
+    DefaultHttpPort = 5169,
+    DefaultRescheduleTimeout = 15000,
+    DefaultRescheduleCheck = 2500
 };
 const String DefaultServerHost = "127.0.0.1";
 

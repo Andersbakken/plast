@@ -16,11 +16,11 @@ static void sigSegvHandler(int signal)
     _exit(1);
 }
 
-template<typename T>
+template<typename T, int min = 0>
 inline bool validate(int64_t c, const char* name, String& err)
 {
-    if (c < 0) {
-        err = String::format<128>("Invalid %s. Must be >= 0", name);
+    if (c < min) {
+        err = String::format<128>("Invalid %s. Must be >= %d", name, min);
         return false;
     } else if (c > std::numeric_limits<T>::max()) {
         err = String::format<128>("Invalid %s. Must be <= %d", name, std::numeric_limits<T>::max());
@@ -44,11 +44,17 @@ int main(int argc, char** argv)
                                 [](const int &count, String &err) { return validate<int>(count, "preprocess-count", err); });
     Config::registerOption<String>("server",
                                    String::format<128>("Server to connect to. (defaults to port %d if hostname doesn't contain a port)", plast::DefaultServerPort), 's');
-    Config::registerOption<int>("port", String::format<129>("Use this port, (default %d)", plast::DefaultDaemonPort),'p', plast::DefaultDaemonPort,
+    Config::registerOption<int>("port", String::format<128>("Use this port, (default %d)", plast::DefaultDaemonPort), 'p', plast::DefaultDaemonPort,
                                 [](const int &count, String &err) { return validate<uint16_t>(count, "port", err); });
     Config::registerOption<String>("socket",
                                    String::format<128>("Run daemon with this domain socket. (default %s)", socketPath.constData()),
                                    'n', socketPath);
+    Config::registerOption<int>("reschedule-timeout", String::format<128>("Reschedule job timeout (defaults to %d)", plast::DefaultRescheduleTimeout),
+                                't', plast::DefaultRescheduleTimeout,
+                                [](const int &count, String &err) { return validate<int>(count, "reschedule-timeout", err); });
+    Config::registerOption<int>("reschedule-check", String::format<128>("How often to check for reschedule (defaults to %d)", plast::DefaultRescheduleCheck),
+                                'c', plast::DefaultRescheduleCheck,
+                                [](const int &count, String &err) { return validate<int, 500>(count, "reschedule-check", err); });
 
     Config::parse(argc, argv, List<Path>() << (Path::home() + ".config/plastd.rc") << "/etc/plastd.rc");
     if (Config::isEnabled("help")) {
@@ -77,7 +83,9 @@ int main(int argc, char** argv)
         Config::value<int>("preprocess-count"),
         plast::DefaultServerHost, plast::DefaultServerPort,
         static_cast<uint16_t>(Config::value<int>("port")),
-        Config::value<String>("socket")
+        Config::value<String>("socket"),
+        Config::value<int>("reschedule-timeout"),
+        Config::value<int>("reschedule-check")
     };
     const String serverValue = Config::value<String>("server");
     if (!serverValue.isEmpty()) {

@@ -69,6 +69,7 @@ private:
     Hash<Connection*, int> mRequested;
     Set<Connection*> mHasMore;
     int mRequestedCount;
+    int mRescheduleTimeout;
 
     struct Peer
     {
