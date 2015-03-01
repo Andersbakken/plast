@@ -26,11 +26,12 @@ CompilerVersion::CompilerVersion(const Path& path, unsigned int flags, const Str
         return;
     const auto list = data.split('\n');
 
-    const std::regex verrx("^(Apple LLVM|clang|gcc) version (\\d+)\\.(\\d+)(\\.\\d+)?.*", std::regex_constants::ECMAScript);
+    const std::regex verrx("^(clang|gcc) version (\\d+)\\.(\\d+)(\\.\\d+)?.*", std::regex_constants::ECMAScript);
+    const std::regex aaplrx("^(Apple LLVM).*based on LLVM (\\d+)\\.(\\d+)(\\.\\d+)?.*", std::regex_constants::ECMAScript);
     const std::regex targetrx("^Target: (.*)", std::regex_constants::ECMAScript);
     std::smatch match;
     for (const auto& line : list) {
-        if (std::regex_match(line.ref(), match, verrx)) {
+        auto parse = [this](const String& line, const std::smatch& match) {
             assert(match.size() >= 4);
             const String c = match[1].str();
             if (c == "Apple LLVM" || c == "clang") {
@@ -49,6 +50,11 @@ CompilerVersion::CompilerVersion(const Path& path, unsigned int flags, const Str
                 mVersion.patch = 0;
             }
             mVersion.str = line;
+        };
+        if (std::regex_match(line.ref(), match, verrx)) {
+            parse(line, match);
+        } else if (std::regex_match(line.ref(), match, aaplrx)) {
+            parse(line, match);
         } else if (mTarget.isEmpty() && std::regex_match(line.ref(), match, targetrx)) {
             assert(match.size() == 2);
             mTarget = match[1].str();
