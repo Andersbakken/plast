@@ -136,13 +136,14 @@ void Local::post(const Job::SharedPtr& job)
     error() << "local post";
     std::shared_ptr<CompilerArgs> args = job->compilerArgs();
     List<String> cmdline = args->commandLine;
-    const Path cmd = plast::resolveCompiler(cmdline.front());
+    const Path cmd = job->resolvedCompiler();
     if (cmd.isEmpty()) {
         error() << "Unable to resolve compiler" << cmdline.front();
         job->mError = "Unable to resolve compiler for Local post";
         job->updateStatus(Job::Error);
         return;
     }
+    assert(cmd.isAbsolute());
 
     Data data(job);
 
@@ -229,7 +230,7 @@ void Local::run(const Job::SharedPtr& job)
 {
     error() << "local run";
     List<String> args = job->args();
-    const Path cmd = plast::resolveCompiler(args.front());
+    const Path cmd = job->resolvedCompiler();
     if (cmd.isEmpty()) {
         error() << "Unable to resolve compiler" << args.front();
         job->mError = "Unable to resolve compiler for Local post";

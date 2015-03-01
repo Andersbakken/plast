@@ -1,6 +1,7 @@
 #ifndef JOB_H
 #define JOB_H
 
+#include "CompilerVersion.h"
 #include <rct/Hash.h>
 #include <rct/List.h>
 #include <rct/Path.h>
@@ -25,7 +26,9 @@ public:
 
     static SharedPtr create(const Path& path, const List<String>& args, Type type,
                             const String& remoteName, uint64_t remoteId = 0,
-                            const String& preprocessed = String(), int serial = 0);
+                            const String& preprocessed = String(), int serial = 0,
+                            plast::CompilerType ctype = plast::Unknown,
+                            int cmajor = -1, const String& ctarget = String());
     static SharedPtr job(uint64_t j);
 
     void start();
@@ -37,9 +40,14 @@ public:
     Signal<std::function<void(Job*)> >& readyReadStdOut() { return mReadyReadStdOut; }
     Signal<std::function<void(Job*)> >& readyReadStdErr() { return mReadyReadStdErr; }
 
+    plast::CompilerType compilerType() const { return mCompilerType; }
+    int compilerMajor() const { return mCompilerMajor; }
+    String compilerTarget() const { return mCompilerTarget; }
+
     Status status() const { return mStatus; }
     bool isPreprocessed() const { return !mPreprocessed.isEmpty(); }
     Path path() const { return mPath; }
+    Path resolvedCompiler() const { return mResolvedCompiler; }
     String preprocessed() const { return mPreprocessed; }
     String objectCode() const { return mObjectCode; }
     List<String> args() const { return mArgs; }
@@ -61,7 +69,8 @@ public:
 
 private:
     Job(const Path& path, const List<String>& args, Type type, uint64_t remoteId,
-        const String& preprocessed, int serial, const String& remoteName);
+        const String& preprocessed, int serial, const String& remoteName,
+        plast::CompilerType ctype, int cmajor, const String& ctarget);
 
     void writeFile(const String& data);
     void updateStatus(Status status);
@@ -74,7 +83,7 @@ private:
     String mError;
     List<String> mArgs;
     std::shared_ptr<CompilerArgs> mCompilerArgs;
-    Path mPath;
+    Path mPath, mResolvedCompiler;
     uint64_t mRemoteId;
     String mPreprocessed, mObjectCode;
     String mStdOut, mStdErr;
@@ -83,6 +92,9 @@ private:
     int mSerial;
     uint64_t mId;
     String mRemoteName;
+    plast::CompilerType mCompilerType;
+    int mCompilerMajor;
+    String mCompilerTarget;
 
     static Hash<uint64_t, SharedPtr> sJobs;
     static uint64_t sNextId;

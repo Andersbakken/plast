@@ -8,6 +8,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
 set(SOURCES
     plastd.cpp
     CompilerArgs.cpp
+    CompilerVersion.cpp
     Daemon.cpp
     Job.cpp
     Local.cpp

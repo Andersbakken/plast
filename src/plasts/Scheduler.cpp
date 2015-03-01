@@ -126,6 +126,7 @@ Scheduler::Scheduler(const Options& opts)
                                             const String name = j.get<json::string_t>();
                                             if (mBlackList.remove(name)) {
                                                 ws->write((JsonObject() << "unblocked" << name).dump());
+                                                writeSettings();
                                             } else {
                                                 ws->write((JsonObject() << "error" << (name + " not found in blacklist")).dump());
                                             }
@@ -299,7 +300,10 @@ void Scheduler::addPeer(const Peer::SharedPtr& peer)
     peer->event().connect([this](const Peer::SharedPtr& peer, Peer::Event event, const json& value) {
             switch (event) {
             case Peer::JobsAvailable: {
-                HasJobsMessage msg(value["count"].get<int>(),
+                HasJobsMessage msg(static_cast<plast::CompilerType>(value["type"].get<int>()),
+                                   value["major"].get<int>(),
+                                   value["target"].get<json::string_t>(),
+                                   value["count"].get<int>(),
                                    value["port"].get<uint16_t>());
                 msg.setPeer(value["peer"].get<std::string>());
                 for (const Peer::SharedPtr& other : mPeers) {

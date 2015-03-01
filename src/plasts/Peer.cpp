@@ -15,6 +15,9 @@ Peer::Peer(const SocketClient::SharedPtr& client)
 
                 const json obj = {
                     { "port", jobsmsg->port() },
+                    { "type", static_cast<int>(jobsmsg->compilerType()) },
+                    { "major", jobsmsg->compilerMajor() },
+                    { "target", jobsmsg->compilerTarget().ref() },
                     { "count", jobsmsg->count() },
                     { "peer", conn->client()->peerName().ref() }
                 };

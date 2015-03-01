@@ -29,9 +29,16 @@ inline bool validate(int64_t c, const char* name, String& err)
     return true;
 }
 
+static inline void ensurePath(const Path& p)
+{
+    p.mkdir();
+}
+
 int main(int argc, char** argv)
 {
     Rct::findExecutablePath(*argv);
+
+    ensurePath(Path::home() + ".config");
 
     const int idealThreadCount = ThreadPool::idealThreadCount();
     const String socketPath = plast::defaultSocketFile();

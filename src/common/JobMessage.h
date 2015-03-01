@@ -17,13 +17,15 @@ public:
     enum { MessageId = plast::JobMessageId };
 
     JobMessage()
-        : Message(MessageId), mId(0), mSerial(0)
+        : Message(MessageId), mId(0), mSerial(0), mCompilerType(plast::Unknown), mCompilerMajor(-1)
     {
     }
     JobMessage(const Path& path, const List<String>& args, uint64_t id = 0, const String& pre = String(),
-               int serial = 0, const String& remoteName = String())
+               int serial = 0, const String& remoteName = String(), plast::CompilerType ctype = plast::Unknown,
+               int cmajor = 0, const String& ctarget = String())
         : Message(MessageId), mPath(path), mArgs(args), mId(id),
-          mPreprocessed(pre), mSerial(serial), mRemoteName(remoteName)
+          mPreprocessed(pre), mSerial(serial), mRemoteName(remoteName),
+          mCompilerType(ctype), mCompilerMajor(cmajor), mCompilerTarget(ctarget)
     {
     }
 
@@ -33,6 +35,9 @@ public:
     uint64_t id() const { return mId; }
     int serial() const { return mSerial; }
     String remoteName() const { return mRemoteName; }
+    plast::CompilerType compilerType() const { return mCompilerType; }
+    int compilerMajor() const { return mCompilerMajor; }
+    String compilerTarget() const { return mCompilerTarget; }
 
     virtual int encodedSize() const;
     virtual void encode(Serializer& serializer) const;
@@ -45,6 +50,9 @@ private:
     String mPreprocessed;
     int mSerial;
     String mRemoteName;
+    plast::CompilerType mCompilerType;
+    int mCompilerMajor;
+    String mCompilerTarget;
 };
 
 inline int JobMessage::encodedSize() const
@@ -63,16 +71,21 @@ inline int JobMessage::encodedSize() const
     addString(mPreprocessed);
     size += sizeof(mSerial);
     addString(mRemoteName);
+    size += sizeof(int) + sizeof(mCompilerMajor);
+    addString(mCompilerTarget);
     return size;
 }
+
 inline void JobMessage::encode(Serializer& serializer) const
 {
-    serializer << mPath << mArgs << mId << mPreprocessed << mSerial << mRemoteName;
+    serializer << mPath << mArgs << mId << mPreprocessed << mSerial << mRemoteName << static_cast<int>(mCompilerType) << mCompilerMajor << mCompilerTarget;
 }
 
 inline void JobMessage::decode(Deserializer& deserializer)
 {
-    deserializer >> mPath >> mArgs >> mId >> mPreprocessed >> mSerial >> mRemoteName;
+    int ctype;
+    deserializer >> mPath >> mArgs >> mId >> mPreprocessed >> mSerial >> mRemoteName >> ctype >> mCompilerMajor >> mCompilerTarget;
+    mCompilerType = static_cast<plast::CompilerType>(ctype);
 }
 
 #endif

@@ -1,5 +1,6 @@
 #include "Remote.h"
 #include "Daemon.h"
+#include "CompilerVersion.h"
 #include <rct/Log.h>
 #include <unistd.h>
 
@@ -70,6 +71,7 @@ void Remote::init()
 #warning Should we reschedule pending remote jobs?
             auto it = mBuildingByTime.begin();
             while (it != mBuildingByTime.end()) {
+                assert(mBuildingById.contains(it->second->jobid));
                 const uint64_t started = it->first;
                 error() << "considering" << now << started << (now - started) << mRescheduleTimeout;
                 if (now - started < mRescheduleTimeout)
@@ -78,7 +80,7 @@ void Remote::init()
                 // reschedule
                 Job::SharedPtr job = it->second->job.lock();
                 if (job) {
-                    error() << "job still exists" << job->status();
+                    error() << "job still exists" << job->status() << job->id();
                     if (job->status() != Job::RemotePending) {
                         // can only reschedule remotepending jobs
                         ++it;
@@ -89,11 +91,16 @@ void Remote::init()
                     job->increaseSerial();
                     job->start();
                 }
+                error() << "removed job 1" << it->second->jobid;
                 mBuildingById.erase(it->second->jobid);
                 mBuildingByTime.erase(it++);
             }
             if (!mPending.isEmpty()) {
-                mConnection.send(HasJobsMessage(mPending.size(), Daemon::instance()->options().localPort));
+                //mConnection.send(HasJobsMessage(mPending.size(), Daemon::instance()->options().localPort));
+                for (const auto& p : mPending) {
+                    mConnection.send(HasJobsMessage(p.first.type, p.first.major, p.first.target, p.second.size(),
+                                                    Daemon::instance()->options().localPort));
+                }
             }
         });
 }
@@ -136,12 +143,20 @@ void Remote::handleRequestJobsMessage(const RequestJobsMessage::SharedPtr& msg, 
 {
     error() << "handle request jobs message";
     // take count jobs
+    const plast::CompilerKey k = { msg->compilerType(), msg->compilerMajor(), msg->compilerTarget() };
+    auto p = mPending.find(k);
+    if (p == mPending.end()) {
+        conn->send(LastJobMessage(k.type, k.major, k.target, 0, false));
+        return;
+    }
+    auto& pending = p->second;
+    assert(!pending.isEmpty());
+
     int rem = msg->count();
+    bool sent = false, empty = false;
     for (;;) {
-        if (mPending.empty())
-            break;
-        Job::SharedPtr job = mPending.front().lock();
-        mPending.removeFirst();
+        Job::SharedPtr job = pending.front().lock();
+        pending.removeFirst();
         if (job) {
             // add job to building map
             std::shared_ptr<Building> b = std::make_shared<Building>(Rct::monoMs(), job->id(), job);
@@ -153,19 +168,30 @@ void Remote::handleRequestJobsMessage(const RequestJobsMessage::SharedPtr& msg, 
             error() << "sending job back";
             job->updateStatus(Job::RemotePending);
             conn->send(JobMessage(job->path(), job->args(), job->id(), job->preprocessed(),
-                                  job->serial(), job->remoteName()));
+                                  job->serial(), job->remoteName(), job->compilerType(),
+                                  job->compilerMajor(), job->compilerTarget()));
             if (!--rem)
                 break;
         }
+        if (pending.empty())
+            break;
     }
-    conn->send(LastJobMessage(msg->count() - rem, !mPending.empty()));
-
+    conn->send(LastJobMessage(k.type, k.major, k.target, msg->count() - rem, !pending.empty()));
+    if (pending.empty())
+        mPending.erase(p);
 }
 
 void Remote::handleHasJobsMessage(const HasJobsMessage::SharedPtr& msg, Connection* conn)
 {
     error() << "handle has jobs message";
-    // assume we have room for the job for now, make a connection and ask for jobs
+
+    // do we have the compiler in question?
+    if (!CompilerVersion::hasCompiler(msg->compilerType(), msg->compilerMajor(), msg->compilerTarget())) {
+        error() << "we don't have compiler" << msg->compilerType() << msg->compilerMajor() << msg->compilerTarget();
+        return;
+    }
+    error() << "we have compiler" << msg->compilerType() << msg->compilerMajor() << msg->compilerTarget();
+
     Connection* remoteConn = 0;
     {
         const Peer key = { msg->peer(), msg->port() };
@@ -188,13 +214,14 @@ void Remote::handleHasJobsMessage(const HasJobsMessage::SharedPtr& msg, Connecti
 
     assert(remoteConn);
 
-    if (mRequested.contains(remoteConn)) {
+    const ConnectionKey ck = { remoteConn, msg->compilerType(), msg->compilerMajor(), msg->compilerTarget() };
+    if (mRequested.contains(ck)) {
         error() << "already asked";
         // we already asked this host for jobs, wait until it gets back to us
         return;
     }
 
-    requestMore(remoteConn);
+    requestMore(ck);
 }
 
 void Remote::handleHandshakeMessage(const HandshakeMessage::SharedPtr& msg, Connection* conn)
@@ -251,6 +278,7 @@ void Remote::handleJobResponseMessage(const JobResponseMessage::SharedPtr& msg, 
         Job::finish(job.get());
         break;
     case JobResponseMessage::Compiled:
+        error() << "job successfully remote compiled" << job->id();
         removeJob(job->id());
         job->writeFile(msg->data());
         job->updateStatus(Job::Compiled);
@@ -261,7 +289,10 @@ void Remote::handleJobResponseMessage(const JobResponseMessage::SharedPtr& msg, 
 
 void Remote::handleLastJobMessage(const LastJobMessage::SharedPtr& msg, Connection* conn)
 {
-    auto it = mRequested.find(conn);
+    error() << "last job msg";
+    const ConnectionKey ck = { conn, msg->compilerType(), msg->compilerMajor(), msg->compilerTarget() };
+
+    auto it = mRequested.find(ck);
     assert(it != mRequested.end());
     assert(it->second >= msg->count());
     mRequestedCount -= it->second;
@@ -269,19 +300,19 @@ void Remote::handleLastJobMessage(const LastJobMessage::SharedPtr& msg, Connecti
 
     if (msg->hasMore()) {
         error() << "still has more";
-        mHasMore.insert(conn);
+        mHasMore.insert(ck);
     } else {
         error() << "no more" << conn;;
-        mHasMore.erase(conn);
-        requestMore();
+        mHasMore.erase(ck);
     }
+    requestMore();
 }
 
 void Remote::requestMore()
 {
-    if (!Daemon::instance()->local().isAvailable())
+    if (Daemon::instance()->local().availableCount() <= mRequestedCount)
         return;
-    for (auto it : mHasMore) {
+    for (const auto& it : mHasMore) {
         if (!mRequested.contains(it)) {
             requestMore(it);
             return;
@@ -289,23 +320,27 @@ void Remote::requestMore()
     }
 }
 
-void Remote::requestMore(Connection* conn)
+void Remote::requestMore(const ConnectionKey& key)
 {
     const unsigned int idle = Daemon::instance()->local().availableCount();
     if (idle > mRequestedCount) {
+        error() << "asking," << mRequestedCount << "<" << idle;
         const int count = std::min<int>(idle - mRequestedCount, 5);
         mRequestedCount += count;
-        mRequested[conn] = count;
-        conn->send(RequestJobsMessage(count));
+        mRequested[key] = count;
+        key.conn->send(RequestJobsMessage(key.type, key.major, key.target, count));
+    } else {
+        error() << "not asking," << mRequestedCount << ">=" << idle;
     }
 }
 
 void Remote::removeJob(uint64_t id)
 {
     Hash<uint64_t, std::shared_ptr<Building> >::iterator idit = mBuildingById.find(id);
-    if (idit != mBuildingById.end())
+    if (idit == mBuildingById.end())
         return;
-    assert(idit->second.use_count() == 2);
+    error() << "removed job 2" << id;
+    //assert(idit->second.use_count() == 2);
     Map<uint64_t, std::shared_ptr<Building> >::iterator tit = mBuildingByTime.lower_bound(idit->second->started);
     assert(tit != mBuildingByTime.end());
     mBuildingById.erase(idit);
@@ -320,8 +355,12 @@ Job::SharedPtr Remote::take()
 {
     // prefer jobs that are not sent out
     while (!mPending.isEmpty()) {
-        Job::SharedPtr job = mPending.front().lock();
-        mPending.removeFirst();
+        auto p = mPending.begin();
+        assert(!p->second.isEmpty());
+        Job::SharedPtr job = p->second.front().lock();
+        p->second.removeFirst();
+        if (p->second.isEmpty())
+            mPending.erase(p);
         if (job)
             return job;
     }
@@ -333,6 +372,7 @@ Job::SharedPtr Remote::take()
             job->increaseSerial();
             job->updateStatus(Job::Idle);
             const uint64_t id = cand.second->jobid;
+            assert(id == job->id());
             removeJob(id);
             return job;
         }
@@ -372,12 +412,16 @@ Connection* Remote::addClient(const SocketClient::SharedPtr& client)
             conn->disconnected().disconnect();
             EventLoop::deleteLater(conn);
 
-            auto itr = mRequested.find(conn);
-            if (itr != mRequested.end()) {
-                mRequestedCount -= itr->second;
-                mRequested.erase(itr);
+            auto ck = mRequested.begin();
+            while (ck != mRequested.end()) {
+                if (ck->first.conn == conn) {
+                    mRequestedCount -= ck->second;
+                    mHasMore.erase(ck->first);
+                    mRequested.erase(ck++);
+                } else {
+                    ++ck;
+                }
             }
-            mHasMore.erase(conn);
 
             auto itc = mPeersByConn.find(conn);
             if (itc == mPeersByConn.end())
@@ -386,6 +430,8 @@ Connection* Remote::addClient(const SocketClient::SharedPtr& client)
             mPeersByConn.erase(itc);
             assert(mPeersByKey.contains(key));
             mPeersByKey.erase(key);
+
+            requestMore();
         });
     return conn;
 }
@@ -394,19 +440,22 @@ void Remote::post(const Job::SharedPtr& job)
 {
     error() << "local post";
     // queue for preprocess if not already done
+    const plast::CompilerKey k = { job->compilerType(), job->compilerMajor(), job->compilerTarget() };
     if (!job->isPreprocessed()) {
-        job->statusChanged().connect([this](Job* job, Job::Status status) {
+        job->statusChanged().connect([this, k](Job* job, Job::Status status) {
                 if (status == Job::Preprocessed) {
                     error() << "preproc size" << job->preprocessed().size();
-                    mPending.push_back(job->shared_from_this());
+                    mPending[k].push_back(job->shared_from_this());
                     // send a HasJobsMessage to the scheduler
-                    mConnection.send(HasJobsMessage(mPending.size(), Daemon::instance()->options().localPort));
+                    mConnection.send(HasJobsMessage(k.type, k.major, k.target, mPending[k].size(),
+                                                    Daemon::instance()->options().localPort));
                 }
             });
         mPreprocessor.preprocess(job);
     } else {
-        mPending.push_back(job);
+        mPending[k].push_back(job);
         // send a HasJobsMessage to the scheduler
-        mConnection.send(HasJobsMessage(mPending.size(), Daemon::instance()->options().localPort));
+        mConnection.send(HasJobsMessage(k.type, k.major, k.target, mPending[k].size(),
+                                        Daemon::instance()->options().localPort));
     }
 }

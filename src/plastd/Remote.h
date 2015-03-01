@@ -12,6 +12,7 @@
 #include <rct/SocketServer.h>
 #include <rct/Timer.h>
 #include <Messages.h>
+#include <Plast.h>
 #include <memory>
 #include <cstdint>
 
@@ -39,7 +40,32 @@ private:
     void handleJobResponseMessage(const JobResponseMessage::SharedPtr& msg, Connection* conn);
     void handleLastJobMessage(const LastJobMessage::SharedPtr& msg, Connection* conn);
     void removeJob(uint64_t id);
-    void requestMore(Connection* conn);
+
+    struct ConnectionKey
+    {
+        Connection* conn;
+        plast::CompilerType type;
+        int major;
+        String target;
+
+        bool operator<(const ConnectionKey& other) const
+        {
+            if (conn < other.conn)
+                return true;
+            if (conn > other.conn)
+                return false;
+            if (type < other.type)
+                return true;
+            if (type > other.type)
+                return false;
+            if (major < other.major)
+                return true;
+            if (major > other.major)
+                return false;
+            return target < other.target;
+        }
+    };
+    void requestMore(const ConnectionKey& conn);
 
 private:
     SocketServer mServer;
@@ -48,7 +74,6 @@ private:
     unsigned int mNextId;
     Timer mRescheduleTimer;
 
-    List<Job::WeakPtr> mPending;
     struct Building
     {
         Building()
@@ -64,10 +89,11 @@ private:
         uint64_t jobid;
         Job::WeakPtr job;
     };
+    Map<plast::CompilerKey, List<Job::WeakPtr> > mPending;
     Map<uint64_t, std::shared_ptr<Building> > mBuildingByTime;
     Hash<uint64_t, std::shared_ptr<Building> > mBuildingById;
-    Hash<Connection*, int> mRequested;
-    Set<Connection*> mHasMore;
+    Map<ConnectionKey, int> mRequested;
+    Set<ConnectionKey> mHasMore;
     int mRequestedCount;
     int mRescheduleTimeout;
 

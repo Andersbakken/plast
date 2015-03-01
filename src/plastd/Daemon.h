@@ -51,6 +51,7 @@ private:
     Options mOptions;
     int mExitCode;
     String mHostName;
+    Set<Path> mCompilers;
 
 private:
     static WeakPtr sInstance;

@@ -1,5 +1,6 @@
 #include "Daemon.h"
 #include "Job.h"
+#include "CompilerVersion.h"
 #include <rct/Log.h>
 #include <rct/QuitMessage.h>
 
@@ -8,6 +9,15 @@ Daemon::WeakPtr Daemon::sInstance;
 Daemon::Daemon(const Options& opts)
     : mOptions(opts), mExitCode(0)
 {
+    const Path cmp = Path::home() + ".config/plasts.compilers";
+    mCompilers << cmp.readAll().split('\n', String::SkipEmpty);
+    if (mCompilers.isEmpty()) {
+        mCompilers << "/usr/bin/cc";
+        mCompilers << "/usr/bin/c++";
+    }
+    for (const Path& c : mCompilers) {
+        CompilerVersion::init(c.resolved());
+    }
 }
 
 bool Daemon::init()

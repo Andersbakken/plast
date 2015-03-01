@@ -1,16 +1,48 @@
 #include "Job.h"
 #include "CompilerArgs.h"
+#include "CompilerVersion.h"
 #include "Local.h"
 #include "Daemon.h"
+#include <stdlib.h>
 
 Hash<uint64_t, Job::SharedPtr> Job::sJobs;
 uint64_t Job::sNextId = 0;
 
 Job::Job(const Path& path, const List<String>& args, Type type,
-         uint64_t remoteId, const String& preprocessed, int serial, const String& remoteName)
+         uint64_t remoteId, const String& preprocessed, int serial, const String& remoteName,
+         plast::CompilerType ctype, int cmajor, const String& ctarget)
     : mArgs(args), mPath(path), mRemoteId(remoteId), mPreprocessed(preprocessed),
-      mStatus(Idle), mType(type), mSerial(serial), mId(++sNextId), mRemoteName(remoteName)
+      mStatus(Idle), mType(type), mSerial(serial), mId(++sNextId), mRemoteName(remoteName),
+      mCompilerType(ctype), mCompilerMajor(cmajor), mCompilerTarget(ctarget)
 {
+    assert(!mArgs.isEmpty());
+    if (mCompilerType == plast::Unknown) {
+        mResolvedCompiler = plast::resolveCompiler(mArgs.front());
+        if (!mResolvedCompiler.isEmpty()) {
+            CompilerVersion::SharedPtr version = CompilerVersion::version(mResolvedCompiler);
+            if (version) {
+                mCompilerType = version->compiler();
+                mCompilerMajor = version->major();
+                mCompilerTarget = version->target();
+            }
+        } else {
+#warning handle me
+            abort();
+            return;
+        }
+    } else {
+        CompilerVersion::SharedPtr version = CompilerVersion::version(ctype, cmajor, ctarget);
+        if (!version) {
+#warning handle me
+            abort();
+            return;
+        }
+        mResolvedCompiler = version->path();
+        assert(ctype == version->compiler());
+        assert(cmajor == version->major());
+        assert(ctarget == version->target());
+    }
+
     mCompilerArgs = CompilerArgs::create(mArgs);
 }
 
@@ -20,9 +52,10 @@ Job::~Job()
 
 Job::SharedPtr Job::create(const Path& path, const List<String>& args, Type type,
                            const String& remoteName, uint64_t remoteId,
-                           const String& preprocessed, int serial)
+                           const String& preprocessed, int serial,
+                           plast::CompilerType ctype, int cmajor, const String& ctarget)
 {
-    Job::SharedPtr job(new Job(path, args, type, remoteId, preprocessed, serial, remoteName));
+    Job::SharedPtr job(new Job(path, args, type, remoteId, preprocessed, serial, remoteName, ctype, cmajor, ctarget));
     sJobs[job->id()] = job;
     return job;
 }
@@ -93,6 +126,7 @@ void Job::writeFile(const String& data)
     }
     fclose(file);
 }
+
 const char* Job::statusName(Status status)
 {
     switch (status) {
@@ -107,6 +141,7 @@ const char* Job::statusName(Status status)
     }
     return "";
 }
+
 void Job::abort()
 {
 #warning implement me

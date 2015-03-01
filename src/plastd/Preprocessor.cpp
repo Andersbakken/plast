@@ -108,7 +108,7 @@ void Preprocessor::preprocess(const Job::SharedPtr& job)
         cmdline.push_back(data.filename);
     }
     cmdline.push_back("-E");
-    const Path compiler = plast::resolveCompiler(cmdline.front());
+    const Path compiler = job->resolvedCompiler();
     cmdline.removeFirst();
 
     const ProcessPool::Id id = mPool.prepare(job->path(), compiler, cmdline);
