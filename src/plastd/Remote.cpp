@@ -65,17 +65,21 @@ void Remote::init()
     }
 
     mRescheduleTimer.timeout().connect([this](Timer*) {
+            error() << "checking for reschedule!!!";
             const uint64_t now = Rct::monoMs();
             // reschedule outstanding jobs only, local will get to pending jobs eventually
 #warning Should we reschedule pending remote jobs?
             auto it = mBuildingByTime.begin();
             while (it != mBuildingByTime.end()) {
                 const uint64_t started = it->first;
+                error() << "considering" << now << started << (now - started) << RESCHEDULETIMEOUT;
                 if (now - started < RESCHEDULETIMEOUT)
                     break;
+                error() << "job has expired";
                 // reschedule
                 Job::SharedPtr job = it->second->job.lock();
                 if (job) {
+                    error() << "job still exists" << job->status();
                     if (job->status() != Job::RemotePending) {
                         // can only reschedule remotepending jobs
                         ++it;
@@ -186,6 +190,7 @@ void Remote::handleHasJobsMessage(const HasJobsMessage::SharedPtr& msg, Connecti
     assert(remoteConn);
 
     if (mRequested.contains(remoteConn)) {
+        error() << "already asked";
         // we already asked this host for jobs, wait until it gets back to us
         return;
     }
@@ -264,8 +269,10 @@ void Remote::handleLastJobMessage(const LastJobMessage::SharedPtr& msg, Connecti
     mRequested.erase(it);
 
     if (msg->hasMore()) {
+        error() << "still has more";
         mHasMore.insert(conn);
     } else {
+        error() << "no more" << conn;;
         mHasMore.erase(conn);
         requestMore();
     }

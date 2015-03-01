@@ -245,12 +245,19 @@ void Local::run(const Job::SharedPtr& job)
 
 void Local::takeRemoteJobs()
 {
+    error() << "takeRemoteJobs?";
     for (;;) {
-        if (!mPool.isIdle())
+        if (!mPool.isIdle()) {
+            error() << "pool is not idle";
             break;
+        }
+        error() << "pool is idle, taking remote?";
         const Job::SharedPtr job = Daemon::instance()->remote().take();
-        if (!job)
+        if (!job) {
+            error() << "no remote jobs";
             break;
+        }
+        error() << "took remote job";
         post(job);
     }
     if (mPool.isIdle())
