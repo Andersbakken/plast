@@ -25,6 +25,7 @@ public:
         Path localUnixPath;
         int rescheduleTimeout;
         int rescheduleCheck;
+        int overcommit;
     };
 
     Daemon(const Options& opts);

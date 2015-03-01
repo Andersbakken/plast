@@ -9,7 +9,7 @@
 Daemon::WeakPtr Daemon::sInstance;
 
 Daemon::Daemon(const Options& opts)
-    : mOptions(opts), mExitCode(0)
+    : mLocal(opts.overcommit), mOptions(opts), mExitCode(0)
 {
     const Path cmp = Path::home() + ".config/plastd.compilers";
     auto cmplist = cmp.readAll().split('\n', String::SkipEmpty);

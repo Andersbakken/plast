@@ -8,7 +8,8 @@
 #include <unistd.h>
 #include <stdio.h>
 
-Local::Local()
+Local::Local(int overcommit)
+    : mOvercommit(overcommit)
 {
 }
 

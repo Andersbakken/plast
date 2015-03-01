@@ -153,7 +153,7 @@ void Remote::handleJobMessage(const JobMessage::SharedPtr& msg, Connection* conn
 
 void Remote::handleRequestJobsMessage(const RequestJobsMessage::SharedPtr& msg, Connection* conn)
 {
-    error() << "handle request jobs message";
+    error() << "handle request jobs message" << msg->count();
     // take count jobs
     const plast::CompilerKey k = { msg->compilerType(), msg->compilerMajor(), msg->compilerTarget() };
     auto p = mPending.find(k);
@@ -336,8 +336,8 @@ void Remote::requestMore(const ConnectionKey& key)
 {
     const unsigned int idle = Daemon::instance()->local().availableCount();
     if (idle > mRequestedCount) {
-        error() << "asking," << mRequestedCount << "<" << idle;
         const int count = std::min<int>(idle - mRequestedCount, 5);
+        error() << "asking for" << count << "since" << mRequestedCount << "<" << idle;
         mRequestedCount += count;
         mRequested[key] = count;
         key.conn->send(RequestJobsMessage(key.type, key.major, key.target, count));

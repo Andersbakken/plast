@@ -62,6 +62,9 @@ int main(int argc, char** argv)
     Config::registerOption<int>("reschedule-check", String::format<128>("How often to check for reschedule (defaults to %d)", plast::DefaultRescheduleCheck),
                                 'c', plast::DefaultRescheduleCheck,
                                 [](const int &count, String &err) { return validate<int, 500>(count, "reschedule-check", err); });
+    Config::registerOption<int>("overcommit", String::format<128>("How many local jobs to overcommit (defaults to %d)", plast::DefaultOvercommit),
+                                'o', plast::DefaultOvercommit,
+                                [](const int &count, String &err) { return validate<int>(count, "overcommit", err); });
 
     Config::parse(argc, argv, List<Path>() << (Path::home() + ".config/plastd.rc") << "/etc/plastd.rc");
     if (Config::isEnabled("help")) {
@@ -92,7 +95,8 @@ int main(int argc, char** argv)
         static_cast<uint16_t>(Config::value<int>("port")),
         Config::value<String>("socket"),
         Config::value<int>("reschedule-timeout"),
-        Config::value<int>("reschedule-check")
+        Config::value<int>("reschedule-check"),
+        Config::value<int>("overcommit")
     };
     const String serverValue = Config::value<String>("server");
     if (!serverValue.isEmpty()) {
