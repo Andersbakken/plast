@@ -10,6 +10,7 @@ var opts = {
 var ws;
 var readline = require('readline');
 var websocket = require('ws');
+var lastcmd;
 var rl = readline.createInterface({
     completer: completer,
     input: process.stdin,
@@ -114,8 +115,13 @@ rl.setPrompt('plastsh> ');
 rl.prompt();
 
 rl.on('line', function(line) {
-    if (line.length > 0 && line[0] === '/')
+    if (line.length > 0 && line[0] === '/') {
+        if (line.length === 1 && lastcmd !== undefined)
+            line = lastcmd;
+        else
+            lastcmd = line;
         handleCommand(line.substr(1));
+    }
     // else
     //     console.log(line);
     rl.prompt();
