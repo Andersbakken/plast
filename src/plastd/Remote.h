@@ -77,20 +77,21 @@ private:
     struct Building
     {
         Building()
-            : started(0), jobid(0)
+            : started(0), jobid(0), conn(0)
         {
         }
-        Building(uint64_t s, uint64_t id, const Job::SharedPtr& j)
-            : started(s), jobid(id), job(j)
+        Building(uint64_t s, uint64_t id, const Job::SharedPtr& j, Connection* c)
+            : started(s), jobid(id), job(j), conn(c)
         {
         }
 
         uint64_t started;
         uint64_t jobid;
         Job::WeakPtr job;
+        Connection* conn;
     };
     Map<plast::CompilerKey, List<Job::WeakPtr> > mPending;
-    Map<uint64_t, std::shared_ptr<Building> > mBuildingByTime;
+    Map<uint64_t, List<std::shared_ptr<Building> > > mBuildingByTime;
     Hash<uint64_t, std::shared_ptr<Building> > mBuildingById;
     Map<ConnectionKey, int> mRequested;
     Set<ConnectionKey> mHasMore;

@@ -69,31 +69,41 @@ void Remote::init()
             const uint64_t now = Rct::monoMs();
             // reschedule outstanding jobs only, local will get to pending jobs eventually
 #warning Should we reschedule pending remote jobs?
+            bool done = false;
             auto it = mBuildingByTime.begin();
-            while (it != mBuildingByTime.end()) {
-                assert(mBuildingById.contains(it->second->jobid));
+            while (it != mBuildingByTime.end() && !done) {
                 const uint64_t started = it->first;
-                error() << "considering" << now << started << (now - started) << mRescheduleTimeout;
-                if (now - started < mRescheduleTimeout)
-                    break;
-                error() << "job has expired";
-                // reschedule
-                Job::SharedPtr job = it->second->job.lock();
-                if (job) {
-                    error() << "job still exists" << job->status() << job->id();
-                    if (job->status() != Job::RemotePending) {
-                        // can only reschedule remotepending jobs
-                        ++it;
-                        continue;
+                auto sub = it->second.begin();
+                while (sub != it->second.end()) {
+                    assert(mBuildingById.contains((*sub)->jobid));
+                    error() << "considering" << now << started << (now - started) << mRescheduleTimeout;
+                    if (now - started < mRescheduleTimeout) {
+                        done = true;
+                        break;
                     }
-                    error() << "rescheduling" << job->id() << "now" << now << "started" << started;
-                    job->updateStatus(Job::Idle);
-                    job->increaseSerial();
-                    job->start();
+                    error() << "job has expired";
+                    // reschedule
+                    Job::SharedPtr job = (*sub)->job.lock();
+                    if (job) {
+                        error() << "job still exists" << job->status() << job->id();
+                        if (job->status() != Job::RemotePending) {
+                            // can only reschedule remotepending jobs
+                            ++it;
+                            continue;
+                        }
+                        error() << "rescheduling" << job->id() << "now" << now << "started" << started;
+                        job->updateStatus(Job::Idle);
+                        job->increaseSerial();
+                        job->start();
+                    }
+                    error() << "removed job 1" << (*sub)->jobid;
+                    mBuildingById.erase((*sub)->jobid);
+                    sub = it->second.erase(sub);
+                    if (it->second.isEmpty()) {
+                        mBuildingByTime.erase(it++);
+                        break;
+                    }
                 }
-                error() << "removed job 1" << it->second->jobid;
-                mBuildingById.erase(it->second->jobid);
-                mBuildingByTime.erase(it++);
             }
             if (!mPending.isEmpty()) {
                 //mConnection.send(HasJobsMessage(mPending.size(), Daemon::instance()->options().localPort));
@@ -159,8 +169,8 @@ void Remote::handleRequestJobsMessage(const RequestJobsMessage::SharedPtr& msg, 
         pending.removeFirst();
         if (job) {
             // add job to building map
-            std::shared_ptr<Building> b = std::make_shared<Building>(Rct::monoMs(), job->id(), job);
-            mBuildingByTime[b->started] = b;
+            std::shared_ptr<Building> b = std::make_shared<Building>(Rct::monoMs(), job->id(), job, conn);
+            mBuildingByTime[b->started].append(b);
             mBuildingById[b->jobid] = b;
 
             assert(job->isPreprocessed());
@@ -336,19 +346,27 @@ void Remote::requestMore(const ConnectionKey& key)
 
 void Remote::removeJob(uint64_t id)
 {
-    Hash<uint64_t, std::shared_ptr<Building> >::iterator idit = mBuildingById.find(id);
+    auto idit = mBuildingById.find(id);
     if (idit == mBuildingById.end())
         return;
     error() << "removed job 2" << id;
     //assert(idit->second.use_count() == 2);
-    Map<uint64_t, std::shared_ptr<Building> >::iterator tit = mBuildingByTime.lower_bound(idit->second->started);
+    auto tit = mBuildingByTime.find(idit->second->started);
     assert(tit != mBuildingByTime.end());
     mBuildingById.erase(idit);
-    while (tit->second->jobid != id) {
-        ++tit;
-        assert(tit != mBuildingByTime.end());
+
+    auto sit = tit->second.begin();
+    const auto send = tit->second.cend();
+    while (sit != send) {
+        if ((*sit)->jobid == id) {
+            tit->second.erase(sit);
+            if (tit->second.empty()) {
+                mBuildingByTime.erase(tit);
+            }
+            break;
+        }
+        ++sit;
     }
-    mBuildingByTime.erase(tit);
 }
 
 Job::SharedPtr Remote::take()
@@ -365,16 +383,18 @@ Job::SharedPtr Remote::take()
             return job;
     }
     // take oldest pending jobs first
-    for (auto cand : mBuildingByTime) {
-        Job::SharedPtr job = cand.second->job.lock();
-        if (job && job->status() == Job::RemotePending) {
-            // we can take this job since we haven't received any data for it yet
-            job->increaseSerial();
-            job->updateStatus(Job::Idle);
-            const uint64_t id = cand.second->jobid;
-            assert(id == job->id());
-            removeJob(id);
-            return job;
+    for (auto time : mBuildingByTime) {
+        for (auto cand : time.second) {
+            Job::SharedPtr job = cand->job.lock();
+            if (job && job->status() == Job::RemotePending) {
+                // we can take this job since we haven't received any data for it yet
+                job->increaseSerial();
+                job->updateStatus(Job::Idle);
+                const uint64_t id = cand->jobid;
+                assert(id == job->id());
+                removeJob(id);
+                return job;
+            }
         }
     }
     return Job::SharedPtr();
