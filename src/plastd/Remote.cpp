@@ -260,10 +260,8 @@ void Remote::handleLastJobMessage(const LastJobMessage::SharedPtr& msg, Connecti
     auto it = mRequested.find(conn);
     assert(it != mRequested.end());
     assert(it->second >= msg->count());
-    mRequestedCount -= msg->count();
-    it->second -= msg->count();
-    if (!it->second)
-        mRequested.erase(it);
+    mRequestedCount -= it->second;
+    mRequested.erase(it);
 
     if (msg->hasMore()) {
         mHasMore.insert(conn);
@@ -292,7 +290,7 @@ void Remote::requestMore(Connection* conn)
         const int count = std::min<int>(idle - mRequestedCount, 5);
         mRequestedCount += count;
         mRequested[conn] = count;
-        conn->send(RequestJobsMessage(idle));
+        conn->send(RequestJobsMessage(count));
     }
 }
 
