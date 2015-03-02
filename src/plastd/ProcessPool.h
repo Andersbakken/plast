@@ -36,7 +36,8 @@ public:
     Signal<std::function<void(Id)> >& error() { return mError; }
 
     bool isIdle() const { return !mAvail.isEmpty() || mProcs.size() < mCount; }
-    int pending() const { return mRunning + mPending.size(); }
+    int running() const { return mRunning; }
+    int pending() const { return mPending.size(); }
     int max() const { return mCount; }
 
 private:

@@ -16,8 +16,8 @@ public:
     void post(const Job::SharedPtr& job);
     void run(const Job::SharedPtr& job);
 
-    bool isAvailable() const { return mPool.isIdle(); }
-    unsigned int availableCount() const { return std::max<int>(mPool.max() - mPool.pending() + mOvercommit, 0); }
+    bool isAvailable() const { return mPool.isIdle() || mPool.pending() < mOvercommit; }
+    unsigned int availableCount() const { return std::max<int>(mPool.max() - mPool.running() + mOvercommit, 0); }
 
 private:
     void takeRemoteJobs();
