@@ -9,10 +9,7 @@ Map<plast::CompilerKey, CompilerVersion::WeakPtr> CompilerVersion::sVersionsByKe
 CompilerVersion::CompilerVersion(const Path& path, unsigned int flags, const String& target)
     : mCompiler(plast::Unknown)
 {
-    if (!target.isEmpty())
-        mTarget = target;
-
-    mKey = { path, flags };
+    mKey = { path, flags, target };
     Process proc;
     List<String> args = { "-v" };
     if (flags & CompilerArgs::HasDashM32)
@@ -55,12 +52,12 @@ CompilerVersion::CompilerVersion(const Path& path, unsigned int flags, const Str
             parse(line, match);
         } else if (std::regex_match(line.ref(), match, aaplrx)) {
             parse(line, match);
-        } else if (mTarget.isEmpty() && std::regex_match(line.ref(), match, targetrx)) {
+        } else if (mKey.target.isEmpty() && std::regex_match(line.ref(), match, targetrx)) {
             assert(match.size() == 2);
-            mTarget = match[1].str();
+            mKey.target = match[1].str();
         }
     }
-    if (mTarget.isEmpty())
+    if (mKey.target.isEmpty())
         mCompiler = plast::Unknown;
 }
 

@@ -27,7 +27,7 @@ public:
     int patch() const { return mVersion.patch; }
     String versionString() const { return mVersion.str; }
 
-    String target() const { return mTarget; }
+    String target() const { return mKey.target; }
 
     Path path() const { return mKey.path; }
 
@@ -41,18 +41,22 @@ private:
         int patch;
         String str;
     } mVersion;
-    String mTarget;
 
     enum { FlagMask = CompilerArgs::HasDashM32 };
     struct PathKey {
         Path path;
         unsigned int flags;
+        String target;
 
         bool operator<(const PathKey& other) const
         {
             if (path < other.path)
                 return true;
             if (path > other.path)
+                return false;
+            if (target < other.target)
+                return true;
+            if (target > other.target)
                 return false;
             return flags < other.flags;
         }
