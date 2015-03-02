@@ -33,9 +33,7 @@ Preprocessor::Preprocessor()
             Hash<ProcessPool::Id, Data>::iterator data = mJobs.find(id);
             assert(data != mJobs.end());
             Job::SharedPtr job = data->second.job.lock();
-            const int fd = data->second.fd;
-            assert(fd != -1);
-            FILE* f = fdopen(fd, "r");
+            FILE* f = fopen(data->second.filename.constData(), "r");
             assert(f);
             if (job) {
                 if (proc->returnCode() != 0) {
@@ -64,16 +62,12 @@ Preprocessor::Preprocessor()
             }
             fclose(f);
             unlink(data->second.filename.constData());
-            data->second.fd = -1;
             mJobs.erase(data);
         });
     mPool.error().connect([this](ProcessPool::Id id) {
             Hash<ProcessPool::Id, Data>::iterator data = mJobs.find(id);
             assert(data != mJobs.end());
-            assert(data->second.fd != -1);
-            close(data->second.fd);
             unlink(data->second.filename.constData());
-            data->second.fd = -1;
             Job::SharedPtr job = data->second.job.lock();
             if (job) {
                 job->mError = "Unable to start job for preprocess";
@@ -91,13 +85,14 @@ void Preprocessor::preprocess(const Job::SharedPtr& job)
 {
     Data data(job);
     data.filename = "/tmp/plastXXXXXXpre";
-    data.fd = mkstemps(data.filename.data(), 3);
-    if (data.fd == -1) {
+    const int fd = mkstemps(data.filename.data(), 3);
+    if (fd == -1) {
         // badness happened
         job->mError = "Unable to mkstemps preprocess file";
         job->updateStatus(Job::Error);
         return;
     }
+    close(fd);
 
     std::shared_ptr<CompilerArgs> args = job->compilerArgs();
     List<String> cmdline = args->commandLine;

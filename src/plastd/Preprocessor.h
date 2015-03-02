@@ -22,12 +22,11 @@ private:
     ProcessPool mPool;
     struct Data
     {
-        Data() : fd(-1) {}
-        Data(const Job::SharedPtr& j) : job(j), fd(-1) {}
+        Data() {}
+        Data(const Job::SharedPtr& j) : job(j) {}
 
         Job::WeakPtr job;
         String filename;
-        int fd;
     };
     Hash<ProcessPool::Id, Data> mJobs;
 };

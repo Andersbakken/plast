@@ -55,7 +55,6 @@ void Local::init()
             error() << "pool finished for" << id;
             assert(mJobs.contains(id));
             const Data data = mJobs[id];
-            const int fd = data.fd;
             const String fn = data.filename;
             Job::SharedPtr job = data.job.lock();
             const bool localForRemote = !fn.isEmpty();
@@ -63,8 +62,7 @@ void Local::init()
 
             mJobs.erase(id);
             if (localForRemote) {
-                assert(fd != -1);
-                f = fdopen(fd, "r");
+                f = fopen(fn.constData(), "r");
                 assert(f);
             }
 
@@ -114,8 +112,6 @@ void Local::init()
             const Data& data = mJobs[id];
             const bool localForRemote = !data.filename.isEmpty();
             if (localForRemote) {
-                assert(data.fd != -1);
-                close(data.fd);
                 unlink(data.filename.constData());
             }
 
@@ -155,13 +151,14 @@ void Local::post(const Job::SharedPtr& job)
         assert(args->sourceFileIndexes.size() == 1);
 
         data.filename = "/tmp/plastXXXXXXcmp";
-        data.fd = mkstemps(data.filename.data(), 3);
-        if (data.fd == -1) {
+        const int fd = mkstemps(data.filename.data(), 3);
+        if (fd == -1) {
             // badness happened
             job->mError = "Unable to mkstemps preprocess file";
             job->updateStatus(Job::Error);
             return;
         }
+        close(fd);
 
         String lang;
         if (!(args->flags & CompilerArgs::HasDashX)) {

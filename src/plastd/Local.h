@@ -26,10 +26,9 @@ private:
     ProcessPool mPool;
     struct Data
     {
-        Data() : fd(-1) {}
-        Data(const Job::SharedPtr& j) : fd(-1), job(j) {}
+        Data() {}
+        Data(const Job::SharedPtr& j) : job(j) {}
 
-        int fd;
         String filename;
         Job::WeakPtr job;
     };
