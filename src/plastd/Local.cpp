@@ -58,17 +58,11 @@ void Local::init()
             const String fn = data.filename;
             Job::SharedPtr job = data.job.lock();
             const bool localForRemote = !fn.isEmpty();
-            FILE* f = 0;
 
             mJobs.erase(id);
-            if (localForRemote) {
-                f = fopen(fn.constData(), "r");
-                assert(f);
-            }
 
             if (!job) {
                 if (localForRemote) {
-                    fclose(f);
                     unlink(fn.constData());
                 }
                 return;
@@ -87,10 +81,10 @@ void Local::init()
             } else {
                 if (localForRemote) {
                     // read all the compiled data
-                    f = freopen(fn.constData(), "r", f);
+                    FILE* f = fopen(fn.constData(), "r");
                     assert(f);
-
                     job->mObjectCode = Rct::readAll(f);
+                    fclose(f);
                     if (job->mObjectCode.isEmpty()) {
                         job->mError = "Got no object code for compile";
                         job->updateStatus(Job::Error);
@@ -102,7 +96,6 @@ void Local::init()
                 }
             }
             if (localForRemote) {
-                fclose(f);
                 unlink(fn.constData());
             }
             Job::finish(job.get());

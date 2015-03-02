@@ -33,25 +33,23 @@ Preprocessor::Preprocessor()
             Hash<ProcessPool::Id, Data>::iterator data = mJobs.find(id);
             assert(data != mJobs.end());
             Job::SharedPtr job = data->second.job.lock();
-            FILE* f = fopen(data->second.filename.constData(), "r");
-            assert(f);
             if (job) {
                 if (proc->returnCode() != 0) {
                     job->mError = "Preprocess failed";
                     job->updateStatus(Job::Error);
                 } else {
                     // read all the preprocessed data
-                    f = freopen(data->second.filename.constData(), "r", f);
-                    assert(f);
-
                     char buf[65536];
                     size_t r;
+                    FILE* f = fopen(data->second.filename.constData(), "r");
+                    assert(f);
                     while (!feof(f) && !ferror(f)) {
                         r = fread(buf, 1, sizeof(buf), f);
                         if (r) {
                             job->mPreprocessed.append(buf, r);
                         }
                     }
+                    fclose(f);
                     if (job->mPreprocessed.isEmpty()) {
                         job->mError = "Got no data from stdout for preprocess";
                         job->updateStatus(Job::Error);
@@ -60,7 +58,6 @@ Preprocessor::Preprocessor()
                     }
                 }
             }
-            fclose(f);
             unlink(data->second.filename.constData());
             mJobs.erase(data);
         });
