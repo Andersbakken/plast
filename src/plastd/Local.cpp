@@ -169,7 +169,7 @@ void Local::post(const Job::SharedPtr& job)
             lang = CompilerArgs::languageName(f, true);
             if (lang.isEmpty()) {
                 error() << "Unknown language";
-                job->mError = "Unknown language for remote job";
+                job->mError = "Unknown language for remote job " + args->sourceFile();
                 job->updateStatus(Job::Error);
                 return;
             }
