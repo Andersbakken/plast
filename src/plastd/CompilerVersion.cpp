@@ -63,7 +63,7 @@ CompilerVersion::CompilerVersion(const Path& path, unsigned int flags, const Str
 
 CompilerVersion::SharedPtr CompilerVersion::version(const Path& path, unsigned int flags, const String& target)
 {
-    const PathKey k = { path.resolved(), flags & FlagMask };
+    const PathKey k = { path.resolved(), flags & FlagMask, target };
     auto it = sVersions.find(k);
     if (it == sVersions.end()) {
         CompilerVersion::SharedPtr ver(new CompilerVersion(k.path, k.flags, target));
