@@ -27,6 +27,7 @@ static const char *argOptions[] = {
     "-include",
     "-iprefix",
     "-isysroot",
+    "-isystem",
     "-iwithprefix",
     "-iwithprefixbefore",
     "-target",
