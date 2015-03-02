@@ -79,7 +79,7 @@ std::shared_ptr<CompilerArgs> CompilerArgs::create(const List<String> &args)
             if (++i == args.size())
                 return std::shared_ptr<CompilerArgs>();
             const String lang = args.value(i);
-            const CompilerArgs::Flag languages[] = { CPlusPlus, C, CPreprocessed, CPlusPlusPreprocessed, ObjectiveC, ObjectiveCPlusPlus, AssemblerWithCpp, Assembler };
+            const CompilerArgs::Flag languages[] = { CPlusPlus, C, CPreprocessed, CPlusPlusPreprocessed, ObjectiveC, ObjectiveCPreprocessed, ObjectiveCPlusPlus, ObjectiveCPlusPlusPreprocessed, AssemblerWithCpp, Assembler };
             for (size_t j=0; j<sizeof(languages) / sizeof(languages[0]); ++j) {
                 if (lang == CompilerArgs::languageName(languages[j])) {
                     ret->flags &= ~LanguageMask;
@@ -96,6 +96,7 @@ std::shared_ptr<CompilerArgs> CompilerArgs::create(const List<String> &args)
                 const int lastDot = arg.lastIndexOf('.');
                 if (lastDot != -1) {
                     const char *ext = arg.constData() + lastDot + 1;
+                    // https://gcc.gnu.org/onlinedocs/gcc/Overall-Options.html
                     struct {
                         const char *suffix;
                         const Flag flag;
@@ -104,12 +105,19 @@ std::shared_ptr<CompilerArgs> CompilerArgs::create(const List<String> &args)
                         { "cc", CPlusPlus },
                         { "cxx", CPlusPlus },
                         { "cpp", CPlusPlus },
+                        { "cp", CPlusPlus },
+                        { "CPP", CPlusPlus },
+                        { "c++", CPlusPlus },
+                        { "ii", CPlusPlusPreprocessed },
                         { "c", C },
                         { "i", CPreprocessed },
-                        { "ii", CPlusPlusPreprocessed },
                         { "m", ObjectiveC },
+                        { "mi", ObjectiveCPreprocessed },
+                        { "M", ObjectiveCPlusPlus },
                         { "mm", ObjectiveCPlusPlus },
+                        { "mii", ObjectiveCPlusPlusPreprocessed },
                         { "S", Assembler },
+                        { "sx", Assembler },
                         { "s", AssemblerWithCpp },
                         { 0, None }
                     };
@@ -140,8 +148,10 @@ const char *CompilerArgs::languageName(Flag flag, bool preprocessed)
     case C: return "c";
     case CPreprocessed: return "cpp-output";
     case CPlusPlusPreprocessed: return "c++-cpp-output";
-    case ObjectiveC: return "objective-c"; // ### what about ObjectiveC++?
+    case ObjectiveC: return "objective-c";
+    case ObjectiveCPreprocessed: return "objective-c-cpp-output";
     case ObjectiveCPlusPlus: return "objective-c++";
+    case ObjectiveCPlusPlusPreprocessed: return "objective-c++-cpp-output";
     case AssemblerWithCpp: return "assembler-with-cpp";
     case Assembler: return "assembler";
     default: break;

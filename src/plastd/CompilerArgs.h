@@ -65,15 +65,17 @@ struct CompilerArgs
         HasDashM32 = 0x00080,
         StdinInput = 0x00100,
         // Languages
-        CPlusPlus = 0x01000,
-        C = 0x02000,
-        CPreprocessed = 0x04000,
-        CPlusPlusPreprocessed = 0x08000,
-        ObjectiveC = 0x10000,
-        ObjectiveCPlusPlus = 0x20000,
-        AssemblerWithCpp = 0x40000,
-        Assembler = 0x80000,
-        LanguageMask = CPlusPlus|C|CPreprocessed|CPlusPlusPreprocessed|ObjectiveC|AssemblerWithCpp|Assembler
+        CPlusPlus = 0x001000,
+        C = 0x002000,
+        CPreprocessed = 0x004000,
+        CPlusPlusPreprocessed = 0x008000,
+        ObjectiveC = 0x010000,
+        ObjectiveCPreprocessed = 0x20000,
+        ObjectiveCPlusPlus = 0x040000,
+        ObjectiveCPlusPlusPreprocessed = 0x080000,
+        AssemblerWithCpp = 0x100000,
+        Assembler = 0x200000,
+        LanguageMask = CPlusPlus|C|CPreprocessed|CPlusPlusPreprocessed|ObjectiveC|ObjectiveCPreprocessed|ObjectiveCPlusPlus|ObjectiveCPlusPlusPreprocessed|AssemblerWithCpp|Assembler
     };
     static Flag preprocessedFlag(Flag);
     static const char *languageName(Flag flag, bool preprocessed = false);
