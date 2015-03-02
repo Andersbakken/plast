@@ -16,13 +16,13 @@ Remote::~Remote()
 void Remote::init()
 {
     mServer.newConnection().connect([this](SocketServer* server) {
-            error() << "Got a connection";
+            warning() << "Got a connection";
             SocketClient::SharedPtr client;
             for (;;) {
                 client = server->nextConnection();
                 if (!client)
                     return;
-                error() << "remote client connected";
+                warning() << "remote client connected";
                 addClient(client);
             }
         });
@@ -36,7 +36,7 @@ void Remote::init()
         error() << "Unable to tcp listen";
         abort();
     }
-    error() << "Listening" << opts.localPort;
+    warning() << "Listening" << opts.localPort;
 
     mConnection.newMessage().connect([this](const std::shared_ptr<Message>& message, Connection* conn) {
             error() << "Got a message" << message->messageId() << __LINE__;
@@ -76,7 +76,7 @@ void Remote::init()
                 auto sub = it->second.begin();
                 while (sub != it->second.end()) {
                     assert(mBuildingById.contains((*sub)->jobid));
-                    error() << "considering" << now << started << (now - started) << mRescheduleTimeout;
+                    warning() << "considering" << now << started << (now - started) << mRescheduleTimeout;
                     if (now - started < mRescheduleTimeout) {
                         done = true;
                         break;
@@ -118,7 +118,7 @@ void Remote::init()
 
 void Remote::handleJobMessage(const JobMessage::SharedPtr& msg, Connection* conn)
 {
-    error() << "handle job message!";
+    error() << "handle job message!" << msg->id();
     // let's make a job out of this
     Job::SharedPtr job = Job::create(msg->path(), msg->args(), Job::RemoteJob, msg->remoteName(),
                                      msg->id(), msg->preprocessed(), msg->serial(),
@@ -139,12 +139,12 @@ void Remote::handleJobMessage(const JobMessage::SharedPtr& msg, Connection* conn
             }
         });
     job->readyReadStdOut().connect([conn](Job* job) {
-            error() << "remote job ready stdout";
+            warning() << "remote job ready stdout";
             conn->send(JobResponseMessage(JobResponseMessage::Stdout, job->remoteId(),
                                           job->serial(), job->readAllStdOut()));
         });
     job->readyReadStdErr().connect([conn](Job* job) {
-            error() << "remote job ready stderr";
+            warning() << "remote job ready stderr";
             conn->send(JobResponseMessage(JobResponseMessage::Stderr, job->remoteId(),
                                           job->serial(), job->readAllStdErr()));
         });

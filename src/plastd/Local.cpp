@@ -199,12 +199,12 @@ void Local::post(const Job::SharedPtr& job)
         cmdline.removeFirst();
         cmdline.prepend(lang);
         cmdline.prepend("-x");
-        error() << "Compiler resolved to" << cmd << job->path() << cmdline << data.filename;
+        warning() << "Compiler resolved to" << cmd << job->path() << cmdline << data.filename;
         const ProcessPool::Id id = mPool.prepare(Path(), cmd, cmdline, List<String>(), job->preprocessed());
         mJobs[id] = data;
         mPool.post(id);
     } else {
-        error() << "Compiler resolved to" << cmd << job->path() << cmdline << data.filename;
+        warning() << "Compiler resolved to" << cmd << job->path() << cmdline << data.filename;
         cmdline.removeFirst();
         const ProcessPool::Id id = mPool.prepare(job->path(), cmd, cmdline);
         mJobs[id] = data;
@@ -214,7 +214,7 @@ void Local::post(const Job::SharedPtr& job)
 
 void Local::run(const Job::SharedPtr& job)
 {
-    error() << "local run";
+    warning() << "local run";
     List<String> args = job->args();
     const Path cmd = job->resolvedCompiler();
     if (cmd.isEmpty()) {
@@ -224,7 +224,7 @@ void Local::run(const Job::SharedPtr& job)
         return;
     }
     args.removeFirst();
-    error() << "Compiler resolved to" << cmd << job->path() << args;
+    warning() << "Compiler resolved to" << cmd << job->path() << args;
     const ProcessPool::Id id = mPool.prepare(job->path(), cmd, args);
     mJobs[id] = job;
     mPool.run(id);
@@ -232,19 +232,19 @@ void Local::run(const Job::SharedPtr& job)
 
 void Local::takeRemoteJobs()
 {
-    error() << "takeRemoteJobs?";
+    warning() << "takeRemoteJobs?";
     for (;;) {
         if (!mPool.isIdle()) {
-            error() << "pool is not idle";
+            warning() << "pool is not idle";
             break;
         }
-        error() << "pool is idle, taking remote?";
+        warning() << "pool is idle, taking remote?";
         const Job::SharedPtr job = Daemon::instance()->remote().take();
         if (!job) {
-            error() << "no remote jobs";
+            warning() << "no remote jobs";
             break;
         }
-        error() << "took remote job";
+        warning() << "took remote job";
         post(job);
     }
     if (mPool.isIdle())
