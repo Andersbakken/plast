@@ -73,6 +73,7 @@ void Remote::init()
             bool done = false;
             auto it = mBuildingByTime.begin();
             while (it != mBuildingByTime.end() && !done) {
+                bool del = false;
                 const uint64_t started = it->first;
                 auto sub = it->second.begin();
                 while (sub != it->second.end()) {
@@ -91,7 +92,7 @@ void Remote::init()
                         if (job->status() != Job::RemotePending) {
 #warning should we reschedule jobs we have partially received in case the connection times out?
                             // can only reschedule remotepending jobs
-                            ++it;
+                            ++sub;
                             continue;
                         }
                         error() << "rescheduling" << job->id() << "now" << now << "started" << started;
@@ -103,10 +104,14 @@ void Remote::init()
                     mBuildingById.erase((*sub)->jobid);
                     sub = it->second.erase(sub);
                     if (it->second.isEmpty()) {
-                        mBuildingByTime.erase(it++);
+                        del = true;
                         break;
                     }
                 }
+                if (del)
+                    mBuildingByTime.erase(it++);
+                else
+                    ++it;
             }
             if (!mPending.isEmpty()) {
                 //mConnection->send(HasJobsMessage(mPending.size(), Daemon::instance()->options().localPort));
