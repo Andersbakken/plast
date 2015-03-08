@@ -418,6 +418,7 @@ Job::SharedPtr Remote::take()
 std::shared_ptr<Connection> Remote::addClient(const SocketClient::SharedPtr& client)
 {
     error() << "remote client added";
+    static Hash<Connection*, std::shared_ptr<Connection> > conns;
     std::shared_ptr<Connection> conn = std::make_shared<Connection>(client);
     std::weak_ptr<Connection> weak = conn;
     conn->newMessage().connect([this, weak](const std::shared_ptr<Message>& msg, Connection*) {
@@ -449,7 +450,11 @@ std::shared_ptr<Connection> Remote::addClient(const SocketClient::SharedPtr& cli
                 break;
             }
         });
-    conn->disconnected().connect([this, conn](Connection*) mutable {
+    conn->disconnected().connect([this](Connection* ptr) {
+            auto found = conns.find(ptr);
+            assert(found != conns.end());
+            std::shared_ptr<Connection> conn = found->second;
+
             conn->disconnected().disconnect();
 
             auto ck = mRequested.begin();
@@ -513,7 +518,7 @@ std::shared_ptr<Connection> Remote::addClient(const SocketClient::SharedPtr& cli
 
             requestMore();
 
-            conn.reset();
+            conns.erase(found);
         });
     return conn;
 }
