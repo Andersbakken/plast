@@ -150,4 +150,5 @@ const char* Job::statusName(Status status)
 void Job::abort()
 {
 #warning implement me
+    Job::finish(this);
 }

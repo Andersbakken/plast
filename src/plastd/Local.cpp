@@ -62,6 +62,7 @@ void Local::init()
             mJobs.erase(id);
 
             if (!job) {
+                error() << "job not found in finish";
                 if (localForRemote) {
                     unlink(fn.constData());
                 }
@@ -112,8 +113,10 @@ void Local::init()
 
             mJobs.erase(id);
             Job::SharedPtr job = data.job.lock();
-            if (!job)
+            if (!job) {
+                error() << "job not found in error";
                 return;
+            }
             job->mError = "Local compile pool returned error";
             job->updateStatus(Job::Error);
             Job::finish(job.get());
@@ -228,7 +231,7 @@ void Local::run(const Job::SharedPtr& job)
     args.removeFirst();
     warning() << "Compiler resolved to" << cmd << job->path() << args;
     const ProcessPool::Id id = mPool.prepare(job->path(), cmd, args);
-    mJobs[id] = job;
+    mJobs[id] = Data(job);
     mPool.run(id);
 }
 
