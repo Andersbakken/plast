@@ -260,6 +260,11 @@ void Remote::handleJobResponseMessage(const JobResponseMessage::SharedPtr& msg, 
         error() << "job not found for response";
         return;
     }
+    if (msg->serial() != job->serial()) {
+        error() << "job serial doesn't match, rescheduled remote?";
+        error() << msg->serial() << "vs" << job->serial();
+        return;
+    }
     const Job::Status status = job->status();
     switch (status) {
     case Job::RemotePending:
@@ -271,10 +276,6 @@ void Remote::handleJobResponseMessage(const JobResponseMessage::SharedPtr& msg, 
     default:
         error() << "job no longer remote compiling";
         removeJob(job->id());
-        return;
-    }
-    if (msg->serial() != job->serial()) {
-        error() << "job serial doesn't match, rescheduled remote?";
         return;
     }
     switch (msg->mode()) {
