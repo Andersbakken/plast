@@ -6,7 +6,7 @@
 Map<CompilerVersion::PathKey, CompilerVersion::SharedPtr> CompilerVersion::sVersions;
 Map<plast::CompilerKey, CompilerVersion::WeakPtr> CompilerVersion::sVersionsByKey;
 
-CompilerVersion::CompilerVersion(const Path& path, unsigned int flags, const String& target)
+CompilerVersion::CompilerVersion(const Path& path, uint32_t flags, const String& target)
     : mCompiler(plast::Unknown)
 {
     mKey = { path, flags, target };
@@ -61,7 +61,7 @@ CompilerVersion::CompilerVersion(const Path& path, unsigned int flags, const Str
         mCompiler = plast::Unknown;
 }
 
-CompilerVersion::SharedPtr CompilerVersion::version(const Path& path, unsigned int flags, const String& target)
+CompilerVersion::SharedPtr CompilerVersion::version(const Path& path, uint32_t flags, const String& target)
 {
     const PathKey k = { path.resolved(), flags & FlagMask, target };
     auto it = sVersions.find(k);
@@ -78,7 +78,7 @@ CompilerVersion::SharedPtr CompilerVersion::version(const Path& path, unsigned i
     return it->second;
 }
 
-void CompilerVersion::init(const Path& path, unsigned int flags, const String& target)
+void CompilerVersion::init(const Path& path, uint32_t flags, const String& target)
 {
     version(path, flags, target);
 }

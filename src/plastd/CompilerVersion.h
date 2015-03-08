@@ -6,8 +6,9 @@
 #include <rct/Hash.h>
 #include <rct/Path.h>
 #include <rct/String.h>
-#include <memory>
 #include <Plast.h>
+#include <memory>
+#include <cstdint>
 
 class CompilerVersion
 {
@@ -15,8 +16,8 @@ public:
     typedef std::shared_ptr<CompilerVersion> SharedPtr;
     typedef std::weak_ptr<CompilerVersion> WeakPtr;
 
-    static void init(const Path& path, unsigned int flags = 0, const String& target = String());
-    static SharedPtr version(const Path& path, unsigned int flags = 0, const String& target = String());
+    static void init(const Path& path, uint32_t flags = 0, const String& target = String());
+    static SharedPtr version(const Path& path, uint32_t flags = 0, const String& target = String());
     static SharedPtr version(plast::CompilerType compiler, int major, const String& target);
     static bool hasCompiler(plast::CompilerType compiler, int major, const String& target);
 
@@ -45,7 +46,7 @@ private:
     enum { FlagMask = CompilerArgs::HasDashM32 };
     struct PathKey {
         Path path;
-        unsigned int flags;
+        uint32_t flags;
         String target;
 
         bool operator<(const PathKey& other) const
@@ -65,7 +66,7 @@ private:
     static Map<plast::CompilerKey, WeakPtr> sVersionsByKey;
 
 private:
-    CompilerVersion(const Path& path, unsigned int flags, const String& target);
+    CompilerVersion(const Path& path, uint32_t flags, const String& target);
     CompilerVersion(const CompilerVersion&) = delete;
     CompilerVersion& operator=(const CompilerVersion&) = delete;
 };

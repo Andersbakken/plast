@@ -21,7 +21,7 @@ public:
     {
     }
     JobMessage(const Path& path, const List<String>& args, uint64_t id = 0, const String& pre = String(),
-               int serial = 0, const String& remoteName = String(), plast::CompilerType ctype = plast::Unknown,
+               uint32_t serial = 0, const String& remoteName = String(), plast::CompilerType ctype = plast::Unknown,
                int cmajor = 0, const String& ctarget = String())
         : Message(MessageId), mPath(path), mArgs(args), mId(id),
           mPreprocessed(pre), mSerial(serial), mRemoteName(remoteName),
@@ -33,7 +33,7 @@ public:
     List<String> args() const { return mArgs; }
     String preprocessed() const { return mPreprocessed; }
     uint64_t id() const { return mId; }
-    int serial() const { return mSerial; }
+    uint32_t serial() const { return mSerial; }
     String remoteName() const { return mRemoteName; }
     plast::CompilerType compilerType() const { return mCompilerType; }
     int compilerMajor() const { return mCompilerMajor; }
@@ -48,7 +48,7 @@ private:
     List<String> mArgs;
     uint64_t mId;
     String mPreprocessed;
-    int mSerial;
+    uint32_t mSerial;
     String mRemoteName;
     plast::CompilerType mCompilerType;
     int mCompilerMajor;

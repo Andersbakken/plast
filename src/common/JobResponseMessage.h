@@ -14,7 +14,7 @@ public:
     enum Mode { Stdout, Stderr, Compiled, Error };
 
     JobResponseMessage() : Message(MessageId), mMode(Stdout), mId(0), mSerial(0) {}
-    JobResponseMessage(Mode mode, uint64_t id, int serial, const String& data = String())
+    JobResponseMessage(Mode mode, uint64_t id, uint32_t serial, const String& data = String())
         : Message(MessageId), mMode(mode), mId(id), mSerial(serial), mData(data)
     {
     }
@@ -22,7 +22,7 @@ public:
     Mode mode() const { return mMode; }
     uint64_t id() const { return mId; }
     String data() const { return mData; }
-    int serial() const { return mSerial; }
+    uint32_t serial() const { return mSerial; }
 
     virtual int encodedSize() const;
     virtual void encode(Serializer& serializer) const;
@@ -31,7 +31,7 @@ public:
 private:
     Mode mMode;
     uint64_t mId;
-    int mSerial;
+    uint32_t mSerial;
     String mData;
 };
 

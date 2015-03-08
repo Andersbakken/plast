@@ -180,7 +180,7 @@ void Remote::handleRequestJobsMessage(const RequestJobsMessage::SharedPtr& msg, 
         pending.removeFirst();
         if (job) {
             // add job to building map
-            std::shared_ptr<Building> b = std::make_shared<Building>(Rct::monoMs(), job->id(), job, conn);
+            std::shared_ptr<Building> b = std::make_shared<Building>(Rct::monoMs(), job->id(), job->serial(), job, conn);
             mBuildingByTime[b->started].append(b);
             mBuildingById[b->jobid] = b;
 
@@ -344,7 +344,7 @@ void Remote::requestMore()
 
 void Remote::requestMore(const ConnectionKey& key)
 {
-    const unsigned int idle = Daemon::instance()->local().availableCount();
+    const uint32_t idle = Daemon::instance()->local().availableCount();
     if (idle > mRequestedCount) {
         const int count = std::min<int>(idle - mRequestedCount, 5);
         error() << "asking for" << count << "since" << mRequestedCount << "<" << idle;

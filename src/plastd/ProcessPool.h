@@ -7,13 +7,14 @@
 #include <rct/String.h>
 #include <rct/Path.h>
 #include <rct/SignalSlot.h>
+#include <cstdint>
 
 class Process;
 
 class ProcessPool
 {
 public:
-    typedef unsigned int Id;
+    typedef uint32_t Id;
 
     ProcessPool(int count = 0);
     ~ProcessPool();

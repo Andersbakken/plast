@@ -21,6 +21,7 @@
 #include <rct/Path.h>
 #include <rct/Serializer.h>
 #include <memory>
+#include <cstdint>
 
 struct CompilerArgs
 {
@@ -79,7 +80,7 @@ struct CompilerArgs
     };
     static Flag preprocessedFlag(Flag);
     static const char *languageName(Flag flag, bool preprocessed = false);
-    unsigned int flags;
+    uint32_t flags;
 
     static std::shared_ptr<CompilerArgs> create(const List<String> &args);
 

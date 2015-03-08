@@ -4,6 +4,7 @@
 #include <rct/Hash.h>
 #include "ProcessPool.h"
 #include "Job.h"
+#include <cstdint>
 
 class Local
 {
@@ -17,7 +18,7 @@ public:
     void run(const Job::SharedPtr& job);
 
     bool isAvailable() const { return mPool.isIdle() || mPool.pending() < mOvercommit; }
-    unsigned int availableCount() const { return std::max<int>(mPool.max() - mPool.running() + mOvercommit, 0); }
+    uint32_t availableCount() const { return std::max<int>(mPool.max() - mPool.running() + mOvercommit, 0); }
 
 private:
     void takeRemoteJobs();

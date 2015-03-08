@@ -26,7 +26,8 @@ public:
 
     static SharedPtr create(const Path& path, const List<String>& args, Type type,
                             const String& remoteName, uint64_t remoteId = 0,
-                            const String& preprocessed = String(), int serial = 0,
+                            const String& preprocessed = String(),
+                            uint32_t serial = 0,
                             plast::CompilerType ctype = plast::Unknown,
                             int cmajor = -1, const String& ctarget = String());
     static SharedPtr job(uint64_t j);
@@ -64,12 +65,12 @@ public:
 
     String remoteName() const { return mRemoteName; }
 
-    int serial() const { return mSerial; }
+    uint32_t serial() const { return mSerial; }
     void increaseSerial() { mSerial += 1; }
 
 private:
     Job(const Path& path, const List<String>& args, Type type, uint64_t remoteId,
-        const String& preprocessed, int serial, const String& remoteName,
+        const String& preprocessed, uint32_t serial, const String& remoteName,
         plast::CompilerType ctype, int cmajor, const String& ctarget);
 
     void writeFile(const String& data);
@@ -89,7 +90,7 @@ private:
     String mStdOut, mStdErr;
     Status mStatus;
     Type mType;
-    int mSerial;
+    uint32_t mSerial;
     uint64_t mId;
     String mRemoteName;
     plast::CompilerType mCompilerType;
