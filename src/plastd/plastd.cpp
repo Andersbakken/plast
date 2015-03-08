@@ -88,15 +88,17 @@ int main(int argc, char** argv)
         signal(SIGABRT, sigSegvHandler);
     }
 
+    const int jobs = Config::value<int>("job-count");
+    const int over = Config::value<int>("overcommit");
     Daemon::Options options = {
-        Config::value<int>("job-count"),
+        jobs,
         Config::value<int>("preprocess-count"),
         plast::DefaultServerHost, plast::DefaultServerPort,
         static_cast<uint16_t>(Config::value<int>("port")),
         Config::value<String>("socket"),
         Config::value<int>("reschedule-timeout"),
         Config::value<int>("reschedule-check"),
-        Config::value<int>("overcommit")
+        std::min(jobs, over)
     };
     const String serverValue = Config::value<String>("server");
     if (!serverValue.isEmpty()) {
