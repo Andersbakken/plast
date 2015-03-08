@@ -81,10 +81,11 @@ void Remote::init()
                         done = true;
                         break;
                     }
-                    error() << "job has expired";
+                    error() << "job has expired" << (*sub)->jobid;
                     // reschedule
                     Job::SharedPtr job = (*sub)->job.lock();
                     if (job) {
+                        assert(job->id() == (*sub)->jobid);
                         error() << "job still exists" << job->status() << job->id();
                         if (job->status() != Job::RemotePending) {
 #warning should we reschedule jobs we have partially received in case the connection times out?
@@ -124,7 +125,8 @@ void Remote::handleJobMessage(const JobMessage::SharedPtr& msg, Connection* conn
                                      msg->id(), msg->preprocessed(), msg->serial(),
                                      msg->compilerType(), msg->compilerMajor(), msg->compilerTarget());
     job->statusChanged().connect([conn](Job* job, Job::Status status) {
-            error() << "remote job status changed" << job << status;
+            assert(job->type() == Job::RemoteJob);
+            error() << "remote job status changed" << job << "local" << job->id() << "remote" << job->remoteId() << status;
             switch (status) {
             case Job::Compiled:
                 conn->send(JobResponseMessage(JobResponseMessage::Compiled, job->remoteId(),

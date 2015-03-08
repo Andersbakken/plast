@@ -96,7 +96,8 @@ void Daemon::handleJobMessage(const JobMessage::SharedPtr& msg, Connection* conn
                 job->abort();
         });
     job->statusChanged().connect([conn](Job* job, Job::Status status) {
-            error() << "job status changed" << job << status;
+            assert(job->type() == Job::LocalJob);
+            error() << "job status changed" << job << "local" << job->id() << status;
             switch (status) {
             case Job::Compiled:
                 conn->finish();
