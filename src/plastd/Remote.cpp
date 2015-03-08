@@ -449,7 +449,7 @@ std::shared_ptr<Connection> Remote::addClient(const SocketClient::SharedPtr& cli
                 break;
             }
         });
-    conn->disconnected().connect([this, conn](Connection*) {
+    conn->disconnected().connect([this, conn](Connection*) mutable {
             conn->disconnected().disconnect();
 
             auto ck = mRequested.begin();
@@ -512,6 +512,8 @@ std::shared_ptr<Connection> Remote::addClient(const SocketClient::SharedPtr& cli
             mPeersByKey.erase(key);
 
             requestMore();
+
+            conn.reset();
         });
     return conn;
 }
