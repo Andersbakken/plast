@@ -149,6 +149,7 @@ void Daemon::addClient(const SocketClient::SharedPtr& client)
             }
         });
     conn->disconnected().connect([](Connection* ptr) {
+            error() << "conn dis 1";
             auto found = conns.find(ptr);
             assert(found != conns.end());
             std::shared_ptr<Connection> conn = found->second;
