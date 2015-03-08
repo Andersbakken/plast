@@ -421,6 +421,7 @@ std::shared_ptr<Connection> Remote::addClient(const SocketClient::SharedPtr& cli
     static Hash<Connection*, std::shared_ptr<Connection> > conns;
     std::shared_ptr<Connection> conn = std::make_shared<Connection>(client);
     std::weak_ptr<Connection> weak = conn;
+    conns[conn.get()] = conn;
     conn->newMessage().connect([this, weak](const std::shared_ptr<Message>& msg, Connection*) {
             error() << "Got a message" << msg->messageId() << __LINE__;
             std::shared_ptr<Connection> conn = weak.lock();
