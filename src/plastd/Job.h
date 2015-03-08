@@ -50,6 +50,7 @@ public:
     Path path() const { return mPath; }
     Path resolvedCompiler() const { return mResolvedCompiler; }
     String preprocessed() const { return mPreprocessed; }
+    void clearPreprocessed() { mPreprocessed.clear(); }
     String objectCode() const { return mObjectCode; }
     List<String> args() const { return mArgs; }
     std::shared_ptr<CompilerArgs> compilerArgs() const { return mCompilerArgs; }

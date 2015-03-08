@@ -275,6 +275,7 @@ void Remote::handleJobResponseMessage(const JobResponseMessage::SharedPtr& msg, 
     switch (status) {
     case Job::RemotePending:
         job->updateStatus(Job::RemoteReceiving);
+        job->clearPreprocessed();
         // fall through
     case Job::RemoteReceiving:
         // accept the above statuses

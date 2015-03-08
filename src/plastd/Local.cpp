@@ -250,6 +250,7 @@ void Local::takeRemoteJobs()
             break;
         }
         warning() << "took remote job";
+        job->clearPreprocessed();
         post(job);
     }
     if (mPool.isIdle())
