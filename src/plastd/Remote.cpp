@@ -78,8 +78,9 @@ void Remote::init()
                 auto sub = it->second.begin();
                 while (sub != it->second.end()) {
                     assert(mBuildingById.contains((*sub)->jobid));
-                    warning() << "considering" << now << started << (now - started) << mRescheduleTimeout;
-                    if (now - started < mRescheduleTimeout) {
+                    const int timeout = mRescheduleTimeout * std::max<uint32_t>(1, (*sub)->serial);
+                    warning() << "considering" << now << started << (now - started) << timeout;
+                    if (now - started < timeout) {
                         done = true;
                         break;
                     }
