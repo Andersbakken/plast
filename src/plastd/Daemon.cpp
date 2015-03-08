@@ -125,8 +125,10 @@ void Daemon::handleJobMessage(const JobMessage::SharedPtr& msg, const std::share
 void Daemon::addClient(const SocketClient::SharedPtr& client)
 {
     error() << "local client added";
+    static Hash<Connection*, std::shared_ptr<Connection> > conns;
     std::shared_ptr<Connection> conn = std::make_shared<Connection>(client);
     std::weak_ptr<Connection> weak = conn;
+    conns[conn.get()] = conn;
     conn->newMessage().connect([this, weak](const std::shared_ptr<Message>& msg, Connection*) {
             std::shared_ptr<Connection> conn = weak.lock();
             if (!conn)
@@ -145,7 +147,11 @@ void Daemon::addClient(const SocketClient::SharedPtr& client)
                 break;
             }
         });
-    conn->disconnected().connect([conn](Connection*) {
+    conn->disconnected().connect([](Connection* ptr) {
+            auto found = conns.find(ptr);
+            assert(found != conns.end());
+            std::shared_ptr<Connection> conn = found->second;
             conn->disconnected().disconnect();
+            conns.erase(found);
         });
 }
