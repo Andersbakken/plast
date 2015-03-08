@@ -5,7 +5,7 @@
 #include <unistd.h>
 
 Remote::Remote()
-    : mNextId(0), mRequestedCount(0), mRescheduleTimeout(-1)
+    : mNextId(0), mRequestedCount(0), mRescheduleTimeout(-1), mMaxPreprocessPending(0), mCurPreprocessed(0)
 {
 }
 
@@ -31,6 +31,7 @@ void Remote::init()
     mPreprocessor.setCount(opts.preprocessCount);
     mRescheduleTimer.restart(opts.rescheduleCheck);
     mRescheduleTimeout = opts.rescheduleTimeout;
+    mMaxPreprocessPending = opts.maxPreprocessPending;
 
     if (!mServer.listen(opts.localPort)) {
         error() << "Unable to tcp listen";
@@ -114,9 +115,9 @@ void Remote::init()
                 else
                     ++it;
             }
-            if (!mPending.isEmpty()) {
-                //mConnection->send(HasJobsMessage(mPending.size(), Daemon::instance()->options().localPort));
-                for (const auto& p : mPending) {
+            if (!mPendingBuild.isEmpty()) {
+                //mConnection->send(HasJobsMessage(mPendingBuild.size(), Daemon::instance()->options().localPort));
+                for (const auto& p : mPendingBuild) {
                     mConnection->send(HasJobsMessage(p.first.type, p.first.major, p.first.target, p.second.size(),
                                                     Daemon::instance()->options().localPort));
                 }
@@ -165,8 +166,8 @@ void Remote::handleRequestJobsMessage(const RequestJobsMessage::SharedPtr& msg, 
     error() << "handle request jobs message" << msg->count();
     // take count jobs
     const plast::CompilerKey k = { msg->compilerType(), msg->compilerMajor(), msg->compilerTarget() };
-    auto p = mPending.find(k);
-    if (p == mPending.end()) {
+    auto p = mPendingBuild.find(k);
+    if (p == mPendingBuild.end()) {
         conn->send(LastJobMessage(k.type, k.major, k.target, 0, false));
         return;
     }
@@ -199,7 +200,7 @@ void Remote::handleRequestJobsMessage(const RequestJobsMessage::SharedPtr& msg, 
     }
     conn->send(LastJobMessage(k.type, k.major, k.target, msg->count() - rem, !pending.empty()));
     if (pending.empty())
-        mPending.erase(p);
+        mPendingBuild.erase(p);
 }
 
 void Remote::handleHasJobsMessage(const HasJobsMessage::SharedPtr& msg, const std::shared_ptr<Connection>& conn)
@@ -275,7 +276,10 @@ void Remote::handleJobResponseMessage(const JobResponseMessage::SharedPtr& msg, 
     switch (status) {
     case Job::RemotePending:
         job->updateStatus(Job::RemoteReceiving);
+        assert(mCurPreprocessed > 0);
+        --mCurPreprocessed;
         job->clearPreprocessed();
+        preprocessMore();
         // fall through
     case Job::RemoteReceiving:
         // accept the above statuses
@@ -362,6 +366,30 @@ void Remote::requestMore(const ConnectionKey& key)
     }
 }
 
+void Remote::preprocessMore()
+{
+    while (mCurPreprocessed < mMaxPreprocessPending
+           && !mPendingPreprocess.isEmpty()) {
+        const auto& pre = mPendingPreprocess.front();
+        const Job::SharedPtr job = pre.job.lock();
+        if (job) {
+            const plast::CompilerKey k = pre.key;
+            job->statusChanged().connect([this, k](Job* job, Job::Status status) {
+                    if (status == Job::Preprocessed) {
+                        error() << "preproc size" << job->preprocessed().size();
+                        mPendingBuild[k].push_back(job->shared_from_this());
+                        // send a HasJobsMessage to the scheduler
+                        mConnection->send(HasJobsMessage(k.type, k.major, k.target, mPendingBuild[k].size(),
+                                                         Daemon::instance()->options().localPort));
+                    }
+                });
+            ++mCurPreprocessed;
+            mPreprocessor.preprocess(job);
+        }
+        mPendingPreprocess.pop_front();
+    }
+}
+
 void Remote::removeJob(uint64_t id)
 {
     auto idit = mBuildingById.find(id);
@@ -391,15 +419,19 @@ Job::SharedPtr Remote::take()
 {
 #warning we should probably only take these after some timeout since we already paid the cost of preprocessing
     // prefer jobs that are not sent out
-    while (!mPending.isEmpty()) {
-        auto p = mPending.begin();
+    while (!mPendingBuild.isEmpty()) {
+        auto p = mPendingBuild.begin();
         assert(!p->second.isEmpty());
         Job::SharedPtr job = p->second.front().lock();
         p->second.removeFirst();
         if (p->second.isEmpty())
-            mPending.erase(p);
-        if (job)
+            mPendingBuild.erase(p);
+        if (job) {
+            assert(mCurPreprocessed > 0);
+            --mCurPreprocessed;
+            preprocessMore();
             return job;
+        }
     }
     // take newest pending jobs first, the assumption is that this
     // will be the job that will take the longest to get back to us
@@ -415,6 +447,9 @@ Job::SharedPtr Remote::take()
                 const uint64_t id = cand->jobid;
                 assert(id == job->id());
                 removeJob(id);
+                assert(mCurPreprocessed > 0);
+                --mCurPreprocessed;
+                preprocessMore();
                 return job;
             }
         }
@@ -538,20 +573,25 @@ void Remote::post(const Job::SharedPtr& job)
     // queue for preprocess if not already done
     const plast::CompilerKey k = { job->compilerType(), job->compilerMajor(), job->compilerTarget() };
     if (!job->isPreprocessed()) {
+        if (mCurPreprocessed >= mMaxPreprocessPending) {
+            mPendingPreprocess.push_back({ k, job });
+            return;
+        }
         job->statusChanged().connect([this, k](Job* job, Job::Status status) {
                 if (status == Job::Preprocessed) {
                     error() << "preproc size" << job->preprocessed().size();
-                    mPending[k].push_back(job->shared_from_this());
+                    mPendingBuild[k].push_back(job->shared_from_this());
                     // send a HasJobsMessage to the scheduler
-                    mConnection->send(HasJobsMessage(k.type, k.major, k.target, mPending[k].size(),
+                    mConnection->send(HasJobsMessage(k.type, k.major, k.target, mPendingBuild[k].size(),
                                                     Daemon::instance()->options().localPort));
                 }
             });
+        ++mCurPreprocessed;
         mPreprocessor.preprocess(job);
     } else {
-        mPending[k].push_back(job);
+        mPendingBuild[k].push_back(job);
         // send a HasJobsMessage to the scheduler
-        mConnection->send(HasJobsMessage(k.type, k.major, k.target, mPending[k].size(),
+        mConnection->send(HasJobsMessage(k.type, k.major, k.target, mPendingBuild[k].size(),
                                         Daemon::instance()->options().localPort));
     }
 }

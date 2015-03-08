@@ -7,6 +7,7 @@
 #include <rct/Map.h>
 #include <rct/Set.h>
 #include <rct/List.h>
+#include <rct/LinkedList.h>
 #include <rct/Connection.h>
 #include <rct/SocketClient.h>
 #include <rct/SocketServer.h>
@@ -40,6 +41,7 @@ private:
     void handleJobResponseMessage(const JobResponseMessage::SharedPtr& msg, const std::shared_ptr<Connection>& conn);
     void handleLastJobMessage(const LastJobMessage::SharedPtr& msg, const std::shared_ptr<Connection>& conn);
     void removeJob(uint64_t id);
+    void preprocessMore();
 
     struct ConnectionKey
     {
@@ -91,13 +93,20 @@ private:
         Job::WeakPtr job;
         std::weak_ptr<Connection> conn;
     };
-    Map<plast::CompilerKey, List<Job::WeakPtr> > mPending;
+    Map<plast::CompilerKey, List<Job::WeakPtr> > mPendingBuild;
+    struct PendingPreprocess
+    {
+        plast::CompilerKey key;
+        Job::WeakPtr job;
+    };
+    LinkedList<PendingPreprocess> mPendingPreprocess;
     Map<uint64_t, List<std::shared_ptr<Building> > > mBuildingByTime;
     Hash<uint64_t, std::shared_ptr<Building> > mBuildingById;
     Map<ConnectionKey, int> mRequested;
     Set<ConnectionKey> mHasMore;
     int mRequestedCount;
     int mRescheduleTimeout;
+    int mMaxPreprocessPending, mCurPreprocessed;
 
     struct Peer
     {

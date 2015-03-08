@@ -65,6 +65,9 @@ int main(int argc, char** argv)
     Config::registerOption<int>("overcommit", String::format<128>("How many local jobs to overcommit (defaults to %d)", plast::DefaultOvercommit),
                                 'o', plast::DefaultOvercommit,
                                 [](const int &count, String &err) { return validate<int>(count, "overcommit", err); });
+    Config::registerOption<int>("max-preprocess-pending", String::format<128>("Maximum number of pending remote jobs to store preprocessed data for (defaults to %d)",
+                                                                              plast::DefaultMaxPreprocessPending), 'P', plast::DefaultMaxPreprocessPending,
+                                [](const int& count, String& err) { return validate<int, 10>(count, "max-preprocess-pending", err); });
 
     Config::parse(argc, argv, List<Path>() << (Path::home() + ".config/plastd.rc") << "/etc/plastd.rc");
     if (Config::isEnabled("help")) {
@@ -98,7 +101,8 @@ int main(int argc, char** argv)
         Config::value<String>("socket"),
         Config::value<int>("reschedule-timeout"),
         Config::value<int>("reschedule-check"),
-        std::min(jobs, over)
+        std::min(jobs, over),
+        Config::value<int>("max-preprocess-pending")
     };
     const String serverValue = Config::value<String>("server");
     if (!serverValue.isEmpty()) {

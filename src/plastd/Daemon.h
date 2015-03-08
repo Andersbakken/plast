@@ -26,6 +26,7 @@ public:
         int rescheduleTimeout;
         int rescheduleCheck;
         int overcommit;
+        int maxPreprocessPending;
     };
 
     Daemon(const Options& opts);
