@@ -9,6 +9,9 @@ ProcessPool::ProcessPool(int count)
 
 ProcessPool::~ProcessPool()
 {
+    for (Process* proc : mProcs) {
+        delete proc;
+    }
 }
 
 void ProcessPool::setCount(int count)
