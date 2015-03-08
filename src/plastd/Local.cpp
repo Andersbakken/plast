@@ -209,6 +209,10 @@ void Local::post(const Job::SharedPtr& job)
         mJobs[id] = data;
         mPool.post(id);
     } else {
+        if (job->isPreprocessed()) {
+            warning() << "preprocessed remote job became local";
+            Daemon::instance()->remote().compilingLocally(job);
+        }
         warning() << "Compiler resolved to" << cmd << job->path() << cmdline << data.filename;
         cmdline.removeFirst();
         const ProcessPool::Id id = mPool.prepare(job->path(), cmd, cmdline);
@@ -219,6 +223,7 @@ void Local::post(const Job::SharedPtr& job)
 
 void Local::run(const Job::SharedPtr& job)
 {
+    assert(!job->isPreprocessed());
     warning() << "local run";
     List<String> args = job->args();
     const Path cmd = job->resolvedCompiler();

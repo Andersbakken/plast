@@ -27,6 +27,7 @@ public:
 
     void post(const Job::SharedPtr& job);
     Job::SharedPtr take();
+    void compilingLocally(const Job::SharedPtr& job);
 
     void requestMore();
 

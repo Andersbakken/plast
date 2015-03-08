@@ -567,6 +567,15 @@ std::shared_ptr<Connection> Remote::addClient(const SocketClient::SharedPtr& cli
     return conn;
 }
 
+void Remote::compilingLocally(const Job::SharedPtr& job)
+{
+    assert(job->isPreprocessed());
+    assert(mCurPreprocessed > 0);
+    --mCurPreprocessed;
+    job->clearPreprocessed();
+    preprocessMore();
+}
+
 void Remote::post(const Job::SharedPtr& job)
 {
     error() << "remote post";
