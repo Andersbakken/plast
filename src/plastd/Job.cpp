@@ -47,6 +47,7 @@ Job::Job(const Path& path, const List<String>& args, Type type,
         if (version->compiler() == plast::Clang) {
             mArgs << "-target" << version->target();
         }
+        mArgs << version->extraArgs();
         mCompilerArgs = CompilerArgs::create(mArgs);
     }
 }

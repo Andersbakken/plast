@@ -26,6 +26,7 @@ CompilerVersion::CompilerVersion(const Path& path, uint32_t flags, const String&
     const std::regex verrx("^(clang|gcc) version (\\d+)\\.(\\d+)(\\.\\d+)?.*", std::regex_constants::ECMAScript);
     const std::regex aaplrx("^(Apple LLVM).*based on LLVM (\\d+)\\.(\\d+)(\\.\\d+)?.*", std::regex_constants::ECMAScript);
     const std::regex targetrx("^Target: (.*)", std::regex_constants::ECMAScript);
+    const std::regex confrx("^Configured with.+--with-multilib-list=([^ $]+).*$", std::regex_constants::ECMAScript);
     std::smatch match;
     for (const auto& line : list) {
         auto parse = [this](const String& line, const std::smatch& match) {
@@ -55,6 +56,10 @@ CompilerVersion::CompilerVersion(const Path& path, uint32_t flags, const String&
         } else if (mKey.target.isEmpty() && std::regex_match(line.ref(), match, targetrx)) {
             assert(match.size() == 2);
             mKey.target = match[1].str();
+        } else if (std::regex_match(line.ref(), match, confrx)) {
+            assert(match.size() == 2);
+            assert(mMultiLibs.isEmpty());
+            mMultiLibs << String(match[1].str()).split(',');
         }
     }
     if (mKey.target.isEmpty())
@@ -76,11 +81,6 @@ CompilerVersion::SharedPtr CompilerVersion::version(const Path& path, uint32_t f
         return ver;
     }
     return it->second;
-}
-
-void CompilerVersion::init(const Path& path, uint32_t flags, const String& target)
-{
-    version(path, flags, target);
 }
 
 CompilerVersion::SharedPtr CompilerVersion::version(plast::CompilerType compiler, int major, const String& target)

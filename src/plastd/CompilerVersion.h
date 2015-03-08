@@ -4,7 +4,9 @@
 #include "CompilerArgs.h"
 #include <rct/Map.h>
 #include <rct/Hash.h>
+#include <rct/Set.h>
 #include <rct/Path.h>
+#include <rct/List.h>
 #include <rct/String.h>
 #include <Plast.h>
 #include <memory>
@@ -16,7 +18,6 @@ public:
     typedef std::shared_ptr<CompilerVersion> SharedPtr;
     typedef std::weak_ptr<CompilerVersion> WeakPtr;
 
-    static void init(const Path& path, uint32_t flags = 0, const String& target = String());
     static SharedPtr version(const Path& path, uint32_t flags = 0, const String& target = String());
     static SharedPtr version(plast::CompilerType compiler, int major, const String& target);
     static bool hasCompiler(plast::CompilerType compiler, int major, const String& target);
@@ -29,6 +30,9 @@ public:
     String versionString() const { return mVersion.str; }
 
     String target() const { return mKey.target; }
+    Set<String> multiLibs() const { return mMultiLibs; }
+    List<String> extraArgs() const { return mExtraArgs; }
+    void setExtraArgs(const List<String>& extra) { mExtraArgs = extra; }
 
     Path path() const { return mKey.path; }
 
@@ -42,6 +46,8 @@ private:
         int patch;
         String str;
     } mVersion;
+    Set<String> mMultiLibs;
+    List<String> mExtraArgs;
 
     enum { FlagMask = CompilerArgs::HasDashM32 };
     struct PathKey {
