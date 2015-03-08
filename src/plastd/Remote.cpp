@@ -132,7 +132,13 @@ void Remote::handleJobMessage(const JobMessage::SharedPtr& msg, const std::share
     Job::SharedPtr job = Job::create(msg->path(), msg->args(), Job::RemoteJob, msg->remoteName(),
                                      msg->id(), msg->preprocessed(), msg->serial(),
                                      msg->compilerType(), msg->compilerMajor(), msg->compilerTarget());
-    job->statusChanged().connect([conn](Job* job, Job::Status status) {
+    std::weak_ptr<Connection> weakConn = conn;
+    job->statusChanged().connect([weakConn](Job* job, Job::Status status) {
+            const std::shared_ptr<Connection> conn = weakConn.lock();
+            if (!conn) {
+                error() << "no connection" << __FILE__ << __LINE__;
+                return;
+            }
             assert(job->type() == Job::RemoteJob);
             error() << "remote job status changed" << job << "local" << job->id() << "serial" << job->serial() << "remote" << job->remoteId() << status;
             switch (status) {
@@ -148,12 +154,22 @@ void Remote::handleJobMessage(const JobMessage::SharedPtr& msg, const std::share
                 break;
             }
         });
-    job->readyReadStdOut().connect([conn](Job* job) {
+    job->readyReadStdOut().connect([weakConn](Job* job) {
+            const std::shared_ptr<Connection> conn = weakConn.lock();
+            if (!conn) {
+                error() << "no connection" << __FILE__ << __LINE__;
+                return;
+            }
             warning() << "remote job ready stdout";
             conn->send(JobResponseMessage(JobResponseMessage::Stdout, job->remoteId(),
                                           job->serial(), job->readAllStdOut()));
         });
-    job->readyReadStdErr().connect([conn](Job* job) {
+    job->readyReadStdErr().connect([weakConn](Job* job) {
+            const std::shared_ptr<Connection> conn = weakConn.lock();
+            if (!conn) {
+                error() << "no connection" << __FILE__ << __LINE__;
+                return;
+            }
             warning() << "remote job ready stderr";
             conn->send(JobResponseMessage(JobResponseMessage::Stderr, job->remoteId(),
                                           job->serial(), job->readAllStdErr()));

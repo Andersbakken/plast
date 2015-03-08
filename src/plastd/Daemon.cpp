@@ -92,11 +92,17 @@ void Daemon::handleJobMessage(const JobMessage::SharedPtr& msg, const std::share
 
     Job::SharedPtr job = Job::create(msg->path(), msg->args(), Job::LocalJob, mHostName);
     Job::WeakPtr weak = job;
+    std::weak_ptr<Connection> weakConn = conn;
     conn->disconnected().connect([weak](Connection *) {
             if (Job::SharedPtr job = weak.lock())
                 job->abort();
         });
-    job->statusChanged().connect([conn](Job* job, Job::Status status) {
+    job->statusChanged().connect([weakConn](Job* job, Job::Status status) {
+            const std::shared_ptr<Connection> conn = weakConn.lock();
+            if (!conn) {
+                error() << "no connection" << __FILE__ << __LINE__;
+                return;
+            }
             assert(job->type() == Job::LocalJob);
             error() << "job status changed" << job << "local" << job->id() << status;
             switch (status) {
@@ -111,11 +117,21 @@ void Daemon::handleJobMessage(const JobMessage::SharedPtr& msg, const std::share
                 break;
             }
         });
-    job->readyReadStdOut().connect([conn](Job* job) {
+    job->readyReadStdOut().connect([weakConn](Job* job) {
+            const std::shared_ptr<Connection> conn = weakConn.lock();
+            if (!conn) {
+                error() << "no connection" << __FILE__ << __LINE__;
+                return;
+            }
             error() << "job ready stdout";
             conn->write(job->readAllStdOut());
         });
-    job->readyReadStdErr().connect([conn](Job* job) {
+    job->readyReadStdErr().connect([weakConn](Job* job) {
+            const std::shared_ptr<Connection> conn = weakConn.lock();
+            if (!conn) {
+                error() << "no connection" << __FILE__ << __LINE__;
+                return;
+            }
             const String err = job->readAllStdErr();
             error() << "job ready stderr" << err;
             conn->write(err, ResponseMessage::Stderr);
@@ -149,7 +165,6 @@ void Daemon::addClient(const SocketClient::SharedPtr& client)
             }
         });
     conn->disconnected().connect([](Connection* ptr) {
-            error() << "conn dis 1";
             auto found = conns.find(ptr);
             assert(found != conns.end());
             std::shared_ptr<Connection> conn = found->second;
