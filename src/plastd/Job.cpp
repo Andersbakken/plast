@@ -89,7 +89,7 @@ void Job::start()
 
 void Job::finish(Job* job)
 {
-    sJobs.erase(reinterpret_cast<uint64_t>(job));
+    sJobs.erase(job->id());
 }
 
 String Job::readAllStdOut()
