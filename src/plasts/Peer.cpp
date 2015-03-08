@@ -50,6 +50,7 @@ Peer::Peer(const SocketClient::SharedPtr& client)
         });
     mConnection.disconnected().connect([this](Connection* conn) {
             conn->disconnected().disconnect();
+            EventLoop::deleteLater(conn);
             mEvent(shared_from_this(), Disconnected, json());
         });
 }
