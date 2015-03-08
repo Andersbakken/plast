@@ -120,14 +120,14 @@ void Remote::init()
 
 void Remote::handleJobMessage(const JobMessage::SharedPtr& msg, const std::shared_ptr<Connection>& conn)
 {
-    error() << "handle job message!" << msg->id();
+    error() << "handle job message!" << msg->id() << "serial" << msg->serial();
     // let's make a job out of this
     Job::SharedPtr job = Job::create(msg->path(), msg->args(), Job::RemoteJob, msg->remoteName(),
                                      msg->id(), msg->preprocessed(), msg->serial(),
                                      msg->compilerType(), msg->compilerMajor(), msg->compilerTarget());
     job->statusChanged().connect([conn](Job* job, Job::Status status) {
             assert(job->type() == Job::RemoteJob);
-            error() << "remote job status changed" << job << "local" << job->id() << "remote" << job->remoteId() << status;
+            error() << "remote job status changed" << job << "local" << job->id() << "serial" << job->serial() << "remote" << job->remoteId() << status;
             switch (status) {
             case Job::Compiled:
                 conn->send(JobResponseMessage(JobResponseMessage::Compiled, job->remoteId(),
@@ -180,7 +180,7 @@ void Remote::handleRequestJobsMessage(const RequestJobsMessage::SharedPtr& msg, 
 
             assert(job->isPreprocessed());
             // send this job to remote;
-            error() << "sending job back";
+            error() << "sending job back" << job->id() << "serial" << job->serial();
             job->updateStatus(Job::RemotePending);
             conn->send(JobMessage(job->path(), job->args(), job->id(), job->preprocessed(),
                                   job->serial(), job->remoteName(), job->compilerType(),
@@ -526,7 +526,7 @@ std::shared_ptr<Connection> Remote::addClient(const SocketClient::SharedPtr& cli
 
 void Remote::post(const Job::SharedPtr& job)
 {
-    error() << "local post";
+    error() << "remote post";
     // queue for preprocess if not already done
     const plast::CompilerKey k = { job->compilerType(), job->compilerMajor(), job->compilerTarget() };
     if (!job->isPreprocessed()) {
