@@ -38,20 +38,21 @@ void Remote::init()
     }
     warning() << "Listening" << opts.localPort;
 
-    mConnection.newMessage().connect([this](const std::shared_ptr<Message>& message, Connection* conn) {
+    mConnection.reset(new Connection);
+    mConnection->newMessage().connect([this](const std::shared_ptr<Message>& message, Connection*) {
             error() << "Got a message" << message->messageId() << __LINE__;
             switch (message->messageId()) {
             case HasJobsMessage::MessageId:
-                handleHasJobsMessage(std::static_pointer_cast<HasJobsMessage>(message), conn);
+                handleHasJobsMessage(std::static_pointer_cast<HasJobsMessage>(message), mConnection);
                 break;
             default:
                 error("Unexpected message Remote::init: %d", message->messageId());
                 break;
             }
         });
-    mConnection.finished().connect(std::bind([](){ error() << "server finished connection"; EventLoop::eventLoop()->quit(); }));
-    mConnection.disconnected().connect(std::bind([](){ error() << "server closed connection"; EventLoop::eventLoop()->quit(); }));
-    if (!mConnection.connectTcp(opts.serverHost, opts.serverPort)) {
+    mConnection->finished().connect(std::bind([](){ error() << "server finished connection"; EventLoop::eventLoop()->quit(); }));
+    mConnection->disconnected().connect(std::bind([](){ error() << "server closed connection"; EventLoop::eventLoop()->quit(); }));
+    if (!mConnection->connectTcp(opts.serverHost, opts.serverPort)) {
         error("Can't seem to connect to server");
         abort();
     }
@@ -60,7 +61,7 @@ void Remote::init()
         hn.resize(sysconf(_SC_HOST_NAME_MAX));
         if (gethostname(hn.data(), hn.size()) == 0) {
             hn.resize(strlen(hn.constData()));
-            mConnection.send(PeerMessage(hn, opts.localPort));
+            mConnection->send(PeerMessage(hn, opts.localPort));
         }
     }
 
@@ -108,16 +109,16 @@ void Remote::init()
                 }
             }
             if (!mPending.isEmpty()) {
-                //mConnection.send(HasJobsMessage(mPending.size(), Daemon::instance()->options().localPort));
+                //mConnection->send(HasJobsMessage(mPending.size(), Daemon::instance()->options().localPort));
                 for (const auto& p : mPending) {
-                    mConnection.send(HasJobsMessage(p.first.type, p.first.major, p.first.target, p.second.size(),
+                    mConnection->send(HasJobsMessage(p.first.type, p.first.major, p.first.target, p.second.size(),
                                                     Daemon::instance()->options().localPort));
                 }
             }
         });
 }
 
-void Remote::handleJobMessage(const JobMessage::SharedPtr& msg, Connection* conn)
+void Remote::handleJobMessage(const JobMessage::SharedPtr& msg, const std::shared_ptr<Connection>& conn)
 {
     error() << "handle job message!" << msg->id();
     // let's make a job out of this
@@ -153,7 +154,7 @@ void Remote::handleJobMessage(const JobMessage::SharedPtr& msg, Connection* conn
     job->start();
 }
 
-void Remote::handleRequestJobsMessage(const RequestJobsMessage::SharedPtr& msg, Connection* conn)
+void Remote::handleRequestJobsMessage(const RequestJobsMessage::SharedPtr& msg, const std::shared_ptr<Connection>& conn)
 {
     error() << "handle request jobs message" << msg->count();
     // take count jobs
@@ -195,7 +196,7 @@ void Remote::handleRequestJobsMessage(const RequestJobsMessage::SharedPtr& msg, 
         mPending.erase(p);
 }
 
-void Remote::handleHasJobsMessage(const HasJobsMessage::SharedPtr& msg, Connection* conn)
+void Remote::handleHasJobsMessage(const HasJobsMessage::SharedPtr& msg, const std::shared_ptr<Connection>& conn)
 {
     error() << "handle has jobs message";
 
@@ -206,23 +207,23 @@ void Remote::handleHasJobsMessage(const HasJobsMessage::SharedPtr& msg, Connecti
     }
     error() << "we have compiler" << msg->compilerType() << msg->compilerMajor() << msg->compilerTarget();
 
-    Connection* remoteConn = 0;
+    std::shared_ptr<Connection> remoteConn;
     {
         const Peer key = { msg->peer(), msg->port() };
-        Map<Peer, Connection*>::const_iterator peer = mPeersByKey.find(key);
+        auto peer = mPeersByKey.find(key);
         if (peer == mPeersByKey.end()) {
             // make connection
             SocketClient::SharedPtr client = std::make_shared<SocketClient>();
             client->connect(key.peer, key.port);
-            Connection* conn = addClient(client);
+            std::shared_ptr<Connection> conn = addClient(client);
 
             mPeersByKey[key] = conn;
-            mPeersByConn[conn] = key;
+            mPeersByConn[conn.get()] = key;
             remoteConn = conn;
 
             conn->send(HandshakeMessage(Daemon::instance()->options().localPort));
         } else {
-            remoteConn = peer->second;
+            remoteConn = peer->second.lock();
         }
     }
 
@@ -238,20 +239,20 @@ void Remote::handleHasJobsMessage(const HasJobsMessage::SharedPtr& msg, Connecti
     requestMore(ck);
 }
 
-void Remote::handleHandshakeMessage(const HandshakeMessage::SharedPtr& msg, Connection* conn)
+void Remote::handleHandshakeMessage(const HandshakeMessage::SharedPtr& msg, const std::shared_ptr<Connection>& conn)
 {
     const Peer key = { conn->client()->peerName(), msg->port() };
     if (mPeersByKey.contains(key)) {
         // drop the connection
-        assert(!mPeersByConn.contains(conn));
+        assert(!mPeersByConn.contains(conn.get()));
         conn->finish();
     } else {
         mPeersByKey[key] = conn;
-        mPeersByConn[conn] = key;
+        mPeersByConn[conn.get()] = key;
     }
 }
 
-void Remote::handleJobResponseMessage(const JobResponseMessage::SharedPtr& msg, Connection* conn)
+void Remote::handleJobResponseMessage(const JobResponseMessage::SharedPtr& msg, const std::shared_ptr<Connection>& conn)
 {
     error() << "handle job response" << msg->mode() << msg->id();
     Job::SharedPtr job = Job::job(msg->id());
@@ -301,7 +302,7 @@ void Remote::handleJobResponseMessage(const JobResponseMessage::SharedPtr& msg, 
     }
 }
 
-void Remote::handleLastJobMessage(const LastJobMessage::SharedPtr& msg, Connection* conn)
+void Remote::handleLastJobMessage(const LastJobMessage::SharedPtr& msg, const std::shared_ptr<Connection>& conn)
 {
     error() << "last job msg";
     const ConnectionKey ck = { conn, msg->compilerType(), msg->compilerMajor(), msg->compilerTarget() };
@@ -342,7 +343,12 @@ void Remote::requestMore(const ConnectionKey& key)
         error() << "asking for" << count << "since" << mRequestedCount << "<" << idle;
         mRequestedCount += count;
         mRequested[key] = count;
-        key.conn->send(RequestJobsMessage(key.type, key.major, key.target, count));
+        std::shared_ptr<Connection> conn = key.conn.lock();
+        if (!conn) {
+            error() << "connection dead" << __FILE__ << __LINE__;
+            return;
+        }
+        conn->send(RequestJobsMessage(key.type, key.major, key.target, count));
     } else {
         error() << "not asking," << mRequestedCount << ">=" << idle;
     }
@@ -409,12 +415,18 @@ Job::SharedPtr Remote::take()
     return Job::SharedPtr();
 }
 
-Connection* Remote::addClient(const SocketClient::SharedPtr& client)
+std::shared_ptr<Connection> Remote::addClient(const SocketClient::SharedPtr& client)
 {
     error() << "remote client added";
-    Connection* conn = new Connection(client);
-    conn->newMessage().connect([this](const std::shared_ptr<Message>& msg, Connection* conn) {
+    std::shared_ptr<Connection> conn = std::make_shared<Connection>(client);
+    std::weak_ptr<Connection> weak = conn;
+    conn->newMessage().connect([this, weak](const std::shared_ptr<Message>& msg, Connection*) {
             error() << "Got a message" << msg->messageId() << __LINE__;
+            std::shared_ptr<Connection> conn = weak.lock();
+            if (!conn) {
+                error() << "connection dead";
+                return;
+            }
             switch (msg->messageId()) {
             case JobMessage::MessageId:
                 handleJobMessage(std::static_pointer_cast<JobMessage>(msg), conn);
@@ -437,13 +449,12 @@ Connection* Remote::addClient(const SocketClient::SharedPtr& client)
                 break;
             }
         });
-    conn->disconnected().connect([this](Connection* conn) {
+    conn->disconnected().connect([this, conn](Connection*) {
             conn->disconnected().disconnect();
-            EventLoop::deleteLater(conn);
 
             auto ck = mRequested.begin();
             while (ck != mRequested.end()) {
-                if (ck->first.conn == conn) {
+                if (ck->first.conn.lock() == conn) {
                     mRequestedCount -= ck->second;
                     mHasMore.erase(ck->first);
                     mRequested.erase(ck++);
@@ -459,7 +470,7 @@ Connection* Remote::addClient(const SocketClient::SharedPtr& client)
                     assert(!t->second.isEmpty());
                     auto b = t->second.begin();
                     while (b != t->second.end()) {
-                        if ((*b)->conn == conn) {
+                        if ((*b)->conn.lock() == conn) {
                             Job::SharedPtr j = (*b)->job.lock();
                             if (j) {
                                 // reschedule
@@ -492,7 +503,7 @@ Connection* Remote::addClient(const SocketClient::SharedPtr& client)
                 }
             }
 
-            auto itc = mPeersByConn.find(conn);
+            auto itc = mPeersByConn.find(conn.get());
             if (itc == mPeersByConn.end())
                 return;
             const Peer key = itc->second;
@@ -516,7 +527,7 @@ void Remote::post(const Job::SharedPtr& job)
                     error() << "preproc size" << job->preprocessed().size();
                     mPending[k].push_back(job->shared_from_this());
                     // send a HasJobsMessage to the scheduler
-                    mConnection.send(HasJobsMessage(k.type, k.major, k.target, mPending[k].size(),
+                    mConnection->send(HasJobsMessage(k.type, k.major, k.target, mPending[k].size(),
                                                     Daemon::instance()->options().localPort));
                 }
             });
@@ -524,7 +535,7 @@ void Remote::post(const Job::SharedPtr& job)
     } else {
         mPending[k].push_back(job);
         // send a HasJobsMessage to the scheduler
-        mConnection.send(HasJobsMessage(k.type, k.major, k.target, mPending[k].size(),
+        mConnection->send(HasJobsMessage(k.type, k.major, k.target, mPending[k].size(),
                                         Daemon::instance()->options().localPort));
     }
 }

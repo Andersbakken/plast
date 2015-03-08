@@ -29,30 +29,30 @@ public:
 
     void requestMore();
 
-    Connection& scheduler() { return mConnection; }
+    std::shared_ptr<Connection> scheduler() { return mConnection; }
 
 private:
-    Connection* addClient(const SocketClient::SharedPtr& client);
-    void handleJobMessage(const JobMessage::SharedPtr& msg, Connection* conn);
-    void handleHasJobsMessage(const HasJobsMessage::SharedPtr& msg, Connection* conn);
-    void handleRequestJobsMessage(const RequestJobsMessage::SharedPtr& msg, Connection* conn);
-    void handleHandshakeMessage(const HandshakeMessage::SharedPtr& msg, Connection* conn);
-    void handleJobResponseMessage(const JobResponseMessage::SharedPtr& msg, Connection* conn);
-    void handleLastJobMessage(const LastJobMessage::SharedPtr& msg, Connection* conn);
+    std::shared_ptr<Connection> addClient(const SocketClient::SharedPtr& client);
+    void handleJobMessage(const JobMessage::SharedPtr& msg, const std::shared_ptr<Connection>& conn);
+    void handleHasJobsMessage(const HasJobsMessage::SharedPtr& msg, const std::shared_ptr<Connection>& conn);
+    void handleRequestJobsMessage(const RequestJobsMessage::SharedPtr& msg, const std::shared_ptr<Connection>& conn);
+    void handleHandshakeMessage(const HandshakeMessage::SharedPtr& msg, const std::shared_ptr<Connection>& conn);
+    void handleJobResponseMessage(const JobResponseMessage::SharedPtr& msg, const std::shared_ptr<Connection>& conn);
+    void handleLastJobMessage(const LastJobMessage::SharedPtr& msg, const std::shared_ptr<Connection>& conn);
     void removeJob(uint64_t id);
 
     struct ConnectionKey
     {
-        Connection* conn;
+        std::weak_ptr<Connection> conn;
         plast::CompilerType type;
         int major;
         String target;
 
         bool operator<(const ConnectionKey& other) const
         {
-            if (conn < other.conn)
+            if (conn.owner_before(other.conn))
                 return true;
-            if (conn > other.conn)
+            if (other.conn.owner_before(conn))
                 return false;
             if (type < other.type)
                 return true;
@@ -69,7 +69,7 @@ private:
 
 private:
     SocketServer mServer;
-    Connection mConnection;
+    std::shared_ptr<Connection> mConnection;
     Preprocessor mPreprocessor;
     unsigned int mNextId;
     Timer mRescheduleTimer;
@@ -77,10 +77,10 @@ private:
     struct Building
     {
         Building()
-            : started(0), jobid(0), conn(0)
+            : started(0), jobid(0)
         {
         }
-        Building(uint64_t s, uint64_t id, const Job::SharedPtr& j, Connection* c)
+        Building(uint64_t s, uint64_t id, const Job::SharedPtr& j, const std::shared_ptr<Connection> c)
             : started(s), jobid(id), job(j), conn(c)
         {
         }
@@ -88,7 +88,7 @@ private:
         uint64_t started;
         uint64_t jobid;
         Job::WeakPtr job;
-        Connection* conn;
+        std::weak_ptr<Connection> conn;
     };
     Map<plast::CompilerKey, List<Job::WeakPtr> > mPending;
     Map<uint64_t, List<std::shared_ptr<Building> > > mBuildingByTime;
@@ -112,7 +112,7 @@ private:
             return port < other.port;
         }
     };
-    Map<Peer, Connection*> mPeersByKey;
+    Map<Peer, std::weak_ptr<Connection> > mPeersByKey;
     Hash<Connection*, Peer> mPeersByConn;
 };
 

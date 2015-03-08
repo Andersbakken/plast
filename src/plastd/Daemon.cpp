@@ -85,7 +85,7 @@ Daemon::~Daemon()
 {
 }
 
-void Daemon::handleJobMessage(const JobMessage::SharedPtr& msg, Connection* conn)
+void Daemon::handleJobMessage(const JobMessage::SharedPtr& msg, const std::shared_ptr<Connection>& conn)
 {
     error() << "handling job message";
 
@@ -125,8 +125,12 @@ void Daemon::handleJobMessage(const JobMessage::SharedPtr& msg, Connection* conn
 void Daemon::addClient(const SocketClient::SharedPtr& client)
 {
     error() << "local client added";
-    Connection* conn = new Connection(client);
-    conn->newMessage().connect([this](const std::shared_ptr<Message>& msg, Connection* conn) {
+    std::shared_ptr<Connection> conn = std::make_shared<Connection>(client);
+    std::weak_ptr<Connection> weak = conn;
+    conn->newMessage().connect([this, weak](const std::shared_ptr<Message>& msg, Connection*) {
+            std::shared_ptr<Connection> conn = weak.lock();
+            if (!conn)
+                return;
             switch (msg->messageId()) {
             case QuitMessage::MessageId:
                 mExitCode = std::static_pointer_cast<QuitMessage>(msg)->exitCode();
@@ -141,8 +145,7 @@ void Daemon::addClient(const SocketClient::SharedPtr& client)
                 break;
             }
         });
-    conn->disconnected().connect([](Connection* conn) {
+    conn->disconnected().connect([conn](Connection*) {
             conn->disconnected().disconnect();
-            EventLoop::deleteLater(conn);
         });
 }

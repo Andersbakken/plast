@@ -43,7 +43,7 @@ public:
 
 private:
     void addClient(const SocketClient::SharedPtr& client);
-    void handleJobMessage(const JobMessage::SharedPtr& msg, Connection* conn);
+    void handleJobMessage(const JobMessage::SharedPtr& msg, const std::shared_ptr<Connection>& conn);
 
 private:
     SocketServer mServer;
