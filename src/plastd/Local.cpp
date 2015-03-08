@@ -210,7 +210,7 @@ void Local::post(const Job::SharedPtr& job)
         mPool.post(id);
     } else {
         if (job->isPreprocessed()) {
-            warning() << "preprocessed remote job became local";
+            warning() << "preprocessed remote job became local" << job->id();
             Daemon::instance()->remote().compilingLocally(job);
         }
         warning() << "Compiler resolved to" << cmd << job->path() << cmdline << data.filename;

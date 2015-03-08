@@ -66,6 +66,7 @@ bool Daemon::init()
         return false;
     }
 
+#warning should this really be a weak_ptr?
     sInstance = shared_from_this();
     messages::init();
     mLocal.init();
