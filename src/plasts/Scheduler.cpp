@@ -138,7 +138,13 @@ Scheduler::Scheduler(const Options& opts)
                         websocket->message().connect([this, cmds](WebSocket* websocket, const WebSocket::Message& msg) {
                                 if (msg.opcode() == WebSocket::Message::TextFrame) {
                                     error() << "got message" << msg.opcode() << msg.message();
-                                    auto j = json::parse(msg.message());
+                                    json j;
+                                    try {
+                                        j = json::parse(msg.message());
+                                    } catch(const std::exception& e) {
+                                        error() << "exception" << e.what();
+                                        return;
+                                    }
                                     if (!j.is_object()) {
                                         error() << "message not an object";
                                         websocket->write((JsonObject() << "error" << "message is not an object").dump());
