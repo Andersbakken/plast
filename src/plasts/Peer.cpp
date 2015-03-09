@@ -33,7 +33,7 @@ Peer::Peer(const SocketClient::SharedPtr& client)
                 const BuildingMessage::SharedPtr bmsg = std::static_pointer_cast<BuildingMessage>(msg);
                 const json obj = {
                     { "type", "build" },
-                    { "peerid", mId },
+                    { "id", mId },
                     { "local", mName.ref() },
                     { "peer", bmsg->peer().ref() },
                     { "file", bmsg->file().ref() },

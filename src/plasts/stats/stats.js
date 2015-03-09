@@ -1,6 +1,7 @@
 /*global paper, console, JSON, WebSocket*/
 
 var ws, scheduler;
+var mode;
 
 var peers = {
     init: function(canvas) {
@@ -80,6 +81,8 @@ Peer.prototype = {
     constructor: Peer,
     rect: undefined,
     text: undefined,
+    _path: undefined,
+    _group: undefined,
     draw: function() {
         if (this._path)
             this._path.remove();
@@ -90,7 +93,11 @@ Peer.prototype = {
         this._text = new paper.PointText(this.rect.center);
         this._text.content = this.name;
         this._text.style = { fontSize: 15, fillColor: "white", justification: "center" };
-        this._path.insertBelow(this._text);
+        //this._path.insertBelow(this._text);
+        this._group = new paper.Group();
+        this._group.addChild(this._path);
+        this._group.addChild(this._text);
+        this._group.onClick = onPeerClick;
         return this;
     },
     invalidate: function() {
@@ -104,6 +111,11 @@ Peer.prototype = {
     }
 };
 
+function onPeerClick(event) {
+    window.location.hash = '#detail-' + this.children[1].content;
+    console.log(this.children[1].content);
+}
+
 function handlePeer(peer)
 {
     if (peer["delete"]) {
@@ -116,6 +128,47 @@ function handlePeer(peer)
     peers.draw();
 }
 
+function Detail(args)
+{
+    this.local = args.name;
+    this.dom = document.getElementById('detail');
+    while (this.dom.firstChild) {
+        this.dom.removeChild(this.dom.firstChild);
+    }
+    this._table = document.createElement('table');
+    this.dom.appendChild(this._table);
+};
+
+Detail.prototype = {
+    constructor: Detail,
+    _table: undefined,
+    _map: Object.create(null),
+    processMessage: function(msg) {
+        if (msg.type !== "build")
+            return;
+        if (msg.local !== this.local)
+            return;
+        if (msg.start) {
+            // insert
+            var row = this._table.insertRow(-1);
+            this._addColumn(row, msg.file);
+            this._addColumn(row, msg.peer);
+            this._map[msg.jobid] = row;
+        } else {
+            if (!(msg.jobid in this._map))
+                return;
+            this._table.deleteRow(this._map[msg.jobid].rowIndex);
+            delete this._map[msg.jobid];
+        }
+        //console.log("message for local:", msg);
+    },
+    _addColumn: function(row, text) {
+        var col = row.insertCell(-1);
+        var txt = document.createTextNode(text);
+        col.appendChild(txt);
+    }
+};
+
 var callbacks = {
     websocketOpen: function(evt) {
         console.log("ws open");
@@ -125,11 +178,15 @@ var callbacks = {
         console.log("ws close");
     },
     websocketMessage: function(evt) {
-        console.log("ws msg " + evt.data);
         try {
             var obj = JSON.parse(evt.data);
             if (obj.type === "peer")
                 handlePeer(obj);
+            if (mode) {
+                mode.processMessage(obj);
+            } else {
+                console.log("ws msg", obj);
+            }
         } catch (e) {
         }
     },
@@ -138,7 +195,13 @@ var callbacks = {
     }
 };
 
+var oldHash = "";
+var mapper = Object.create(null);
+
 function init() {
+    mapper[""] = document.getElementById('stats');
+    mapper["detail"] = document.getElementById('detail');
+
     var url = "ws://" + window.location.hostname + ":" + window.location.port + "/";
     ws = new WebSocket(url);
     ws.onopen = callbacks.websocketOpen;
@@ -167,4 +230,32 @@ function init() {
     // paper.view.draw();
 }
 
+function findObject(hash)
+{
+    if (!hash.length) {
+        return { dom: mapper[""], data: undefined };
+    }
+    var dash = hash.indexOf('-');
+    var prefix = hash.substring(1, dash);
+    return { dom: mapper[prefix], data: { prefix: prefix, name: hash.substr(dash + 1) } };
+}
+
+function update(data)
+{
+    if (!data) {
+        mode = undefined;
+    } else if (data.prefix == "detail") {
+        mode = new Detail({ name: data.name });
+    }
+}
+
+window.addEventListener('hashchange', function() {
+    findObject(oldHash).dom.style.display = 'none';
+    var data = findObject(window.location.hash);
+    data.dom.style.display = 'block';
+    update(data.data);
+    oldHash = window.location.hash;
+});
+
+window.location.hash = "";
 window.addEventListener("load", init, false);
