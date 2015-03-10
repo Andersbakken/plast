@@ -30,7 +30,9 @@ bool Client::run(int argc, char** argv)
         });
     mConnection.finished().connect(std::bind([](){ EventLoop::eventLoop()->quit(); }));
     mConnection.disconnected().connect(std::bind([](){ EventLoop::eventLoop()->quit(); }));
-    if (!mConnection.connectUnix(plast::defaultSocketFile())) {
+    if (char *compiler = getenv("PLAST_COMPILER"))
+        argv[0] = compiler;
+    if (getenv("PLAST_DISABLED") || !mConnection.connectUnix(plast::defaultSocketFile())) {
         Path path = plast::resolveCompiler(argv[0]);
         // error() << "Building local" << reason << String::join(args, ' ');
         if (!path.isEmpty()) {

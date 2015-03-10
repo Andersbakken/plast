@@ -9,16 +9,24 @@ Path defaultSocketFile()
 
 Path resolveCompiler(const Path &path)
 {
-    const String fileName = path.fileName();
+    if (path.isAbsolute()) {
+        const Path resolved = path.resolved();
+        const char *fn = resolved.fileName();
+        if (strcmp(fn, "plastc") && strcmp(fn, "gcc-rtags-wrapper.sh") && strcmp(fn, "icecc")) {
+            return path;
+        }
+    }
+
     const List<String> paths = String(getenv("PATH")).split(':');
+    const String fileName = path.fileName();
     // error() << fileName;
     for (const auto &p : paths) {
         const Path orig = p + "/" + fileName;
         Path exec = orig;
         // error() << "Trying" << exec;
         if (exec.resolve()) {
-            const char *fileName = exec.fileName();
-            if (strcmp(fileName, "plastc") && strcmp(fileName, "gcc-rtags-wrapper.sh") && strcmp(fileName, "icecc")) {
+            const char *fn = exec.fileName();
+            if (strcmp(fn, "plastc") && strcmp(fn, "gcc-rtags-wrapper.sh") && strcmp(fn, "icecc")) {
                 return orig;
             }
         }
