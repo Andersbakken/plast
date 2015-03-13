@@ -75,7 +75,7 @@ private:
     std::shared_ptr<Connection> mConnection;
     Preprocessor mPreprocessor;
     uint32_t mNextId;
-    Timer mRescheduleTimer;
+    Timer mRescheduleTimer, mReconnectTimer;
 
     struct Building
     {
@@ -106,8 +106,9 @@ private:
     Map<ConnectionKey, int> mRequested;
     Set<ConnectionKey> mHasMore;
     int mRequestedCount;
-    int mRescheduleTimeout;
+    int mRescheduleTimeout, mReconnectTimeout;
     int mMaxPreprocessPending, mCurPreprocessed;
+    bool mConnectionError;
 
     struct Peer
     {

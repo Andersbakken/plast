@@ -5,7 +5,8 @@
 #include <unistd.h>
 
 Remote::Remote()
-    : mNextId(0), mRequestedCount(0), mRescheduleTimeout(-1), mMaxPreprocessPending(0), mCurPreprocessed(0)
+    : mNextId(0), mRequestedCount(0), mRescheduleTimeout(-1), mReconnectTimeout(1000),
+      mMaxPreprocessPending(0), mCurPreprocessed(0), mConnectionError(false)
 {
 }
 
@@ -39,32 +40,58 @@ void Remote::init()
     }
     warning() << "Listening" << opts.localPort;
 
-    mConnection.reset(new Connection);
-    mConnection->newMessage().connect([this](const std::shared_ptr<Message>& message, Connection*) {
-            error() << "Got a message" << message->messageId() << __LINE__;
-            switch (message->messageId()) {
-            case HasJobsMessage::MessageId:
-                handleHasJobsMessage(std::static_pointer_cast<HasJobsMessage>(message), mConnection);
-                break;
-            default:
-                error("Unexpected message Remote::init: %d", message->messageId());
-                break;
-            }
-        });
-    mConnection->finished().connect(std::bind([](){ error() << "server finished connection"; EventLoop::eventLoop()->quit(); }));
-    mConnection->disconnected().connect(std::bind([](){ error() << "server closed connection"; EventLoop::eventLoop()->quit(); }));
-    if (!mConnection->connectTcp(opts.serverHost, opts.serverPort)) {
-        error("Can't seem to connect to server");
-        abort();
-    }
-    {
-        String hn;
-        hn.resize(sysconf(_SC_HOST_NAME_MAX));
-        if (gethostname(hn.data(), hn.size()) == 0) {
-            hn.resize(strlen(hn.constData()));
-            mConnection->send(PeerMessage(hn, opts.localPort));
+    auto connectToScheduler = [this, opts]() {
+        mConnectionError = false;
+        mConnection.reset(new Connection);
+        mConnection->newMessage().connect([this](const std::shared_ptr<Message>& message, Connection*) {
+                error() << "Got a message" << message->messageId() << __LINE__;
+                switch (message->messageId()) {
+                case HasJobsMessage::MessageId:
+                    handleHasJobsMessage(std::static_pointer_cast<HasJobsMessage>(message), mConnection);
+                    break;
+                default:
+                    error("Unexpected message Remote::init: %d", message->messageId());
+                    break;
+                }
+            });
+        mConnection->finished().connect(std::bind([]() {
+                    error() << "server finished connection";
+                    EventLoop::eventLoop()->quit();
+                }));
+        mConnection->error().connect(std::bind([this] {
+                    mConnectionError = true;
+                    error() << "unable to reconnect, retrying in" << mReconnectTimeout << "ms";
+                    mReconnectTimer.restart(mReconnectTimeout, Timer::SingleShot);
+                }));
+        mConnection->disconnected().connect(std::bind([this]() {
+                    if (mConnectionError)
+                        return;
+                    mReconnectTimeout = 1000;
+                    error() << "server closed connection, retrying in" << mReconnectTimeout << "ms";
+                    mReconnectTimer.restart(mReconnectTimeout, Timer::SingleShot);
+                }));
+        mConnection->connected().connect(std::bind([this, opts]() {
+                    error() << "connected to scheduler";
+                    String hn;
+                    hn.resize(sysconf(_SC_HOST_NAME_MAX));
+                    if (gethostname(hn.data(), hn.size()) == 0) {
+                        hn.resize(strlen(hn.constData()));
+                        mConnection->send(PeerMessage(hn, opts.localPort));
+                    }
+                }));
+        if (!mConnection->connectTcp(opts.serverHost, opts.serverPort)) {
+            error() << "unable to reconnect, retrying in" << mReconnectTimeout << "ms";
+            mReconnectTimer.restart(mReconnectTimeout, Timer::SingleShot);
+            return;
         }
-    }
+
+    };
+    connectToScheduler();
+    mReconnectTimer.timeout().connect([this, connectToScheduler](Timer*) {
+            // exponential backoff, max 5 minutes
+            mReconnectTimeout = std::min(mReconnectTimeout * 2, 5 * 60 * 1000);
+            connectToScheduler();
+        });
 
     mRescheduleTimer.timeout().connect([this](Timer*) {
             //error() << "checking for reschedule!!!";
