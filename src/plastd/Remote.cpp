@@ -71,6 +71,7 @@ void Remote::init()
                     mReconnectTimer.restart(mReconnectTimeout, Timer::SingleShot);
                 }));
         mConnection->connected().connect(std::bind([this, opts]() {
+                    mReconnectTimeout = 1000;
                     error() << "connected to scheduler";
                     String hn;
                     hn.resize(sysconf(_SC_HOST_NAME_MAX));
@@ -86,12 +87,12 @@ void Remote::init()
         }
 
     };
-    connectToScheduler();
     mReconnectTimer.timeout().connect([this, connectToScheduler](Timer*) {
             // exponential backoff, max 5 minutes
             mReconnectTimeout = std::min(mReconnectTimeout * 2, 5 * 60 * 1000);
             connectToScheduler();
         });
+    connectToScheduler();
 
     mRescheduleTimer.timeout().connect([this](Timer*) {
             //error() << "checking for reschedule!!!";
