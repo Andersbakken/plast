@@ -23,6 +23,13 @@ var peers = {
             delete this._peers[id];
         }
     },
+    get: function(name) {
+        for (var i in this._peers) {
+            if (this._peers[i].name === name)
+                return this._peers[i];
+        }
+        return undefined;
+    },
     center: function(rel) {
         var pt = new paper.Point(this.width() / 2, this.height() / 2);
         if (rel) {
@@ -66,8 +73,28 @@ var peers = {
     height: function() {
         return this._canvas.height / ((window.devicePixelRatio || 1) / this._pixelRatio);
     },
+    processMessage: function(msg) {
+        console.log("ws msg", msg);
+        if (msg.type !== "build")
+            return;
+        var peer;
+        if (msg.start) {
+            if ((peer = this.get(msg.local))) {
+                peer.jobs.add(peer, msg);
+                this._messages[msg.jobid] = msg.local;
+            }
+        } else {
+            var peername = this._messages[msg.jobid];
+            delete this._messages[msg.jobid];
+            if ((peer = this.get(peername))) {
+                peer.jobs.remove(peer, msg);
+            }
+        }
+        this.draw();
+    },
     _canvas: undefined,
     _peers: {},
+    _messages: Object.create(null),
     _pixelRatio: undefined
 };
 
@@ -75,39 +102,77 @@ function Peer(args) {
     this.id = args.id;
     this.name = args.name;
     this.color = args.color;
+    this._jobs = Object.create(null);
 }
 
 Peer.prototype = {
+    JOB_OFFSET: 1,
     constructor: Peer,
     rect: undefined,
     text: undefined,
     _path: undefined,
     _group: undefined,
+    _jobs: undefined,
+    _adjustRect: function(off) {
+        return new paper.Rectangle(this.rect.x - off, this.rect.y - off,
+                                   this.rect.width + off * 2, this.rect.height + off * 2);
+    },
     draw: function() {
-        if (this._path)
-            this._path.remove();
+        // sort jobs based on local
+        var sortedJobs = Object.create(null), job, local;
+        for (job in this._jobs) {
+            local = this._jobs[job].local;
+            if (!(local in sortedJobs)) {
+                sortedJobs[local] = [];
+            }
+            sortedJobs[local].push(this._jobs[job]);
+        }
+
+        this.invalidate();
         this._path = new paper.Path.RoundRectangle(this.rect, peers.roundSize());
         this._path.fillColor = this.color;
-        if (this._text)
-            this._text.remove();
         this._text = new paper.PointText(this.rect.center);
         this._text.content = this.name;
         this._text.style = { fontSize: 15, fillColor: "white", justification: "center" };
         //this._path.insertBelow(this._text);
         this._group = new paper.Group();
+
+        var numSorted = Object.keys(sortedJobs).length;
+        var off = 0;
+        for (local in sortedJobs) {
+            var jobs = sortedJobs[local];
+            var num = jobs.length;
+            off += (num * Peer.prototype.JOB_OFFSET);
+            var other = peers.get(local);
+            // add a rect
+            var rect = new paper.Path.RoundRectangle(this._adjustRect(off), peers.roundSize());
+            rect.fillColor = other.color;
+            this._group.addChild(rect);
+        }
+
         this._group.addChild(this._path);
         this._group.addChild(this._text);
         this._group.onClick = onPeerClick;
         return this;
     },
     invalidate: function() {
-        if (this._path)
-            this._path.remove();
-        if (this._text)
-            this._text.remove();
+        if (this._group) {
+            var chld = this._group.children;
+            for (var idx in chld) {
+                chld[idx].remove();
+            }
+        }
     },
     recalculate: function(pos, size) {
         this.rect = new paper.Rectangle(pos, new paper.Point(pos.x + size.width, pos.y + size.height));
+    },
+    jobs: {
+        add: function(peer, job) {
+            peer._jobs[job.jobid] = job;
+        },
+        remove: function(peer, job) {
+            delete peer._jobs[job.jobid];
+        }
     }
 };
 
@@ -185,7 +250,7 @@ var callbacks = {
             if (mode) {
                 mode.processMessage(obj);
             } else {
-                console.log("ws msg", obj);
+                peers.processMessage(obj);
             }
         } catch (e) {
         }

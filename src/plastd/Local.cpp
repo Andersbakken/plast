@@ -61,6 +61,11 @@ void Local::init()
 
             mJobs.erase(id);
 
+            {
+                std::shared_ptr<Connection> scheduler = Daemon::instance()->remote().scheduler();
+                scheduler->send(BuildingMessage(BuildingMessage::Stop, data.jobid));
+            }
+
             if (!job) {
                 error() << "job not found in finish";
                 if (localForRemote) {
@@ -68,11 +73,7 @@ void Local::init()
                 }
                 return;
             }
-
-            {
-                std::shared_ptr<Connection> scheduler = Daemon::instance()->remote().scheduler();
-                scheduler->send(BuildingMessage(BuildingMessage::Stop, job->id()));
-            }
+            assert(job->id() == data.jobid);
 
             const int retcode = proc->returnCode();
             if (retcode != 0) {
@@ -110,6 +111,10 @@ void Local::init()
             if (localForRemote) {
                 unlink(data.filename.constData());
             }
+            {
+                std::shared_ptr<Connection> scheduler = Daemon::instance()->remote().scheduler();
+                scheduler->send(BuildingMessage(BuildingMessage::Stop, data.jobid));
+            }
 
             mJobs.erase(id);
             Job::SharedPtr job = data.job.lock();
@@ -117,6 +122,7 @@ void Local::init()
                 error() << "job not found in error";
                 return;
             }
+            assert(job->id() == data.jobid);
             job->mError = "Local compile pool returned error";
             job->updateStatus(Job::Error);
             Job::finish(job.get());
