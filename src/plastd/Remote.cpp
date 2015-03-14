@@ -42,7 +42,7 @@ void Remote::init()
 
     auto connectToScheduler = [this, opts]() {
         mConnectionError = false;
-        mConnection.reset(new Connection);
+        mConnection = Connection::create();
         mConnection->newMessage().connect([this](const std::shared_ptr<Message>& message, const std::shared_ptr<Connection> &) {
                 error() << "Got a message" << message->messageId() << __LINE__;
                 switch (message->messageId()) {
@@ -506,7 +506,7 @@ std::shared_ptr<Connection> Remote::addClient(const SocketClient::SharedPtr& cli
 {
     error() << "remote client added";
     static Set<std::shared_ptr<Connection> > conns;
-    std::shared_ptr<Connection> conn = std::make_shared<Connection>();
+    std::shared_ptr<Connection> conn = Connection::create();
     conn->connect(client);
     conns.insert(conn);
     conn->newMessage().connect([this](const std::shared_ptr<Message>& msg, const std::shared_ptr<Connection> &conn) {

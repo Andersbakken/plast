@@ -5,7 +5,7 @@
 #include <stdio.h>
 
 Client::Client()
-    : mConnection(new Connection)
+    : mConnection(Connection::create())
 {
     messages::init();
 }

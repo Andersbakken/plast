@@ -6,7 +6,7 @@ using nlohmann::json;
 int Peer::sId = 0;
 
 Peer::Peer(const SocketClient::SharedPtr& client)
-    : mId(++sId), mConnection(new Connection)
+    : mId(++sId), mConnection(Connection::create())
 {
     mConnection->connect(client);
     mConnection->newMessage().connect([this](const std::shared_ptr<Message>& msg, const std::shared_ptr<Connection> &conn) {
