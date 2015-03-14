@@ -43,7 +43,7 @@ void Remote::init()
     auto connectToScheduler = [this, opts]() {
         mConnectionError = false;
         mConnection.reset(new Connection);
-        mConnection->newMessage().connect([this](const std::shared_ptr<Message>& message, Connection*) {
+        mConnection->newMessage().connect([this](const std::shared_ptr<Message>& message, const std::shared_ptr<Connection> &) {
                 error() << "Got a message" << message->messageId() << __LINE__;
                 switch (message->messageId()) {
                 case HasJobsMessage::MessageId:
@@ -269,7 +269,7 @@ void Remote::handleHasJobsMessage(const HasJobsMessage::SharedPtr& msg, const st
             std::shared_ptr<Connection> conn = addClient(client);
 
             mPeersByKey[key] = conn;
-            mPeersByConn[conn.get()] = key;
+            mPeersByConn[conn] = key;
             remoteConn = conn;
 
             conn->send(HandshakeMessage(Daemon::instance()->options().localPort));
@@ -295,11 +295,11 @@ void Remote::handleHandshakeMessage(const HandshakeMessage::SharedPtr& msg, cons
     const Peer key = { conn->client()->peerName(), msg->port() };
     if (mPeersByKey.contains(key)) {
         // drop the connection
-        assert(!mPeersByConn.contains(conn.get()));
+        assert(!mPeersByConn.contains(conn));
         conn->finish();
     } else {
         mPeersByKey[key] = conn;
-        mPeersByConn[conn.get()] = key;
+        mPeersByConn[conn] = key;
     }
 }
 
@@ -505,17 +505,12 @@ Job::SharedPtr Remote::take()
 std::shared_ptr<Connection> Remote::addClient(const SocketClient::SharedPtr& client)
 {
     error() << "remote client added";
-    static Hash<Connection*, std::shared_ptr<Connection> > conns;
-    std::shared_ptr<Connection> conn = std::make_shared<Connection>(client);
-    std::weak_ptr<Connection> weak = conn;
-    conns[conn.get()] = conn;
-    conn->newMessage().connect([this, weak](const std::shared_ptr<Message>& msg, Connection*) {
+    static Set<std::shared_ptr<Connection> > conns;
+    std::shared_ptr<Connection> conn = std::make_shared<Connection>();
+    conn->connect(client);
+    conns.insert(conn);
+    conn->newMessage().connect([this](const std::shared_ptr<Message>& msg, const std::shared_ptr<Connection> &conn) {
             error() << "Got a message" << msg->messageId() << __LINE__;
-            std::shared_ptr<Connection> conn = weak.lock();
-            if (!conn) {
-                error() << "connection dead";
-                return;
-            }
             switch (msg->messageId()) {
             case JobMessage::MessageId:
                 handleJobMessage(std::static_pointer_cast<JobMessage>(msg), conn);
@@ -538,11 +533,7 @@ std::shared_ptr<Connection> Remote::addClient(const SocketClient::SharedPtr& cli
                 break;
             }
         });
-    conn->disconnected().connect([this](Connection* ptr) {
-            auto found = conns.find(ptr);
-            assert(found != conns.end());
-            std::shared_ptr<Connection> conn = found->second;
-
+    conn->disconnected().connect([this](const std::shared_ptr<Connection> &conn) {
             conn->disconnected().disconnect();
 
             auto ck = mRequested.begin();
@@ -596,7 +587,7 @@ std::shared_ptr<Connection> Remote::addClient(const SocketClient::SharedPtr& cli
                 }
             }
 
-            auto itc = mPeersByConn.find(conn.get());
+            auto itc = mPeersByConn.find(conn);
             if (itc == mPeersByConn.end())
                 return;
             const Peer key = itc->second;
@@ -606,7 +597,7 @@ std::shared_ptr<Connection> Remote::addClient(const SocketClient::SharedPtr& cli
 
             requestMore();
 
-            conns.erase(found);
+            conns.erase(conn);
         });
     return conn;
 }

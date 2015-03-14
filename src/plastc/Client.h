@@ -10,10 +10,10 @@ public:
     ~Client();
 
     bool run(int argc, char** argv);
-    int exitCode() const { return mConnection.finishStatus(); }
+    int exitCode() const { return mConnection->finishStatus(); }
 
 private:
-    Connection mConnection;
+    std::shared_ptr<Connection> mConnection;
 };
 
 #endif

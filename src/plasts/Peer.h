@@ -16,9 +16,9 @@ public:
     Peer(const SocketClient::SharedPtr& client);
     ~Peer();
 
-    Connection* connection() { return &mConnection; }
+    std::shared_ptr<Connection> connection() { return mConnection; }
 
-    String ip() const { return mConnection.client()->peerName(); }
+    String ip() const { return mConnection->client()->peerName(); }
     String name() const { return mName; }
     int id() const { return mId; }
 
@@ -32,7 +32,7 @@ public:
 
 private:
     int mId;
-    Connection mConnection;
+    std::shared_ptr<Connection> mConnection;
     String mName;
     Signal<std::function<void(const Peer::SharedPtr&, Event, const nlohmann::json&)> > mEvent;
 

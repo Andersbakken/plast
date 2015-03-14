@@ -5,6 +5,7 @@
 #include <stdio.h>
 
 Client::Client()
+    : mConnection(new Connection)
 {
     messages::init();
 }
@@ -15,7 +16,7 @@ Client::~Client()
 
 bool Client::run(int argc, char** argv)
 {
-    mConnection.newMessage().connect([](std::shared_ptr<Message> message, Connection*) {
+    mConnection->newMessage().connect([](std::shared_ptr<Message> message, std::shared_ptr<Connection>) {
             if (message->messageId() == ResponseMessage::MessageId) {
                 std::shared_ptr<ResponseMessage> resp = std::static_pointer_cast<ResponseMessage>(message);
                 const String response = resp->data();
@@ -28,11 +29,11 @@ bool Client::run(int argc, char** argv)
                 error("Unexpected message Client: %d", message->messageId());
             }
         });
-    mConnection.finished().connect(std::bind([](){ EventLoop::eventLoop()->quit(); }));
-    mConnection.disconnected().connect(std::bind([](){ EventLoop::eventLoop()->quit(); }));
+    mConnection->finished().connect(std::bind([](){ EventLoop::eventLoop()->quit(); }));
+    mConnection->disconnected().connect(std::bind([](){ EventLoop::eventLoop()->quit(); }));
     if (char *compiler = getenv("PLAST_COMPILER"))
         argv[0] = compiler;
-    if (getenv("PLAST_DISABLED") || !mConnection.connectUnix(plast::defaultSocketFile())) {
+    if (getenv("PLAST_DISABLED") || !mConnection->connectUnix(plast::defaultSocketFile())) {
         Path path = plast::resolveCompiler(argv[0]);
         // error() << "Building local" << reason << String::join(args, ' ');
         if (!path.isEmpty()) {
@@ -49,6 +50,6 @@ bool Client::run(int argc, char** argv)
     for (int i = 0; i < argc; ++i) {
         args.push_back(argv[i]);
     }
-    mConnection.send(JobMessage(Path::pwd(), args));
+    mConnection->send(JobMessage(Path::pwd(), args));
     return true;
 }

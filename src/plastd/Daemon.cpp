@@ -110,7 +110,7 @@ void Daemon::handleJobMessage(const JobMessage::SharedPtr& msg, const std::share
     Job::SharedPtr job = Job::create(msg->path(), msg->args(), Job::LocalJob, mHostName);
     Job::WeakPtr weak = job;
     std::weak_ptr<Connection> weakConn = conn;
-    conn->disconnected().connect([weak](Connection *) {
+    conn->disconnected().connect([weak](const std::shared_ptr<Connection> &) {
             if (Job::SharedPtr job = weak.lock())
                 job->abort();
         });
@@ -159,14 +159,11 @@ void Daemon::handleJobMessage(const JobMessage::SharedPtr& msg, const std::share
 void Daemon::addClient(const SocketClient::SharedPtr& client)
 {
     error() << "local client added";
-    static Hash<Connection*, std::shared_ptr<Connection> > conns;
-    std::shared_ptr<Connection> conn = std::make_shared<Connection>(client);
-    std::weak_ptr<Connection> weak = conn;
-    conns[conn.get()] = conn;
-    conn->newMessage().connect([this, weak](const std::shared_ptr<Message>& msg, Connection*) {
-            std::shared_ptr<Connection> conn = weak.lock();
-            if (!conn)
-                return;
+    static Set<std::shared_ptr<Connection> > conns;
+    std::shared_ptr<Connection> conn = std::make_shared<Connection>();
+    conn->connect(client);
+    conns.insert(conn);
+    conn->newMessage().connect([this](const std::shared_ptr<Message>& msg, const std::shared_ptr<Connection> &conn) {
             switch (msg->messageId()) {
             case QuitMessage::MessageId:
                 mExitCode = std::static_pointer_cast<QuitMessage>(msg)->exitCode();
@@ -181,11 +178,8 @@ void Daemon::addClient(const SocketClient::SharedPtr& client)
                 break;
             }
         });
-    conn->disconnected().connect([](Connection* ptr) {
-            auto found = conns.find(ptr);
-            assert(found != conns.end());
-            std::shared_ptr<Connection> conn = found->second;
+    conn->disconnected().connect([](const std::shared_ptr<Connection> &conn) {
             conn->disconnected().disconnect();
-            conns.erase(found);
+            conns.remove(conn);
         });
 }

@@ -83,7 +83,7 @@ private:
             : started(0), jobid(0), serial(0)
         {
         }
-        Building(uint64_t s, uint64_t id, uint32_t ser, const Job::SharedPtr& j, const std::shared_ptr<Connection> c)
+        Building(uint64_t s, uint64_t id, uint32_t ser, const Job::SharedPtr& j, const std::shared_ptr<Connection> &c)
             : started(s), jobid(id), serial(ser), job(j), conn(c)
         {
         }
@@ -125,7 +125,7 @@ private:
         }
     };
     Map<Peer, std::weak_ptr<Connection> > mPeersByKey;
-    Hash<Connection*, Peer> mPeersByConn;
+    Hash<std::shared_ptr<Connection>, Peer> mPeersByConn;
 };
 
 #endif
