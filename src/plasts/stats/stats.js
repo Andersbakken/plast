@@ -54,7 +54,6 @@ Pie.prototype = {
     _peers: Object.create(null),
     _totalJobs: 0,
     _root: undefined,
-    _using: Object.create(null),
     _running: Object.create(null),
 
     constructor: Pie,
@@ -78,19 +77,7 @@ Pie.prototype = {
                 } else {
                     this._running[msg.jobid] = { count: 1, peer: msg.peer };
                 }
-                if (!(msg.peer in this._using)) {
-                    this._using[msg.peer] = 1;
-                } else {
-                    this._using[msg.peer] += 1;
-                }
             } else if (msg.jobid in this._running) {
-                var peername = this._running[msg.jobid].peer;
-                if (peername in this._using) {
-                    this._using[peername] -= 1;
-                    if (this._using[peername] === 0) {
-                        delete this._using[peername];
-                    }
-                }
                 if (!--this._running[msg.jobid].count)
                     delete this._running[msg.jobid];
             }
@@ -100,6 +87,19 @@ Pie.prototype = {
         }
     },
 
+    _using: function() {
+        // not sure why I can't get this shit right
+        var u = Object.create(null);
+        for (var k in this._running) {
+            var p = this._running[k].peer;
+            if (p in u) {
+                u[p] += 1;
+            } else {
+                u[p] = 1;
+            }
+        }
+        return u;
+    },
     _clicked: function(peer) {
         window.location.hash = '#detail-' + peer;
     },
@@ -109,7 +109,8 @@ Pie.prototype = {
         this._root = new paper.Group();
         // make a pie
         var radius = Math.min(common.width(), common.height()) / 3;
-        if (Object.keys(this._using).length === 0) {
+        var usingmap = this._using();
+        if (Object.keys(usingmap).length === 0) {
             // noone is building, make a circle
             var circle = new paper.Path.Circle(common.center(), radius);
             circle.fillColor = unusedColor;
@@ -121,8 +122,8 @@ Pie.prototype = {
             var diff = (Math.PI * 2) / this._totalJobs;
             var used = 0, ta, using, end, through, arc, label, labelTurn, labelPosition, cur = 0;
             var that = this;
-            for (var peer in this._using) {
-                using = this._using[peer];
+            for (var peer in usingmap) {
+                using = usingmap[peer];
                 ta = cur + (using * diff / 2);
                 through = new paper.Point(c.x + (radius * Math.cos(ta)),
                                           c.y + (radius * Math.sin(ta)));
