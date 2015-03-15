@@ -22,23 +22,37 @@ Daemon::Daemon(const Options& opts)
         const Path r = static_cast<Path>(entry[0]).resolved();
         const String target = (entry.size() > 1) ? entry[1] : String();
         CompilerVersion::SharedPtr ver = CompilerVersion::version(r, 0, target);
-        if (ver && Rct::is64Bit) {
-            switch (ver->compiler()) {
-            case plast::Clang:
-                CompilerVersion::version(r, CompilerArgs::HasDashM32, target);
-                break;
-            case plast::GCC: {
-                // does this gcc support both 64 and 32?
-                const Set<String>& multis = ver->multiLibs();
-                if (multis.contains("m32") && multis.contains("m64")) {
-                    // assume we support i686-linux-gnu
-                    ver = CompilerVersion::version(r, CompilerArgs::HasDashM32, "i686-linux-gnu");
-                    if (ver)
-                        ver->setExtraArgs(List<String>() << "-m32");
+        if (ver) {
+            if (Rct::is64Bit) {
+                switch (ver->compiler()) {
+                case plast::Clang:
+                    CompilerVersion::version(r, CompilerArgs::HasDashM32, target);
+                    break;
+                case plast::GCC: {
+                    // does this gcc support both 64 and 32?
+                    const Set<String>& multis = ver->multiLibs();
+                    if (multis.contains("m32") && multis.contains("m64")) {
+                        // assume we support i686-linux-gnu
+                        ver = CompilerVersion::version(r, CompilerArgs::HasDashM32, "i686-linux-gnu");
+                        if (ver)
+                            ver->setExtraArgs(List<String>() << "-m32");
+                    }
+                    break; }
+                case plast::Unknown:
+                    break;
                 }
-                break; }
-            case plast::Unknown:
-                break;
+            } else {
+                // assume that the only alternative to 64bit is 32bit
+                if (ver->compiler() == plast::GCC) {
+                    // does this gcc support both 64 and 32?
+                    const Set<String>& multis = ver->multiLibs();
+                    if (multis.contains("m32") && multis.contains("m64")) {
+                        // assume we support x86_64-linux-gnu
+                        ver = CompilerVersion::version(r, CompilerArgs::HasDashM64, "x86_64-linux-gnu");
+                        if (ver)
+                            ver->setExtraArgs(List<String>() << "-m64");
+                    }
+                }
             }
         }
     }

@@ -64,7 +64,8 @@ struct CompilerArgs
         HasDashMMD = 0x00020,
         HasDashMT = 0x00040,
         HasDashM32 = 0x00080,
-        StdinInput = 0x00100,
+        HasDashM64 = 0x00100,
+        StdinInput = 0x00200,
         // Languages
         CPlusPlus = 0x001000,
         C = 0x002000,

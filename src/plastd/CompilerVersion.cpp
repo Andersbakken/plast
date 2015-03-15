@@ -14,6 +14,8 @@ CompilerVersion::CompilerVersion(const Path& path, uint32_t flags, const String&
     List<String> args = { "-v" };
     if (flags & CompilerArgs::HasDashM32)
         args.append("-m32");
+    else if (flags & CompilerArgs::HasDashM64)
+        args.append("-m64");
     if (proc.exec(path, args) != Process::Done)
         return;
     String data = proc.readAllStdErr();
