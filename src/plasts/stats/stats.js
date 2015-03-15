@@ -14,6 +14,11 @@ function generateColor(peer)
     peerColors[peer] = colors[curColor++ % colors.length];
 }
 
+function peerClicked()
+{
+    window.location.hash = '#detail-' + this.peerName;
+}
+
 function Common(stats)
 {
     this.stats = stats;
@@ -55,7 +60,6 @@ function Pie(args)
 Pie.prototype = {
     _peers: Object.create(null),
     _totalJobs: 0,
-    _root: undefined,
     _running: Object.create(null),
 
     constructor: Pie,
@@ -73,50 +77,38 @@ Pie.prototype = {
             }
             this._redraw();
         } else if (msg.type === "build") {
-            if (msg.start) {
-                if (msg.jobid in this._running) {
-                    ++this._running[msg.jobid].count;
-                } else {
-                    this._running[msg.jobid] = { count: 1, peer: msg.peer };
-                }
-            } else if (msg.jobid in this._running) {
-                if (!--this._running[msg.jobid].count)
-                    delete this._running[msg.jobid];
-            }
+            if (msg.start)
+                this._addRunning(msg.peer);
+            else
+                this._removeRunning(msg.peer);
             this._redraw();
         } else {
             console.log("unhandled message", msg);
         }
     },
 
-    _using: function() {
-        // not sure why I can't get this shit right
-        var u = Object.create(null);
-        for (var k in this._running) {
-            var p = this._running[k].peer;
-            if (p in u) {
-                u[p] += 1;
-            } else {
-                u[p] = 1;
-            }
-        }
-        return u;
+    _addRunning: function(peer) {
+        if (peer in this._running)
+            this._running[peer] += 1;
+        else
+            this._running[peer] = 1;
     },
-    _clicked: function(peer) {
-        window.location.hash = '#detail-' + peer;
+    _removeRunning: function(peer) {
+        if (peer in this._running) {
+            if (this._running[peer] === 1)
+                delete this._running[peer];
+            else
+                --this._running[peer];
+        }
     },
     _redraw: function() {
-        if (this._root)
-            this._root.remove();
-        this._root = new paper.Group();
+        paper.project.activeLayer.removeChildren();
         // make a pie
         var radius = Math.min(common.width(), common.height()) / 3;
-        var usingmap = this._using();
-        if (Object.keys(usingmap).length === 0) {
+        if (Object.keys(this._running).length === 0) {
             // noone is building, make a circle
             var circle = new paper.Path.Circle(common.center(), radius);
             circle.fillColor = unusedColor;
-            this._root.addChild(circle);
         } else {
             // make arcs
             var c = common.center();
@@ -124,8 +116,8 @@ Pie.prototype = {
             var diff = (Math.PI * 2) / this._totalJobs;
             var used = 0, ta, using, end, through, arc, label, labelTurn, labelPosition, cur = 0;
             var that = this;
-            for (var peer in usingmap) {
-                using = usingmap[peer];
+            for (var peer in this._running) {
+                using = this._running[peer];
                 ta = cur + (using * diff / 2);
                 through = new paper.Point(c.x + (radius * Math.cos(ta)),
                                           c.y + (radius * Math.sin(ta)));
@@ -138,8 +130,8 @@ Pie.prototype = {
                 arc.arcTo(through, end);
                 arc.closePath();
                 arc.fillColor = peerColors[peer];
-                arc.onClick = function() { that._clicked(peer); };
-                this._root.addChild(arc);
+                arc.peerName = peer;
+                arc.onClick = peerClicked;
 
                 // label
                 labelTurn = new paper.Point(1.25 * radius * Math.cos(ta) + c.x,
@@ -152,7 +144,6 @@ Pie.prototype = {
                 label = new paper.PointText(labelPosition);
                 label.content = peer;
                 label.fillColor = "black";
-                this._root.addChild(label);
 
                 pt = end;
                 used += using;
@@ -173,8 +164,6 @@ Pie.prototype = {
                 arc.arcTo(through, end);
                 arc.closePath();
                 arc.fillColor = unusedColor;
-
-                this._root.addChild(arc);
             }
         }
         paper.view.draw();
