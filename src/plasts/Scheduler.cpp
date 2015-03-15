@@ -68,7 +68,10 @@ Scheduler::Scheduler(const Options& opts)
                         Map<String, CmdHandler> cmds = {
                             { "peers", [this](WebSocket* ws, const List<json>& args) {
                                     for (const auto& p : mPeers) {
-                                        ws->write((JsonObject() << "peer" << p->name() << "ip" << p->ip()).dump());
+                                        ws->write((JsonObject()
+                                                   << "peer" << p->name()
+                                                   << "ip" << p->ip()
+                                                   << "jobs" << p->jobs()).dump());
                                     }
                                 } },
                             { "block", [this](WebSocket* ws, const List<json>& args) {
@@ -293,7 +296,8 @@ void Scheduler::sendAllPeers(const WebSocket::SharedPtr& socket)
         const json peerj = {
             { "type", "peer" },
             { "id", peer->id() },
-            { "name", peer->name().ref() }
+            { "name", peer->name().ref() },
+            { "jobs", peer->jobs() }
         };
         const WebSocket::Message msg(WebSocket::Message::TextFrame, peerj.dump());
         socket->write(msg);
@@ -318,11 +322,12 @@ void Scheduler::addPeer(const Peer::SharedPtr& peer)
                     }
                 }
                 break; }
-            case Peer::NameChanged: {
+            case Peer::PeerChanged: {
                 const json peerj = {
                     { "type", "peer" },
                     { "id", peer->id() },
-                    { "name", peer->name().ref() }
+                    { "name", peer->name().ref() },
+                    { "jobs", peer->jobs() }
                 };
                 const WebSocket::Message msg(WebSocket::Message::TextFrame, peerj.dump());
                 sendToAll(msg);

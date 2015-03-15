@@ -6,7 +6,7 @@ using nlohmann::json;
 int Peer::sId = 0;
 
 Peer::Peer(const SocketClient::SharedPtr& client)
-    : mId(++sId), mConnection(Connection::create())
+    : mId(++sId), mConnection(Connection::create()), mJobs(0)
 {
     mConnection->connect(client);
     mConnection->newMessage().connect([this](const std::shared_ptr<Message>& msg, const std::shared_ptr<Connection> &conn) {
@@ -27,8 +27,12 @@ Peer::Peer(const SocketClient::SharedPtr& client)
             case PeerMessage::MessageId: {
                 const PeerMessage::SharedPtr peermsg = std::static_pointer_cast<PeerMessage>(msg);
                 mName = peermsg->name();
-                const json obj = mName.ref();
-                mEvent(shared_from_this(), NameChanged, obj);
+                mJobs = peermsg->jobs();
+                const json obj = {
+                    { "name", mName.ref() },
+                    { "jobs", mJobs }
+                };
+                mEvent(shared_from_this(), PeerChanged, obj);
                 break; }
             case BuildingMessage::MessageId: {
                 const BuildingMessage::SharedPtr bmsg = std::static_pointer_cast<BuildingMessage>(msg);

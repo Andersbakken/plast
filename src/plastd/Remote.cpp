@@ -77,7 +77,7 @@ void Remote::init()
                     hn.resize(sysconf(_SC_HOST_NAME_MAX));
                     if (gethostname(hn.data(), hn.size()) == 0) {
                         hn.resize(strlen(hn.constData()));
-                        mConnection->send(PeerMessage(hn, opts.localPort));
+                        mConnection->send(PeerMessage(hn, opts.localPort, opts.jobCount));
                     }
                 }));
         if (!mConnection->connectTcp(opts.serverHost, opts.serverPort)) {

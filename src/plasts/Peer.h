@@ -20,11 +20,12 @@ public:
 
     String ip() const { return mConnection->client()->peerName(); }
     String name() const { return mName; }
+    uint32_t jobs() const { return mJobs; }
     int id() const { return mId; }
 
     enum Event {
         Websocket,
-        NameChanged,
+        PeerChanged,
         Disconnected,
         JobsAvailable
     };
@@ -34,6 +35,7 @@ private:
     int mId;
     std::shared_ptr<Connection> mConnection;
     String mName;
+    uint32_t mJobs;
     Signal<std::function<void(const Peer::SharedPtr&, Event, const nlohmann::json&)> > mEvent;
 
     static int sId;
