@@ -1,27 +1,34 @@
 /*global paper, console, JSON, WebSocket*/
 
 var ws, scheduler;
-var mode;
+var mode, mainmode, common;
+var colors = [ "red", "blue", "yellow", "green", "cyan" ];
+var unusedColor = "purple";
+var curColor = 0;
+var peerColors = Object.create(null);
 
-var peers = {
-    init: function(canvas) {
-        var ctx = canvas.getContext("2d");
-        this._canvas = canvas;
+function generateColor(peer)
+{
+    peerColors[peer] = colors[curColor++ % colors.length];
+}
+
+function Common(stats)
+{
+    this.stats = stats;
+    this.init();
+};
+
+Common.prototype = {
+    stats: undefined,
+    _pixelRatio: undefined,
+    init: function() {
+        var ctx = this.stats.getContext("2d");
         this._pixelRatio = ctx.webkitBackingStorePixelRatio
             || ctx.mozBackingStorePixelRatio
             || ctx.msBackingStorePixelRatio
             || ctx.oBackingStorePixelRatio
             || ctx.backingStorePixelRatio
             || 1;
-    },
-    add: function(peer) {
-        this._peers[peer.id] = peer;
-    },
-    remove: function(id) {
-        if (this._peers.hasOwnProperty(id)) {
-            this._peers[id].invalidate();
-            delete this._peers[id];
-        }
     },
     center: function(rel) {
         var pt = new paper.Point(this.width() / 2, this.height() / 2);
@@ -31,102 +38,145 @@ var peers = {
         }
         return pt;
     },
-    peerSize: function() {
-        return new paper.Size(this.width() / 10, this.height() / 20);
-    },
-    roundSize: function() {
-        return new paper.Size(this.width() / 100, this.height() / 100);
-    },
-    recalculate: function() {
-        var sz = this.peerSize();
-        var origo = this.center(sz);
-        scheduler.recalculate(origo, sz);
-
-        // put all peers on the same radius for now
-        var r = Math.min(this.width(), this.height()) / 4;
-        var diff = (Math.PI * 2) / Object.keys(this._peers).length;
-        var cur = 0;
-        for (var i in this._peers) {
-            var pt = new paper.Point(origo.x + (r * Math.cos(cur)),
-                                     origo.y + (r * Math.sin(cur)));
-            this._peers[i].recalculate(pt, sz);
-            cur += diff;
-        }
-    },
-    draw: function() {
-        scheduler.draw();
-        for (var i in this._peers) {
-            this._peers[i].draw();
-        }
-        paper.view.draw();
-    },
     width: function() {
-        return this._canvas.width / ((window.devicePixelRatio || 1) / this._pixelRatio);
+        return this.stats.width / ((window.devicePixelRatio || 1) / this._pixelRatio);
     },
     height: function() {
-        return this._canvas.height / ((window.devicePixelRatio || 1) / this._pixelRatio);
-    },
-    _canvas: undefined,
-    _peers: {},
-    _pixelRatio: undefined
-};
-
-function Peer(args) {
-    this.id = args.id;
-    this.name = args.name;
-    this.color = args.color;
-}
-
-Peer.prototype = {
-    constructor: Peer,
-    rect: undefined,
-    text: undefined,
-    _path: undefined,
-    _group: undefined,
-    draw: function() {
-        if (this._path)
-            this._path.remove();
-        this._path = new paper.Path.RoundRectangle(this.rect, peers.roundSize());
-        this._path.fillColor = this.color;
-        if (this._text)
-            this._text.remove();
-        this._text = new paper.PointText(this.rect.center);
-        this._text.content = this.name;
-        this._text.style = { fontSize: 15, fillColor: "white", justification: "center" };
-        //this._path.insertBelow(this._text);
-        this._group = new paper.Group();
-        this._group.addChild(this._path);
-        this._group.addChild(this._text);
-        this._group.onClick = onPeerClick;
-        return this;
-    },
-    invalidate: function() {
-        if (this._path)
-            this._path.remove();
-        if (this._text)
-            this._text.remove();
-    },
-    recalculate: function(pos, size) {
-        this.rect = new paper.Rectangle(pos, new paper.Point(pos.x + size.width, pos.y + size.height));
+        return this.stats.height / ((window.devicePixelRatio || 1) / this._pixelRatio);
     }
 };
 
-function onPeerClick(event) {
-    window.location.hash = '#detail-' + this.children[1].content;
-    console.log(this.children[1].content);
-}
-
-function handlePeer(peer)
+function Pie(args)
 {
-    if (peer["delete"]) {
-        peers.remove(peer.id);
-    } else {
-        var p = new Peer({ id: peer.id, name: peer.name, color: "blue" });
-        peers.add(p);
+};
+
+Pie.prototype = {
+    _peers: Object.create(null),
+    _totalJobs: 0,
+    _root: undefined,
+    _using: Object.create(null),
+    _running: Object.create(null),
+
+    constructor: Pie,
+    processMessage: function(msg) {
+        if (msg.type === "peer") {
+            if (msg.delete) {
+                if (msg.id in this._peers) {
+                    this._totalJobs -= this._peers[msg.id].jobs;
+                    delete this._peers[msg.id];
+                }
+            } else {
+                this._peers[msg.id] = msg;
+                this._totalJobs += msg.jobs;
+                generateColor(msg.name);
+            }
+            this._redraw();
+        } else if (msg.type === "build") {
+            if (msg.start) {
+                if (msg.jobid in this._running) {
+                    ++this._running[msg.jobid].count;
+                } else {
+                    this._running[msg.jobid] = { count: 1, peer: msg.peer };
+                }
+                if (!(msg.peer in this._using)) {
+                    this._using[msg.peer] = 1;
+                } else {
+                    this._using[msg.peer] += 1;
+                }
+            } else if (msg.jobid in this._running) {
+                var peername = this._running[msg.jobid].peer;
+                if (peername in this._using) {
+                    this._using[peername] -= 1;
+                    if (this._using[peername] === 0) {
+                        delete this._using[peername];
+                    }
+                }
+                if (!--this._running[msg.jobid].count)
+                    delete this._running[msg.jobid];
+            }
+            this._redraw();
+        } else {
+            console.log("unhandled message", msg);
+        }
+    },
+
+    _clicked: function(peer) {
+        window.location.hash = '#detail-' + peer;
+    },
+    _redraw: function() {
+        if (this._root)
+            this._root.remove();
+        this._root = new paper.Group();
+        // make a pie
+        var radius = Math.min(common.width(), common.height()) / 3;
+        if (Object.keys(this._using).length === 0) {
+            // noone is building, make a circle
+            var circle = new paper.Path.Circle(common.center(), radius);
+            circle.fillColor = unusedColor;
+            this._root.addChild(circle);
+        } else {
+            // make arcs
+            var c = common.center();
+            var pt = new paper.Point(c.x + radius, c.y);
+            var diff = (Math.PI * 2) / this._totalJobs;
+            var used = 0, ta, using, end, through, arc, label, labelTurn, labelPosition, cur = 0;
+            var that = this;
+            for (var peer in this._using) {
+                using = this._using[peer];
+                ta = cur + (using * diff / 2);
+                through = new paper.Point(c.x + (radius * Math.cos(ta)),
+                                          c.y + (radius * Math.sin(ta)));
+                cur += using * diff;
+                end = new paper.Point(c.x + (radius * Math.cos(cur)),
+                                      c.y + (radius * Math.sin(cur)));
+
+                arc = new paper.Path(c);
+                arc.add(pt);
+                arc.arcTo(through, end);
+                arc.closePath();
+                arc.fillColor = peerColors[peer];
+                arc.onClick = function() { that._clicked(peer); };
+                this._root.addChild(arc);
+
+                // label
+                labelTurn = new paper.Point(1.25 * radius * Math.cos(ta) + c.x,
+                                            1.25 * radius * Math.sin(ta) + c.y);
+                if (labelTurn.x >= c.x) { // turn right
+                    labelPosition = new paper.Point(labelTurn.x + 15, labelTurn.y);
+                } else {
+                    labelPosition = new paper.Point(labelTurn.x - 15, labelTurn.y);
+                }
+                label = new paper.PointText(labelPosition);
+                label.content = peer;
+                label.fillColor = "black";
+                this._root.addChild(label);
+
+                pt = end;
+                used += using;
+            }
+            if (used < this._totalJobs) {
+                // make one final arc
+                using = this._totalJobs - used;
+                ta = cur + (using * diff / 2);
+                through = new paper.Point(c.x + (radius * Math.cos(ta)),
+                                          c.y + (radius * Math.sin(ta)));
+                cur += using * diff;
+                end = new paper.Point(c.x + (radius * Math.cos(cur)),
+                                      c.y + (radius * Math.sin(cur)));
+                cur += using * diff;
+
+                arc = new paper.Path(c);
+                arc.add(pt);
+                arc.arcTo(through, end);
+                arc.closePath();
+                arc.fillColor = unusedColor;
+
+                this._root.addChild(arc);
+            }
+        }
+        paper.view.draw();
     }
-    peers.recalculate();
-    peers.draw();
-}
+};
 
 function Detail(args)
 {
@@ -178,16 +228,16 @@ var callbacks = {
         console.log("ws close");
     },
     websocketMessage: function(evt) {
+        var obj;
         try {
-            var obj = JSON.parse(evt.data);
-            if (obj.type === "peer")
-                handlePeer(obj);
-            if (mode) {
-                mode.processMessage(obj);
-            } else {
-                console.log("ws msg", obj);
-            }
+            obj = JSON.parse(evt.data);
         } catch (e) {
+        }
+        if (obj) {
+            if (mode !== mainmode) {
+                mode.processMessage(obj);
+            }
+            mainmode.processMessage(obj);
         }
     },
     websocketError: function(evt) {
@@ -210,18 +260,11 @@ function init() {
     ws.onerror = callbacks.websocketError;
 
     var canvas = document.getElementById('stats');
-    peers.init(canvas);
-
-    scheduler = new Peer({ id: 0, name: "scheduler", color: "red" });
-
     paper.setup(canvas);
-    paper.view.onResize = function(event) {
-        peers.recalculate();
-        peers.draw();
-    };
+    common = new Common(canvas);
+    mode = new Pie();
+    mainmode = mode;
 
-    peers.recalculate();
-    peers.draw();
     // var path = new paper.Path();
     // path.strokeColor = 'black';
     // var start = new paper.Point(100, 100);
@@ -243,7 +286,7 @@ function findObject(hash)
 function update(data)
 {
     if (!data) {
-        mode = undefined;
+        mode = mainmode;
     } else if (data.prefix == "detail") {
         mode = new Detail({ name: data.name });
     }

@@ -47,9 +47,11 @@ void Local::init()
             if (!job)
                 return;
             job->updateStatus(Job::Compiling);
-            std::shared_ptr<Connection> scheduler = Daemon::instance()->remote().scheduler();
-            scheduler->send(BuildingMessage(job->remoteName(), job->compilerArgs()->sourceFile(),
-                                           BuildingMessage::Start, job->id()));
+            if (data.posted) {
+                std::shared_ptr<Connection> scheduler = Daemon::instance()->remote().scheduler();
+                scheduler->send(BuildingMessage(job->remoteName(), job->compilerArgs()->sourceFile(),
+                                                BuildingMessage::Start, job->id()));
+            }
         });
     mPool.finished().connect([this](ProcessPool::Id id, Process* proc) {
             error() << "pool finished for" << id;
@@ -61,6 +63,11 @@ void Local::init()
 
             mJobs.erase(id);
 
+            if (data.posted) {
+                std::shared_ptr<Connection> scheduler = Daemon::instance()->remote().scheduler();
+                scheduler->send(BuildingMessage(BuildingMessage::Stop, data.jobid));
+            }
+
             if (!job) {
                 error() << "job not found in finish";
                 if (localForRemote) {
@@ -68,11 +75,7 @@ void Local::init()
                 }
                 return;
             }
-
-            {
-                std::shared_ptr<Connection> scheduler = Daemon::instance()->remote().scheduler();
-                scheduler->send(BuildingMessage(BuildingMessage::Stop, job->id()));
-            }
+            assert(job->id() == data.jobid);
 
             const int retcode = proc->returnCode();
             if (retcode != 0) {
@@ -142,7 +145,7 @@ void Local::post(const Job::SharedPtr& job)
     }
     assert(cmd.isAbsolute());
 
-    Data data(job);
+    Data data(job, job->id(), true);
 
     if (job->type() == Job::RemoteJob) {
         assert(job->isPreprocessed());
@@ -236,7 +239,7 @@ void Local::run(const Job::SharedPtr& job)
     args.removeFirst();
     warning() << "Compiler resolved to" << cmd << job->path() << args;
     const ProcessPool::Id id = mPool.prepare(job->path(), cmd, args);
-    mJobs[id] = Data(job);
+    mJobs[id] = Data(job, job->id(), false);
     mPool.run(id);
 }
 

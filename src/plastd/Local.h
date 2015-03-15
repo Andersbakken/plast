@@ -28,10 +28,12 @@ private:
     struct Data
     {
         Data() {}
-        Data(const Job::SharedPtr& j) : job(j) {}
+        Data(const Job::SharedPtr& j, uint64_t id, bool p) : job(j), jobid(id), posted(p) {}
 
         String filename;
         Job::WeakPtr job;
+        uint64_t jobid;
+        bool posted;
     };
     Hash<ProcessPool::Id, Data> mJobs;
     int mOvercommit;
