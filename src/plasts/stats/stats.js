@@ -9,6 +9,8 @@ var peerColors = Object.create(null);
 
 function generateColor(peer)
 {
+    if (peer in peerColors)
+        return;
     peerColors[peer] = colors[curColor++ % colors.length];
 }
 
