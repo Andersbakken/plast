@@ -108,18 +108,27 @@ void Local::init()
         });
     mPool.error().connect([this](ProcessPool::Id id) {
             error() << "pool error for" << id;
-            const Data& data = mJobs[id];
+            const Data data = mJobs[id];
             const bool localForRemote = !data.filename.isEmpty();
             if (localForRemote) {
                 unlink(data.filename.constData());
             }
 
             mJobs.erase(id);
+
+            if (data.posted) {
+                std::shared_ptr<Connection> scheduler = Daemon::instance()->remote().scheduler();
+                scheduler->send(BuildingMessage(data.remoteName, BuildingMessage::Stop, data.jobid));
+            }
+
             Job::SharedPtr job = data.job.lock();
             if (!job) {
                 error() << "job not found in error";
                 return;
             }
+
+            assert(job->id() == data.jobid);
+
             job->mError = "Local compile pool returned error";
             job->updateStatus(Job::Error);
             Job::finish(job.get());
