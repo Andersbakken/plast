@@ -6,9 +6,8 @@ using nlohmann::json;
 int Peer::sId = 0;
 
 Peer::Peer(const SocketClient::SharedPtr& client)
-    : mId(++sId), mConnection(Connection::create()), mJobs(0)
+    : mId(++sId), mConnection(Connection::create(client)), mJobs(0)
 {
-    mConnection->connect(client);
     mConnection->newMessage().connect([this](const std::shared_ptr<Message>& msg, const std::shared_ptr<Connection> &conn) {
             switch (msg->messageId()) {
             case HasJobsMessage::MessageId: {
