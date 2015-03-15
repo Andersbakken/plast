@@ -123,11 +123,19 @@ Pie.prototype = {
     },
     _removeRunning: function(peer) {
         if (peer in this._running) {
-            if (this._running[peer].count === 1)
+            if (this._running[peer].count === 1) {
+                this._deinit(this._running[peer]);
                 delete this._running[peer];
-            else
+            } else {
                 --this._running[peer].count;
+            }
         }
+    },
+    _deinit: function(peer) {
+        if (peer.path)
+            peer.path.remove();
+        if (peer.text)
+            peer.text.remove();
     },
     _onframe: function(e) {
         // animate the segments
