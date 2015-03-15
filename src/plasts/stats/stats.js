@@ -45,6 +45,14 @@ Common.prototype = {
         }
         return pt;
     },
+    radians: function(pt) {
+        var cx = this.width() / 2;
+        var cy = this.height() / 2;
+        var r = Math.atan2(pt.y - cy, pt.x - cx);
+        if (r < 0)
+            r += Math.PI * 2;
+        return r;
+    },
     width: function() {
         return this.stats.width / ((window.devicePixelRatio || 1) / this._pixelRatio);
     },
@@ -55,12 +63,20 @@ Common.prototype = {
 
 function Pie(args)
 {
+    this._radius = Math.min(common.width(), common.height()) / 3;
+    this._circle = new paper.Path.Circle(common.center(), this._radius);
+    this._circle.fillColor = unusedColor;
+
+    var pie = this;
+    paper.view.onFrame = function(e) { pie._onframe.call(pie, e); };
 };
 
 Pie.prototype = {
     _peers: Object.create(null),
     _totalJobs: 0,
     _running: Object.create(null),
+    _radius: undefined,
+    _circle: undefined,
 
     constructor: Pie,
     processMessage: function(msg) {
@@ -75,96 +91,185 @@ Pie.prototype = {
                 this._totalJobs += msg.jobs;
                 generateColor(msg.name);
             }
-            this._redraw();
+            this._recalc();
         } else if (msg.type === "build") {
             if (msg.start)
                 this._addRunning(msg.peer);
             else
                 this._removeRunning(msg.peer);
-            this._redraw();
+            this._recalc();
         } else {
             console.log("unhandled message", msg);
         }
     },
 
     _addRunning: function(peer) {
-        if (peer in this._running)
-            this._running[peer] += 1;
-        else
-            this._running[peer] = 1;
+        if (peer in this._running) {
+            this._running[peer].count += 1;
+        } else {
+            var path = new paper.Path(common.center());
+            path.fillColor = peerColors[peer];
+            this._running[peer] = {
+                count: 1,
+                diff: { start: 0, rad: 0 },
+                end: { start: 0, rad: 0 },
+                path: path
+            };
+        }
     },
     _removeRunning: function(peer) {
         if (peer in this._running) {
-            if (this._running[peer] === 1)
+            if (this._running[peer].count === 1)
                 delete this._running[peer];
             else
-                --this._running[peer];
+                --this._running[peer].count;
         }
     },
-    _redraw: function() {
-        paper.project.activeLayer.removeChildren();
+    _onframe: function(e) {
+        // animate the segments
+        var c = common.center();
+        for (var name in this._running) {
+            var peer = this._running[name];
+            // console.log(name, peer);
+            if (peer.diff.start || peer.diff.rad) {
+                var startrad = common.radians(peer.path.segments[1].point);
+                var endrad = common.radians(peer.path.segments[peer.path.segments.length - 1].point);
+                // console.log("moving " + name + " " + startrad + " closer to " + peer.end.start + " by " + peer.diff.start + "(" + (startrad + peer.diff.start) + ")");
+                // console.log("  "  + endrad + " closer to " + (peer.end.start + peer.end.rad) + " by " + peer.diff.rad + " (" + (endrad + peer.diff.rad) + ")");
+                // console.log(endrad, peer.diff.rad);
+                startrad += peer.diff.start;
+                endrad += peer.diff.rad;
+                if (startrad > endrad) {
+                    var tmp = startrad;
+                    startrad = endrad;
+                    endrad = tmp;
+                }
+                if (peer.diff.start >= 0 && startrad >= peer.end.start) {
+                    startrad = peer.end.start;
+                    peer.diff.start = 0;
+                } else if (peer.diff.start < 0 && startrad <= peer.end.start) {
+                    startrad = peer.end.start;
+                    peer.diff.start = 0;
+                }
+                if (peer.diff.rad >= 0 && endrad >= peer.end.start + peer.end.rad) {
+                    endrad = peer.end.start + peer.end.rad;
+                    peer.diff.rad = 0;
+                } else if (peer.diff.rad < 0 && endrad <= peer.end.start + peer.end.rad) {
+                    endrad = peer.end.start + peer.end.rad;
+                    peer.diff.rad = 0;
+                }
+                var throughrad = startrad + ((endrad - startrad) / 2);
+                peer.path.removeSegments(1);
+                peer.path.add(new paper.Point(c.x + (this._radius * Math.cos(startrad)),
+                                              c.y + (this._radius * Math.sin(startrad))));
+                var thpt = new paper.Point(c.x + (this._radius * Math.cos(throughrad)),
+                                           c.y + (this._radius * Math.sin(throughrad)));
+                var ept = new paper.Point(c.x + (this._radius * Math.cos(endrad)),
+                                          c.y + (this._radius * Math.sin(endrad)));
+                peer.path.arcTo(thpt, ept);
+                peer.path.closePath();
+                // console.log("  ended up at " + common.radians(peer.path.segments[peer.path.segments.length - 1].point), thpt, ept, peer.path.segments[peer.path.segments.length - 1].point, peer.path.segments[1].point, throughrad);
+            }
+        }
+        // console.log("--");
+    },
+    _recalc: function() {
         // make a pie
-        var radius = Math.min(common.width(), common.height()) / 3;
         if (Object.keys(this._running).length === 0) {
             // noone is building, make a circle
-            var circle = new paper.Path.Circle(common.center(), radius);
-            circle.fillColor = unusedColor;
+            paper.project.activeLayer.removeChildren();
+            paper.project.activeLayer.addChild(this._circle);
         } else {
-            // make arcs
-            var c = common.center();
-            var pt = new paper.Point(c.x + radius, c.y);
-            var diff = (Math.PI * 2) / this._totalJobs;
-            var used = 0, ta, using, end, through, arc, label, labelTurn, labelPosition, cur = 0;
-            var that = this;
-            for (var peer in this._running) {
-                using = this._running[peer];
-                ta = cur + (using * diff / 2);
-                through = new paper.Point(c.x + (radius * Math.cos(ta)),
-                                          c.y + (radius * Math.sin(ta)));
-                cur += using * diff;
-                end = new paper.Point(c.x + (radius * Math.cos(cur)),
-                                      c.y + (radius * Math.sin(cur)));
-
-                arc = new paper.Path(c);
-                arc.add(pt);
-                arc.arcTo(through, end);
-                arc.closePath();
-                arc.fillColor = peerColors[peer];
-                arc.peerName = peer;
-                arc.onClick = peerClicked;
-
-                // label
-                labelTurn = new paper.Point(1.25 * radius * Math.cos(ta) + c.x,
-                                            1.25 * radius * Math.sin(ta) + c.y);
-                if (labelTurn.x >= c.x) { // turn right
-                    labelPosition = new paper.Point(labelTurn.x + 15, labelTurn.y);
+            paper.project.activeLayer.addChild(this._circle);
+            // make and/or animate arcs
+            var time = (1 / 30); // 500ms
+            var c = common.center(), cur = 0, arc, where = 0, to = 0;
+            var pt = new paper.Point(c.x + this._radius, c.y);
+            var diff = (Math.PI * 2) / this._totalJobs, end;
+            var moved = 1;
+            for (var name in this._running) {
+                var peer = this._running[name];
+                arc = peer.count * diff;
+                if (peer.path.segments.length < 3) {
+                    // not calculated yet, make new
+                    end = new paper.Point(c.x + (this._radius * Math.cos(cur + arc)),
+                                          c.y + (this._radius * Math.sin(cur + arc)));
+                    peer.path.add(pt);
+                    var through = new paper.Point(c.x + (this._radius * Math.cos(cur + (arc / 2))),
+                                                  c.y + (this._radius * Math.sin(cur + (arc / 2))));
+                    // console.log("new peer " + name, pt, end, through);
+                    peer.path.arcTo(through, end);
+                    peer.path.closePath();
                 } else {
-                    labelPosition = new paper.Point(labelTurn.x - 15, labelTurn.y);
+                    // calculate diff and end anims
+                    where = common.radians(peer.path.segments[1].point) - where;
+                    var endref = peer.path.segments[peer.path.segments.length - 1].point;
+                    end = new paper.Point(endref.x, endref.y);
+                    to = common.radians(end) - where;
+                    peer.end.start = cur;
+                    peer.end.rad = arc;
+                    peer.diff.start = (cur - where) * time * moved;
+                    peer.diff.rad = (arc - to) * time;
+                    if (peer.diff.start)
+                        moved += 1;
                 }
-                label = new paper.PointText(labelPosition);
-                label.content = peer;
-                label.fillColor = "black";
-
+                paper.project.activeLayer.addChild(peer.path);
+                cur += arc;
                 pt = end;
-                used += using;
             }
-            if (used < this._totalJobs) {
-                // make one final arc
-                using = this._totalJobs - used;
-                ta = cur + (using * diff / 2);
-                through = new paper.Point(c.x + (radius * Math.cos(ta)),
-                                          c.y + (radius * Math.sin(ta)));
-                cur += using * diff;
-                end = new paper.Point(c.x + (radius * Math.cos(cur)),
-                                      c.y + (radius * Math.sin(cur)));
-                cur += using * diff;
+            // var pt = new paper.Point(c.x + radius, c.y);
+            // var diff = (Math.PI * 2) / this._totalJobs;
+            // var used = 0, ta, using, end, through, arc, label, labelTurn, labelPosition, cur = 0;
+            // var that = this;
+            // for (var peer in this._running) {
+            //     using = this._running[peer];
+            //     ta = cur + (using * diff / 2);
+            //     through = new paper.Point(c.x + (radius * Math.cos(ta)),
+            //                               c.y + (radius * Math.sin(ta)));
+            //     cur += using * diff;
+            //     end = new paper.Point(c.x + (radius * Math.cos(cur)),
+            //                           c.y + (radius * Math.sin(cur)));
 
-                arc = new paper.Path(c);
-                arc.add(pt);
-                arc.arcTo(through, end);
-                arc.closePath();
-                arc.fillColor = unusedColor;
-            }
+            //     arc = new paper.Path(c);
+            //     arc.add(pt);
+            //     arc.arcTo(through, end);
+            //     arc.closePath();
+            //     arc.fillColor = peerColors[peer];
+            //     arc.peerName = peer;
+            //     arc.onClick = peerClicked;
+
+            //     // label
+            //     labelTurn = new paper.Point(1.25 * radius * Math.cos(ta) + c.x,
+            //                                 1.25 * radius * Math.sin(ta) + c.y);
+            //     if (labelTurn.x >= c.x) { // turn right
+            //         labelPosition = new paper.Point(labelTurn.x + 15, labelTurn.y);
+            //     } else {
+            //         labelPosition = new paper.Point(labelTurn.x - 15, labelTurn.y);
+            //     }
+            //     label = new paper.PointText(labelPosition);
+            //     label.content = peer;
+            //     label.fillColor = "black";
+
+            //     pt = end;
+            //     used += using;
+            // }
+            // if (used < this._totalJobs) {
+            //     // make one final arc
+            //     using = this._totalJobs - used;
+            //     ta = cur + (using * diff / 2);
+            //     through = new paper.Point(c.x + (radius * Math.cos(ta)),
+            //                               c.y + (radius * Math.sin(ta)));
+            //     cur += using * diff;
+            //     end = new paper.Point(c.x + (radius * Math.cos(cur)),
+            //                           c.y + (radius * Math.sin(cur)));
+            //     cur += using * diff;
+
+            //     arc = new paper.Path(c);
+            //     arc.add(pt);
+            //     arc.arcTo(through, end);
+            //     arc.closePath();
+            //     arc.fillColor = unusedColor;
+            // }
         }
         paper.view.draw();
     }
