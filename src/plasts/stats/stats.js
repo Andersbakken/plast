@@ -109,11 +109,15 @@ Pie.prototype = {
         } else {
             var path = new paper.Path(common.center());
             path.fillColor = peerColors[peer];
+            var text = new paper.PointText();
+            text.content = peer;
+            text.fillColor = "black";
             this._running[peer] = {
                 count: 1,
                 diff: { start: 0, rad: 0 },
                 end: { start: 0, rad: 0 },
-                path: path
+                path: path,
+                text: text
             };
         }
     },
@@ -168,10 +172,20 @@ Pie.prototype = {
                                           c.y + (this._radius * Math.sin(endrad)));
                 peer.path.arcTo(thpt, ept);
                 peer.path.closePath();
+                this._updateText(peer.text, c, throughrad);
                 // console.log("  ended up at " + common.radians(peer.path.segments[peer.path.segments.length - 1].point), thpt, ept, peer.path.segments[peer.path.segments.length - 1].point, peer.path.segments[1].point, throughrad);
             }
         }
         // console.log("--");
+    },
+    _updateText: function(text, center, through) {
+        var labelTurn = new paper.Point(1.25 * this._radius * Math.cos(through) + center.x,
+                                        1.25 * this._radius * Math.sin(through) + center.y);
+        if (labelTurn.x >= center.x) { // turn right
+            text.position = new paper.Point(labelTurn.x + 15, labelTurn.y);
+        } else {
+            text.position = new paper.Point(labelTurn.x - 15, labelTurn.y);
+        }
     },
     _recalc: function() {
         // make a pie
@@ -200,6 +214,7 @@ Pie.prototype = {
                     // console.log("new peer " + name, pt, end, through);
                     peer.path.arcTo(through, end);
                     peer.path.closePath();
+                    this._updateText(peer.text, c, cur + (arc / 2));
                 } else {
                     // calculate diff and end anims
                     where = common.radians(peer.path.segments[1].point) - where;
@@ -217,59 +232,6 @@ Pie.prototype = {
                 cur += arc;
                 pt = end;
             }
-            // var pt = new paper.Point(c.x + radius, c.y);
-            // var diff = (Math.PI * 2) / this._totalJobs;
-            // var used = 0, ta, using, end, through, arc, label, labelTurn, labelPosition, cur = 0;
-            // var that = this;
-            // for (var peer in this._running) {
-            //     using = this._running[peer];
-            //     ta = cur + (using * diff / 2);
-            //     through = new paper.Point(c.x + (radius * Math.cos(ta)),
-            //                               c.y + (radius * Math.sin(ta)));
-            //     cur += using * diff;
-            //     end = new paper.Point(c.x + (radius * Math.cos(cur)),
-            //                           c.y + (radius * Math.sin(cur)));
-
-            //     arc = new paper.Path(c);
-            //     arc.add(pt);
-            //     arc.arcTo(through, end);
-            //     arc.closePath();
-            //     arc.fillColor = peerColors[peer];
-            //     arc.peerName = peer;
-            //     arc.onClick = peerClicked;
-
-            //     // label
-            //     labelTurn = new paper.Point(1.25 * radius * Math.cos(ta) + c.x,
-            //                                 1.25 * radius * Math.sin(ta) + c.y);
-            //     if (labelTurn.x >= c.x) { // turn right
-            //         labelPosition = new paper.Point(labelTurn.x + 15, labelTurn.y);
-            //     } else {
-            //         labelPosition = new paper.Point(labelTurn.x - 15, labelTurn.y);
-            //     }
-            //     label = new paper.PointText(labelPosition);
-            //     label.content = peer;
-            //     label.fillColor = "black";
-
-            //     pt = end;
-            //     used += using;
-            // }
-            // if (used < this._totalJobs) {
-            //     // make one final arc
-            //     using = this._totalJobs - used;
-            //     ta = cur + (using * diff / 2);
-            //     through = new paper.Point(c.x + (radius * Math.cos(ta)),
-            //                               c.y + (radius * Math.sin(ta)));
-            //     cur += using * diff;
-            //     end = new paper.Point(c.x + (radius * Math.cos(cur)),
-            //                           c.y + (radius * Math.sin(cur)));
-            //     cur += using * diff;
-
-            //     arc = new paper.Path(c);
-            //     arc.add(pt);
-            //     arc.arcTo(through, end);
-            //     arc.closePath();
-            //     arc.fillColor = unusedColor;
-            // }
         }
         paper.view.draw();
     }
