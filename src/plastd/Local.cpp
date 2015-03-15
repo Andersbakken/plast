@@ -65,7 +65,7 @@ void Local::init()
 
             if (data.posted) {
                 std::shared_ptr<Connection> scheduler = Daemon::instance()->remote().scheduler();
-                scheduler->send(BuildingMessage(BuildingMessage::Stop, data.jobid));
+                scheduler->send(BuildingMessage(data.remoteName, BuildingMessage::Stop, data.jobid));
             }
 
             if (!job) {
@@ -145,7 +145,7 @@ void Local::post(const Job::SharedPtr& job)
     }
     assert(cmd.isAbsolute());
 
-    Data data(job, job->id(), true);
+    Data data(job, true);
 
     if (job->type() == Job::RemoteJob) {
         assert(job->isPreprocessed());
@@ -239,7 +239,7 @@ void Local::run(const Job::SharedPtr& job)
     args.removeFirst();
     warning() << "Compiler resolved to" << cmd << job->path() << args;
     const ProcessPool::Id id = mPool.prepare(job->path(), cmd, args);
-    mJobs[id] = Data(job, job->id(), false);
+    mJobs[id] = Data(job, false);
     mPool.run(id);
 }
 

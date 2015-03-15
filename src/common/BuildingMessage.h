@@ -17,8 +17,8 @@ public:
         : Message(MessageId), mPeer(peer), mFile(file), mType(type), mId(id)
     {
     }
-    BuildingMessage(Type type, uint64_t id)
-        : Message(MessageId), mType(type), mId(id)
+    BuildingMessage(const String& peer, Type type, uint64_t id)
+        : Message(MessageId), mPeer(peer), mType(type), mId(id)
     {
     }
 

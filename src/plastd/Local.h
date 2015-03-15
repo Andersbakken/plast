@@ -28,9 +28,12 @@ private:
     struct Data
     {
         Data() {}
-        Data(const Job::SharedPtr& j, uint64_t id, bool p) : job(j), jobid(id), posted(p) {}
+        Data(const Job::SharedPtr& j, bool p)
+            : job(j), jobid(j->id()), remoteName(j->remoteName()), posted(p)
+        {
+        }
 
-        String filename;
+        String filename, remoteName;
         Job::WeakPtr job;
         uint64_t jobid;
         bool posted;
