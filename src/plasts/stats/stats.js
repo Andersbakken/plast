@@ -276,37 +276,113 @@ Pie.prototype = {
 
 function Detail(args)
 {
+    this.type = "detail";
     this.local = args.name;
     this.dom = document.getElementById('detail');
-    while (this.dom.firstChild) {
-        this.dom.removeChild(this.dom.firstChild);
+    var header = document.getElementById('header');
+    while (header.firstChild) {
+        header.removeChild(header.firstChild);
     }
-    this._table = document.createElement('table');
-    this.dom.appendChild(this._table);
+    var h1 = document.createElement('h1');
+    var name = document.createTextNode(this.local);
+    h1.appendChild(name);
+    header.appendChild(h1);
+    var ul = document.createElement('ul');
+    var tabs = [{name: 'info', link: '#detail-' + this.local, path: '/info'},
+                {name: 'building', link: '#detail-' + this.local, path: '/building'},
+                {name: 'builds', link: '#detail-' + this.local, path: '/builds'}];
+    for (var t in tabs) {
+        var li = document.createElement('li');
+        li.setAttribute('path', tabs[t].path);
+        var a = document.createElement('a');
+        a.setAttribute('href', tabs[t].link + tabs[t].path);
+        var txt = document.createTextNode(tabs[t].name);
+        a.appendChild(txt);
+        li.appendChild(a);
+        ul.appendChild(li);
+    }
+    ul.firstChild.setAttribute('id', 'selected');
+    header.appendChild(ul);
+
+    // while (this.dom.firstChild) {
+    //     this.dom.removeChild(this.dom.firstChild);
+    // }
+    // this._table = document.createElement('table');
+    // this.dom.appendChild(this._table);
 };
 
 Detail.prototype = {
     constructor: Detail,
-    _table: undefined,
+    type: undefined,
+    _remoteTable: undefined,
+    _localTable: undefined,
     _map: Object.create(null),
     processMessage: function(msg) {
+        var row;
         if (msg.type !== "build")
             return;
-        if (msg.local !== this.local)
-            return;
-        if (msg.start) {
-            // insert
-            var row = this._table.insertRow(-1);
-            this._addColumn(row, msg.file);
-            this._addColumn(row, msg.peer);
-            this._map[msg.jobid] = row;
-        } else {
-            if (!(msg.jobid in this._map))
+        if (this._remoteTable) {
+            if (msg.local !== this.local)
                 return;
-            this._table.deleteRow(this._map[msg.jobid].rowIndex);
-            delete this._map[msg.jobid];
+            if (msg.start) {
+                // insert
+                row = this._remoteTable.insertRow(-1);
+                this._addColumn(row, msg.file);
+                this._addColumn(row, msg.peer);
+                this._map[msg.jobid] = row;
+            } else {
+                if (!(msg.jobid in this._map))
+                    return;
+                this._remoteTable.deleteRow(this._map[msg.jobid].rowIndex);
+                delete this._map[msg.jobid];
+            }
+        } else if (this._localTable) {
+            if (msg.peer !== this.local)
+                return;
+            if (msg.start) {
+                // insert
+                row = this._localTable.insertRow(-1);
+                this._addColumn(row, msg.file);
+                this._addColumn(row, msg.local);
+                this._map[msg.jobid] = row;
+            } else {
+                if (!(msg.jobid in this._map))
+                    return;
+                this._localTable.deleteRow(this._map[msg.jobid].rowIndex);
+                delete this._map[msg.jobid];
+            }
         }
         //console.log("message for local:", msg);
+    },
+    path: function(arg) {
+        var lis = document.querySelectorAll('#header > ul > li');
+        for (var i = 0; i < lis.length; ++i) {
+            var li = lis[i];
+            if (li.getAttribute('path') === arg) {
+                li.setAttribute('id', 'selected');
+            } else {
+                li.removeAttribute('id');
+            }
+        }
+        this._updatePath(arg);
+    },
+    _updatePath: function(path) {
+        var content = document.getElementById('content');
+        while (content.firstChild) {
+            content.removeChild(content.firstChild);
+        }
+        if (this._remoteTable)
+            this._remoteTable = undefined;
+        if (this._localTable)
+            this._localTable = undefined;
+        this._map = Object.create(null);
+        if (path === '/building') {
+            this._remoteTable = document.createElement('table');
+            content.appendChild(this._remoteTable);
+        } else if (path === '/builds') {
+            this._localTable = document.createElement('table');
+            content.appendChild(this._localTable);
+        }
     },
     _addColumn: function(row, text) {
         var col = row.insertCell(-1);
@@ -381,7 +457,14 @@ function findObject(hash)
     }
     var dash = hash.indexOf('-');
     var prefix = hash.substring(1, dash);
-    return { dom: mapper[prefix], data: { prefix: prefix, name: hash.substr(dash + 1) } };
+    var name = hash.substr(dash + 1);
+    var path = "";
+    var slash = name.indexOf('/');
+    if (slash !== -1) {
+        path = name.substr(slash);
+        name = name.substr(0, slash);
+    }
+    return { dom: mapper[prefix], data: { prefix: prefix, name: name, path: path } };
 }
 
 function update(data)
@@ -389,7 +472,13 @@ function update(data)
     if (!data) {
         mode = mainmode;
     } else if (data.prefix == "detail") {
-        mode = new Detail({ name: data.name });
+        if (mode && mode.type === "detail" && mode.local === data.name) {
+            mode.path(data.path);
+        } else {
+            mode = new Detail({ name: data.name });
+            if (data.path.length)
+                mode.path(data.path);
+        }
     }
 }
 
