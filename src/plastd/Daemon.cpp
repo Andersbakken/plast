@@ -79,7 +79,7 @@ bool Daemon::init()
         }
         if (!i) {
             enum { Timeout = 1000 };
-            std::shared_ptr<Connection> connection = Connection::create();
+            std::shared_ptr<Connection> connection = Connection::create(plast::ConnectionVersion);
             if (connection->connectUnix(mOptions.localUnixPath, Timeout)) {
                 connection->send(QuitMessage());
                 connection->disconnected().connect(std::bind([](){ EventLoop::eventLoop()->quit(); }));
@@ -174,7 +174,7 @@ void Daemon::addClient(const SocketClient::SharedPtr& client)
 {
     error() << "local client added";
     static Set<std::shared_ptr<Connection> > conns;
-    std::shared_ptr<Connection> conn = Connection::create(client);
+    std::shared_ptr<Connection> conn = Connection::create(client, plast::ConnectionVersion);
     conns.insert(conn);
     conn->newMessage().connect([this](const std::shared_ptr<Message>& msg, const std::shared_ptr<Connection> &conn) {
             switch (msg->messageId()) {

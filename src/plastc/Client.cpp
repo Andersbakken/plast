@@ -5,7 +5,7 @@
 #include <stdio.h>
 
 Client::Client()
-    : mConnection(Connection::create())
+    : mConnection(Connection::create(plast::ConnectionVersion))
 {
     messages::init();
 }

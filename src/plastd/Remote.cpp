@@ -42,7 +42,7 @@ void Remote::init()
 
     auto connectToScheduler = [this, opts]() {
         mConnectionError = false;
-        mConnection = Connection::create();
+        mConnection = Connection::create(plast::ConnectionVersion);
         mConnection->newMessage().connect([this](const std::shared_ptr<Message>& message, const std::shared_ptr<Connection> &) {
                 error() << "Got a message" << message->messageId() << __LINE__;
                 switch (message->messageId()) {

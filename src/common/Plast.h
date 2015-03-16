@@ -41,7 +41,9 @@ enum {
     DefaultRescheduleTimeout = 15000,
     DefaultRescheduleCheck = 2500,
     DefaultOvercommit = 4,
-    DefaultMaxPreprocessPending = 100
+    DefaultMaxPreprocessPending = 100,
+
+    ConnectionVersion = 1
 };
 const String DefaultServerHost = "127.0.0.1";
 
