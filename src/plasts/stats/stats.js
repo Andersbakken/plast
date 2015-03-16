@@ -10,8 +10,10 @@ var peerColors = Object.create(null);
 function generateColor(peer)
 {
     if (peer in peerColors)
-        return;
-    peerColors[peer] = colors[curColor++ % colors.length];
+        return peerColors[peer];
+    var c = colors[curColor++ % colors.length];
+    peerColors[peer] = c;
+    return c;
 }
 
 function peerClicked()
@@ -66,6 +68,7 @@ function Pie(args)
     this._radius = Math.min(common.width(), common.height()) / 3;
     this._circle = new paper.Path.Circle(common.center(), this._radius);
     this._circle.fillColor = unusedColor;
+    this._legends = new paper.Group({ position: new paper.Point(20, 20) });
 
     var pie = this;
     paper.view.onFrame = function(e) { pie._onframe.call(pie, e); };
@@ -77,19 +80,23 @@ Pie.prototype = {
     _running: Object.create(null),
     _radius: undefined,
     _circle: undefined,
+    _legends: undefined,
 
     constructor: Pie,
     processMessage: function(msg) {
         if (msg.type === "peer") {
             if (msg.delete) {
                 if (msg.id in this._peers) {
-                    this._totalJobs -= this._peers[msg.id].jobs;
+                    var p = this._peers[msg.id];
+                    p.legend.remove();
+                    this._totalJobs -= p.msg.jobs;
                     delete this._peers[msg.id];
                 }
             } else {
-                this._peers[msg.id] = msg;
+                var group = new paper.Group();
+                this._peers[msg.id] = { msg: msg, legend: group };
                 this._totalJobs += msg.jobs;
-                generateColor(msg.name);
+                this._addLegend(msg.name, group);
             }
             this._recalc();
         } else if (msg.type === "build") {
@@ -103,6 +110,27 @@ Pie.prototype = {
         }
     },
 
+    _addLegend: function(peer, group) {
+        var color = generateColor(peer);
+        var c = common.center();
+        var txt = new paper.PointText({point: new paper.Point(20, 10),
+                                       justification: 'left',
+                                       fillColor: color});
+        txt.content = peer;
+        group.onClick = function() { peerClicked(txt.content); };
+        group.addChild(txt);
+        this._legends.addChild(group);
+        this._rearrangeLegends();
+    },
+    _rearrangeLegends: function() {
+        var cnt = 0;
+        for (var i in this._legends.children) {
+            var p = this._legends.children[i];
+            p.position.y = (20 * cnt++) + 10;
+        }
+        paper.project.activeLayer.addChild(this._legends);
+        paper.view.draw();
+    },
     _addRunning: function(peer) {
         if (peer in this._running) {
             this._running[peer].count += 1;
@@ -201,6 +229,7 @@ Pie.prototype = {
             // noone is building, make a circle
             paper.project.activeLayer.removeChildren();
             paper.project.activeLayer.addChild(this._circle);
+            this._rearrangeLegends();
         } else {
             paper.project.activeLayer.addChild(this._circle);
             // make and/or animate arcs
@@ -314,6 +343,11 @@ var callbacks = {
 
 var oldHash = "";
 var mapper = Object.create(null);
+
+function peerClicked(peer)
+{
+    window.location.hash = '#detail-' + peer;
+};
 
 function init() {
     mapper[""] = document.getElementById('stats');
