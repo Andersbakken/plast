@@ -506,7 +506,7 @@ std::shared_ptr<Connection> Remote::addClient(const SocketClient::SharedPtr& cli
 {
     error() << "remote client added";
     static Set<std::shared_ptr<Connection> > conns;
-    std::shared_ptr<Connection> conn = Connection::create(client);
+    std::shared_ptr<Connection> conn = Connection::create(client, plast::ConnectionVersion);
     conns.insert(conn);
     conn->newMessage().connect([this](const std::shared_ptr<Message>& msg, const std::shared_ptr<Connection> &conn) {
             error() << "Got a message" << msg->messageId() << __LINE__;
