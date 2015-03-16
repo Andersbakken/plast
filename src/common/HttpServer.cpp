@@ -161,7 +161,7 @@ void HttpServer::Data::discardRead()
 }
 
 template<typename T, typename U>
-inline T toNumber(const String& str, bool* ok, int base, bool strict,
+static inline T toNumber(const String& str, bool* ok, int base, bool strict,
                   const std::function<U(const char *, char **, int base)>& convert)
 {
     char* end = 0;
@@ -175,7 +175,7 @@ inline T toNumber(const String& str, bool* ok, int base, bool strict,
 }
 
 template<typename T>
-inline T toInteger(const String& str, bool* ok = 0, int base = 10, bool strict = false)
+static inline T toInteger(const String& str, bool* ok = 0, int base = 10, bool strict = false)
 {
     return toNumber<T, long>(str, ok, base, strict, strtol);
 }
