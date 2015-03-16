@@ -316,7 +316,7 @@ void HttpServer::addClient(const SocketClient::SharedPtr& client)
                                     return;
                                 }
                                 data.bodyLength = len;
-                                ::error() << "chunk size" << data.bodyLength;
+                                //::error() << "chunk size" << data.bodyLength;
                             }
                             // can we read it all right now?
                             if (data.read(body, data.bodyLength, 2)) { // + 2 for the trailing \r\n
@@ -393,7 +393,7 @@ HttpServer::Request::Request(HttpServer* server, uint64_t id, uint64_t seq)
 
 HttpServer::Request::~Request()
 {
-    ::error() << "~Request";
+    // ::error() << "~Request";
 }
 
 bool HttpServer::Request::parseMethod(const String& method)
