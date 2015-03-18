@@ -284,6 +284,12 @@ function Detail(args)
     while (header.firstChild) {
         header.removeChild(header.firstChild);
     }
+    var back = document.createElement('a');
+    back.setAttribute('href', '#');
+    back.setAttribute('class', 'back');
+    var backtxt = document.createTextNode('\u2190');
+    back.appendChild(backtxt);
+    header.appendChild(back);
     var h1 = document.createElement('h1');
     var name = document.createTextNode(this.local);
     h1.appendChild(name);
@@ -296,6 +302,7 @@ function Detail(args)
         var li = document.createElement('li');
         li.setAttribute('path', tabs[t].path);
         var a = document.createElement('a');
+        a.setAttribute('class', 'tab');
         a.setAttribute('href', tabs[t].link + tabs[t].path);
         var txt = document.createTextNode(tabs[t].name);
         a.appendChild(txt);
