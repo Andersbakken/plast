@@ -115,6 +115,7 @@ Pie.prototype = {
         var c = common.center();
         var txt = new paper.PointText({point: new paper.Point(20, 10),
                                        justification: 'left',
+                                       fontSize: 16,
                                        fillColor: color});
         txt.content = peer;
         group.onClick = function() { peerClicked(txt.content); };
@@ -126,7 +127,7 @@ Pie.prototype = {
         var cnt = 0;
         for (var i in this._legends.children) {
             var p = this._legends.children[i];
-            p.position.y = (20 * cnt++) + 10;
+            p.position.y = (24 * cnt++) + 10;
         }
         paper.project.activeLayer.addChild(this._legends);
         paper.view.draw();
