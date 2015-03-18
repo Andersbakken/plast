@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -x
 
 function usage ()
 {
@@ -41,10 +41,9 @@ if [ -z "$REPO" ]; then
     exit 1
 fi
 
-GITROOT=
+cd `git rev-parse --git-dir`/..
+GITROOT=`pwd`
 if [ "$BUILD" = "1" ]; then
-    cd `git rev-parse --git-dir`/..
-    GITROOT=`pwd`
     if [ ! -e build.ninja ] && [ ! -e Makefile ]; then
         if [ -x `which ninja` ]; then
             cmake -G Ninja .
@@ -59,18 +58,16 @@ if [ "$BUILD" = "1" ]; then
     fi
 fi
 
-dir=`mktemp -t plast-XXXXX`
+dir=`mktemp -d -t plast-XXXXX`
 cd "$dir"
-git clone $repo .
+git clone "$REPO" .
 PREFIX="$PWD/usr/local/plast/"
-git rm -rf "$PREFIX"
-cp -r "$GITROOT/bin/plastc $GITROOT/bin/plastd $GITROOT/bin/plasts GITROOT/bin/plast-prefix.sh $GITROOT/src/plastsh/plastsh.js $GITROOT/src/plastsh/packages.json $GITROOT/src/plasts/stats" "$PREFIX"
+git rm -rf "$PREFIX" 2>/dev/null
+mkdir -p "$PREFIX"
+cp -r "$GITROOT/bin/plastc" "$GITROOT/bin/plastd" "$GITROOT/bin/plasts" "$GITROOT/bin/plast-prefix.sh" "$GITROOT/src/plastsh/plastsh.js" "$GITROOT/src/plastsh/packages.json" "$GITROOT/src/plasts/stats" "$PREFIX"
 CURRENTVERSION=`grep ^Version: ./DEBIAN/control | sed -e 's,Version: ,,'`
 VERSION=`expr $CURRENTVERSION + 1`
 sed -i -e "s,Version: $CURRENTVERSION,Version: $VERSION," ./DEBIAN/control
 git add .
 git commit -m "Bumped plast to version: $VERSION"
-
-
-
-
+git push origin
