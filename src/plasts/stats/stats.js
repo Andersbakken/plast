@@ -287,7 +287,7 @@ function Detail(args)
     var back = document.createElement('a');
     back.setAttribute('href', '#');
     back.setAttribute('class', 'back');
-    var backtxt = document.createTextNode('\u2190');
+    var backtxt = document.createTextNode('\u2B05');
     back.appendChild(backtxt);
     header.appendChild(back);
     var h1 = document.createElement('h1');
