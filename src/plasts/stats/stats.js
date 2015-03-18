@@ -430,7 +430,7 @@ var mapper = Object.create(null);
 
 function peerClicked(peer)
 {
-    window.location.hash = '#detail-' + peer;
+    window.location.hash = '#detail-' + peer + '/info';
 };
 
 function init() {
