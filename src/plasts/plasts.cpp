@@ -44,10 +44,12 @@ int main(int argc, char** argv)
 
     ensurePath(Path::home() + ".config");
 
-    Config::parse(argc, argv, List<Path>() << (Path::home() + ".config/plasts.rc") << "/etc/plasts.rc");
+    if (!Config::parse(argc, argv, List<Path>() << (Path::home() + ".config/plasts.conf") << "/etc/plasts.conf")) {
+        return 1;
+    }
     if (Config::isEnabled("help")) {
         Config::showHelp(stdout);
-        return 1;
+        return 2;
     }
     Scheduler::Options opts = {
         static_cast<uint16_t>(Config::value<int>("port"))

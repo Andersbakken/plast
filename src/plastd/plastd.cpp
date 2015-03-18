@@ -69,10 +69,12 @@ int main(int argc, char** argv)
                                                                               plast::DefaultMaxPreprocessPending), 'P', plast::DefaultMaxPreprocessPending,
                                 [](const int& count, String& err) { return validate<int, 10>(count, "max-preprocess-pending", err); });
 
-    Config::parse(argc, argv, List<Path>() << (Path::home() + ".config/plastd.rc") << "/etc/plastd.rc");
+    if (!Config::parse(argc, argv, List<Path>() << (Path::home() + ".config/plastd.conf") << "/etc/plastd.conf")) {
+        return 1;
+    }
     if (Config::isEnabled("help")) {
         Config::showHelp(stdout);
-        return 1;
+        return 2;
     }
 
     const char *logFile = 0;

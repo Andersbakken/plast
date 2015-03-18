@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/bash
 
 function usage ()
 {
@@ -7,10 +7,12 @@ function usage ()
     echo "  --repo=...|-r=..."
     echo "  --no-build|-n"
     echo "  --build-flags|-b"
+    echo "  --message=...|-m=..."
 }
 BUILD=1
 REPO=
 BUILD_FLAGS="$MAKEFLAGS"
+MESSAGE=
 while [ -n "$1" ]; do
     case "$1" in
         --repo=*|-r=*)
@@ -25,6 +27,9 @@ while [ -n "$1" ]; do
             ;;
         --build-flags=*|-b=*)
             BUILD_FLAGS=`echo $1 | sed -e 's,^.*=,,'`
+            ;;
+        --message=*|-m=*)
+            MESSAGE=`echo $1 | sed -e 's,^.*=,,'`
             ;;
         *)
             usage
@@ -64,10 +69,11 @@ git clone "$REPO" .
 PREFIX="$PWD/usr/local/plast/"
 git rm -rf "$PREFIX" 2>/dev/null
 mkdir -p "$PREFIX"
-cp -r "$GITROOT/bin/plastc" "$GITROOT/bin/plastd" "$GITROOT/bin/plasts" "$GITROOT/bin/plast-prefix.sh" "$GITROOT/src/plastsh/plastsh.js" "$GITROOT/src/plastsh/packages.json" "$GITROOT/src/plasts/stats" "$PREFIX"
-CURRENTVERSION=`grep ^Version: ./DEBIAN/control | sed -e 's,Version: ,,'`
+cp -r "$GITROOT/bin/plastc" "$GITROOT/bin/plastd" "$GITROOT/bin/plasts" "$GITROOT/bin/plast_prefix.sh" "$GITROOT/src/plastsh/plastsh.js" "$GITROOT/src/plastsh/package.json" "$GITROOT/src/plasts/stats" "$PREFIX"
+CURRENTVERSION=`grep ^Version: ./plast/DEBIAN/control | sed -e 's,Version: ,,'`
 VERSION=`expr $CURRENTVERSION + 1`
-sed -i -e "s,Version: $CURRENTVERSION,Version: $VERSION," ./DEBIAN/control
+sed -i -e "s,Version: $CURRENTVERSION,Version: $VERSION," ./plast/DEBIAN/control ./plast32/DEBIAN/control
 git add .
-git commit -m "Bumped plast to version: $VERSION"
+[ -z "$MESSAGE" ] && MESSAGE="Bumped plast to version: $VERSION"
+git commit -m "$MESSAGE"
 git push origin
