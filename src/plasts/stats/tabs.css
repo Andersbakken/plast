@@ -2,6 +2,24 @@ body {
     background-color: #bbc
 }
 
+#disconnected {
+    background: #000;
+    opacity: 0.8;
+    position: fixed;
+    top: 2em;
+    left: 2em;
+    bottom: 2em;
+    right: 2em;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+}
+
+#disconnected > p {
+    color: white;
+    font: 2em arial, helvetica, sans-serif;
+}
+
 #detail {
     background: #08f;
     font: 0.8em arial, helvetica, sans-serif;

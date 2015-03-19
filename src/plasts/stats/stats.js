@@ -399,6 +399,12 @@ Detail.prototype = {
     }
 };
 
+function disconnected()
+{
+    var dis = document.getElementById('disconnected');
+    dis.style.display = "flex";
+}
+
 var callbacks = {
     websocketOpen: function(evt) {
         console.log("ws open");
@@ -406,6 +412,7 @@ var callbacks = {
     },
     websocketClose: function(evt) {
         console.log("ws close");
+        disconnected();
     },
     websocketMessage: function(evt) {
         var obj;
@@ -422,6 +429,7 @@ var callbacks = {
     },
     websocketError: function(evt) {
         console.log("ws error " + JSON.stringify(evt));
+        disconnected();
     }
 };
 
