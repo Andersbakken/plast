@@ -70,6 +70,23 @@ function generateColor(peer)
     return rainbow(mod, hash % mod);
 }
 
+function complementaryColor(color) {
+    var col = color.match(/#([0-9][0-9][0-9][0-9][0-9][0-9])/);
+    if (col && col.length == 2) {
+        return ('000000' + (('0xffffff' ^ col).toString(16))).slice(-6);
+    }
+    switch (color) {
+    case 'red': return 'black';
+    case 'white': return 'blue';
+    case 'black': return 'yellow';
+    case 'green': return 'white';
+    case 'blue': return 'white';
+    case 'magenta': return 'black';
+    case 'yellow': return 'blue';
+    }
+    return "0xFFFFFF";
+}
+
 function peerClicked()
 {
     window.location.hash = '#detail-' + this.peerName;
@@ -132,22 +149,34 @@ LogMode.prototype = {
         if (msg.type !== "build")
             return;
 
-        function fileName() {
-            var lastSlash = msg.file.lastIndexOf('/');
-            return lastSlash === -1 ? msg.file : msg.file.substr(lastSlash + 1);
-        }
-
-        var now = new Date();
-        function formatTooltip()
+        var span;
+        function updateTooltip()
         {
             var str = ("Local: " + msg.local +
+                       "\nFile: " + msg.file +
                        "\nPeer: " + msg.peer +
                        "\nJobId: " + msg.jobid +
-                       "\nStarted: " + now.toString() +
-                       "\nArgs: " + (msg.args ? msg.args : ""));
-            return str;
+                       "\nStarted: " + span.started.toString());
+            if (span.finished) {
+                str += ("\nFinished: " + span.finished.toString() +
+                        "\nTime: " + (span.finished.valueOf() - span.started.valueOf()) + "ms");
+            }
+            // "\nArgs: " + (msg.args ? msg.args : ""));
+            span.title = str;
         }
-        var span;
+
+        function updateSpan() {
+            span.started = new Date();
+            function fileName() {
+                var lastSlash = msg.file.lastIndexOf('/');
+                return lastSlash === -1 ? msg.file : msg.file.substr(lastSlash + 1);
+            }
+
+            updateTooltip();
+
+            // span.style.backgroundColor = generateColor(msg.local); // ### this is a little ugly
+            span.firstChild.textContent = msg.local + " builds " + fileName() + (msg.local !== msg.peer ? (" for " + msg.peer) : "");
+        }
         if (msg.start) {
             span = this._active[msg.jobid];
             if (!span) {
@@ -164,9 +193,8 @@ LogMode.prototype = {
                 span = document.createElement("span");
                 span.jobid = msg.jobid;
                 span.setAttribute("class", "active");
-                span.title = formatTooltip();
-                var content = document.createTextNode(msg.local + " builds " + fileName() + (msg.local !== msg.peer ? (" for " + msg.peer) : ""));
-                span.appendChild(content);
+                span.appendChild(document.createTextNode(""));
+                updateSpan();
                 this._log.appendChild(span);
                 this._log.appendChild(document.createElement("br"));
                 span.msg = msg;
@@ -175,8 +203,7 @@ LogMode.prototype = {
                     this._log.scrollTop = this._log.scrollHeight;
             } else {
                 span.msg = msg;
-                span.title = formatTooltip();
-                span.firstChild.textContent = msg.local + " builds " + fileName() + (msg.local !== msg.peer ? (" for " + msg.peer) : "");
+                updateSpan();
             }
         } else {
             span = this._active[msg.jobid];
@@ -184,6 +211,8 @@ LogMode.prototype = {
                 return;
 
             span.firstChild.textContent = span.firstChild.textContent.replace(" builds ", " built ");
+            span.finished = new Date();
+            updateTooltip();
             span.setAttribute("class", "inactive");
             delete this._active[msg.jobid];
         }
