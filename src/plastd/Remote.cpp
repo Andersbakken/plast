@@ -58,9 +58,10 @@ void Remote::init()
                     error() << "server finished connection";
                     EventLoop::eventLoop()->quit();
                 }));
-        mConnection->error().connect(std::bind([this] {
+        mConnection->error().connect(std::bind([opts, this] {
                     mConnectionError = true;
-                    error() << "unable to reconnect, retrying in" << mReconnectTimeout << "ms";
+                    error() << "unable to reconnect to" << String::format("%s:%d", opts.serverHost.constData(), opts.serverPort)
+                            << "Retrying in" << mReconnectTimeout << "ms";
                     mReconnectTimer.restart(mReconnectTimeout, Timer::SingleShot);
                 }));
         mConnection->disconnected().connect(std::bind([this]() {
