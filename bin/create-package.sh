@@ -66,7 +66,7 @@ fi
 dir=`mktemp -d -t plast-XXXXX`
 cd "$dir"
 git clone "$REPO" .
-PREFIX="$PWD/usr/local/plast/"
+PREFIX="$PWD/plast32/usr/local/plast/"
 git rm -rf "$PREFIX" 2>/dev/null
 mkdir -p "$PREFIX"
 cp -r "$GITROOT/bin/plastc" "$GITROOT/bin/plastd" "$GITROOT/bin/plasts" "$GITROOT/bin/plast_prefix.sh" "$GITROOT/src/plastsh/plastsh.js" "$GITROOT/src/plastsh/package.json" "$GITROOT/src/plasts/stats" "$PREFIX"
