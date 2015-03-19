@@ -125,8 +125,9 @@ Pie.prototype = {
     },
     _rearrangeLegends: function() {
         var cnt = 0;
-        for (var i in this._legends.children) {
-            var p = this._legends.children[i];
+        var sorted = this._legends.children.sort(function(a, b) { return a.children[0].content > b.children[0].content; });
+        for (var i=0; i<sorted.length; ++i) {
+            var p = sorted[i];
             p.position.y = (24 * cnt++) + 10;
         }
         paper.project.activeLayer.addChild(this._legends);
