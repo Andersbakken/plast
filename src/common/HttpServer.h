@@ -18,7 +18,22 @@ public:
     typedef std::shared_ptr<HttpServer> SharedPtr;
     typedef std::weak_ptr<HttpServer> WeakPtr;
 
+    enum {
+        DefaultMaxRequestFields = 100,
+        DefaultMaxRequestFieldSize = 8190,
+        DefaultMaxBodySize = 15 * 1024 * 1024
+    };
+
+    struct Options
+    {
+        // defaults above
+        uint32_t maxRequestFields;
+        uint32_t maxRequestFieldSize;
+        uint32_t maxBodySize;
+    };
+
     HttpServer();
+    HttpServer(const Options& opts);
     ~HttpServer();
 
     using SocketServer::Mode;
@@ -145,7 +160,7 @@ public:
         bool parseStatus(const String& line);
         bool parseMethod(const String& method);
         bool parseHttp(const String& http);
-        bool parseHeader(const String& line);
+        bool parseHeader(const String& line, uint32_t max);
 
     private:
         Request(HttpServer* server, uint64_t id, uint64_t seq);
@@ -157,6 +172,7 @@ public:
         Headers mHeaders;
         Body mBody;
         HttpServer* mServer;
+        uint32_t mParsed;
 
         friend class HttpServer;
     };
@@ -166,6 +182,8 @@ public:
     Signal<std::function<void(const Request::SharedPtr&)> >& request() { return mRequest; }
 
 private:
+    void init();
+
     void addClient(const SocketClient::SharedPtr& client);
     void makeRequest(const SocketClient::SharedPtr& client, const String& headers);
 
@@ -193,11 +211,12 @@ private:
         Request::SharedPtr request;
         Map<uint64_t, List<Response> > queue;
 
-        bool readLine(String& data);
-        bool read(String& data, unsigned int len, unsigned int discard = 0);
+        enum State { Success, Pending, Failure };
+        State readLine(String& data, uint32_t max);
+        State read(String& data, unsigned int len, uint32_t max, unsigned int discard = 0);
         void discardRead();
 
-        bool readFrom(const LinkedList<Buffer>::iterator& startBuffer, unsigned int startPos,
+        void readFrom(const LinkedList<Buffer>::iterator& startBuffer, unsigned int startPos,
                       const LinkedList<Buffer>::iterator& endBuffer, unsigned int endPos,
                       String& data, unsigned int discard = 0);
 
@@ -212,6 +231,7 @@ private:
     Signal<std::function<void(const Request::SharedPtr&)> > mRequest;
     Signal<std::function<void(Error)> > mError;
     SocketServer mTcpServer;
+    Options mOptions;
 
     friend class Request;
 };

@@ -4,7 +4,22 @@
 #include <stdio.h>
 
 HttpServer::HttpServer()
-    : mProtocol(Http10), mNextId(0)
+    : mProtocol(Http10), mNextId(0), mOptions({ DefaultMaxRequestFields, DefaultMaxRequestFieldSize, DefaultMaxBodySize })
+{
+    init();
+}
+
+HttpServer::HttpServer(const Options& options)
+    : mProtocol(Http10), mNextId(0), mOptions(options)
+{
+    init();
+}
+
+HttpServer::~HttpServer()
+{
+}
+
+void HttpServer::init()
 {
     mTcpServer.newConnection().connect([this](SocketServer* server) {
             SocketClient::SharedPtr client;
@@ -17,17 +32,13 @@ HttpServer::HttpServer()
         });
 }
 
-HttpServer::~HttpServer()
-{
-}
-
 bool HttpServer::listen(uint16_t port, Protocol proto, Mode mode)
 {
     mProtocol = proto;
     return mTcpServer.listen(port, mode);
 }
 
-bool HttpServer::Data::readFrom(const LinkedList<Buffer>::iterator& startBuffer, unsigned int startPos,
+void HttpServer::Data::readFrom(const LinkedList<Buffer>::iterator& startBuffer, unsigned int startPos,
                                 const LinkedList<Buffer>::iterator& endBuffer, unsigned int endPos,
                                 String& data, unsigned int discard)
 {
@@ -54,17 +65,18 @@ bool HttpServer::Data::readFrom(const LinkedList<Buffer>::iterator& startBuffer,
         //::error() << "memcpy" << static_cast<void*>(buf) << it->data() + pos << sz;
         memcpy(buf, it->data() + pos, sz);
     }
-    return true;
 }
 
-bool HttpServer::Data::read(String& data, unsigned int len, unsigned int discard)
+HttpServer::Data::State HttpServer::Data::read(String& data, unsigned int len, uint32_t max, unsigned int discard)
 {
     data.clear();
     if (currentBuffer == buffers.end())
-        return false;
+        return Pending;
     const auto startBuffer = currentBuffer;
     const unsigned int startPos = currentPos;
     unsigned int total = 0, rem = len + discard;
+    assert(currentBuffer->size() >= currentPos);
+    uint32_t bytesAvailable = currentBuffer->size() - currentPos;
     do {
         Buffer& buf = *currentBuffer;
         assert(startPos < buf.size());
@@ -77,27 +89,33 @@ bool HttpServer::Data::read(String& data, unsigned int len, unsigned int discard
                 currentPos = 0;
                 ++currentBuffer;
             }
-            return readFrom(startBuffer, startPos, endBuffer, endPos, data, discard);
+            readFrom(startBuffer, startPos, endBuffer, endPos, data, discard);
+            return Success;
         }
         total += buf.size();
         rem -= buf.size();
         ++currentBuffer;
+        if (currentBuffer != buffers.end()) {
+            bytesAvailable += currentBuffer->size();
+        }
         currentPos = 0;
     } while (currentBuffer != buffers.end());
     currentBuffer = startBuffer;
     currentPos = startPos;
-    return false;
+    return bytesAvailable < max ? Pending : Failure;
 }
 
-bool HttpServer::Data::readLine(String& data)
+HttpServer::Data::State HttpServer::Data::readLine(String& data, uint32_t max)
 {
     // find \r\n, the \r might be at the end of a buffer and the \n at the beginning of the next
     data.clear();
     if (currentBuffer == buffers.end())
-        return false;
+        return Pending;
     bool lastr = false;
     const auto startBuffer = currentBuffer;
     const unsigned int startPos = currentPos;
+    assert(currentBuffer->size() >= currentPos);
+    unsigned int bytesAvailable = currentBuffer->size() - currentPos;
     for (;;) {
         Buffer& buf = *currentBuffer;
         //::error() << "balle" << startPos << buf.size();
@@ -112,7 +130,8 @@ bool HttpServer::Data::readLine(String& data)
                     currentPos = 0;
                     ++currentBuffer;
                 }
-                return readFrom(startBuffer, startPos, endBuffer, endPos, data);
+                readFrom(startBuffer, startPos, endBuffer, endPos, data);
+                return Success;
             }
         }
         for (; currentPos < buf.size() - 1; ++currentPos) {
@@ -125,22 +144,25 @@ bool HttpServer::Data::readLine(String& data)
                     ++currentBuffer;
                 }
                 //::error() << "reading from" << &*startBuffer << startPos << &*endBuffer << endPos;
-                return readFrom(startBuffer, startPos, endBuffer, endPos, data);
+                readFrom(startBuffer, startPos, endBuffer, endPos, data);
+                return Success;
             }
         }
         if (buf.data()[buf.size() - 1] == '\r')
             lastr = true;
         ++currentBuffer;
         currentPos = 0;
-        if (currentBuffer == buffers.end()) {
+        if (currentBuffer != buffers.end()) {
+            bytesAvailable += currentBuffer->size();
+        } else {
             // no luck, reset current to start and try again next time
             currentBuffer = startBuffer;
             currentPos = startPos;
-            return false;
+            return bytesAvailable < max ? Pending : Failure;
         }
     }
     assert(false);
-    return false;
+    return Pending;
 }
 
 void HttpServer::Data::discardRead()
@@ -215,8 +237,16 @@ void HttpServer::addClient(const SocketClient::SharedPtr& client)
                 }
                 String line;
                 while (data.state == Data::ReadingStatus || data.state == Data::ReadingHeaders) {
-                    if (!data.readLine(line))
+                    const HttpServer::Data::State state = data.readLine(line, mOptions.maxRequestFieldSize);
+                    if (state != HttpServer::Data::Success) {
+                        if (state == HttpServer::Data::Failure) {
+                            // drop the client on the floor
+                            data.client->close();
+                            data.client.reset();
+                            mData.erase(id);
+                        }
                         return;
+                    }
                     if (data.state == Data::ReadingStatus) {
                         data.request.reset(new Request(this, data.id, data.seq++));
                         data.request->mBody.mRequest = data.request;
@@ -276,7 +306,7 @@ void HttpServer::addClient(const SocketClient::SharedPtr& client)
                             }
                             data.discardRead();
                         } else {
-                            if (!data.request->parseHeader(line)) {
+                            if (!data.request->parseHeader(line, mOptions.maxRequestFields)) {
                                 data.client->close();
                                 data.client.reset();
                                 mData.erase(id);
@@ -289,20 +319,32 @@ void HttpServer::addClient(const SocketClient::SharedPtr& client)
                     if (data.bodyMode == Data::ModeLength) {
                         assert(data.bodyLength > 0);
                         String body;
-                        if (data.read(body, data.bodyLength)) {
+                        const HttpServer::Data::State state = data.read(body, data.bodyLength, mOptions.maxBodySize);
+                        if (state == HttpServer::Data::Success) {
                             data.request->mBody.mBody += body;
                             data.request->mBody.mDone = true;
                             data.request->mBody.mReadyRead(&data.request->mBody);
                             data.request.reset();
                             data.state = Data::ReadingStatus;
                             data.discardRead();
+                        } else if (state == HttpServer::Data::Failure) {
+                            // badness
+                            data.client->close();
+                            data.client.reset();
+                            mData.erase(id);
+                            return;
                         }
                     } else if (data.bodyMode == Data::ModeChunked) {
                         String body;
                         for (;;) {
                             if (data.bodyLength == -1) { // read the chunk size;
-                                if (!data.readLine(body)) {
-#warning should have a max size here
+                                const HttpServer::Data::State state = data.readLine(body, 50);
+                                if (state != HttpServer::Data::Success) {
+                                    if (state == HttpServer::Data::Failure) {
+                                        data.client->close();
+                                        data.client.reset();
+                                        mData.erase(id);
+                                    }
                                     return;
                                 }
                                 // we ignore extensions for the time being
@@ -319,7 +361,8 @@ void HttpServer::addClient(const SocketClient::SharedPtr& client)
                                 //::error() << "chunk size" << data.bodyLength;
                             }
                             // can we read it all right now?
-                            if (data.read(body, data.bodyLength, 2)) { // + 2 for the trailing \r\n
+                            const HttpServer::Data::State state = data.read(body, data.bodyLength, mOptions.maxBodySize, 2);
+                            if (state == HttpServer::Data::Success) { // + 2 for the trailing \r\n
                                 // yes, we're done with this chunk
                                 data.request->mBody.mBody += body;
                                 if (data.bodyLength == 0) {
@@ -331,10 +374,22 @@ void HttpServer::addClient(const SocketClient::SharedPtr& client)
                                     data.discardRead();
                                     return;
                                 }
+                                if (data.request->mBody.mBody.size() >= mOptions.maxBodySize) {
+                                    data.client->close();
+                                    data.client.reset();
+                                    mData.erase(id);
+                                    return;
+                                }
                                 data.request->mBody.mReadyRead(&data.request->mBody);
                                 data.bodyLength = -1;
+                            } else if (state == HttpServer::Data::Failure) {
+                                // exceeded max body size
+                                data.client->close();
+                                data.client.reset();
+                                mData.erase(id);
+                                return;
                             } else {
-                                // nope, bail out
+                                // not done with chunk, bail out
                                 return;
                             }
                         }
@@ -387,7 +442,7 @@ HttpServer::Headers::Header HttpServer::Headers::header(const String& key) const
 }
 
 HttpServer::Request::Request(HttpServer* server, uint64_t id, uint64_t seq)
-    : mId(id), mSeq(seq), mProtocol(Http10), mMethod(Get), mServer(server)
+    : mId(id), mSeq(seq), mProtocol(Http10), mMethod(Get), mServer(server), mParsed(0)
 {
 }
 
@@ -462,8 +517,10 @@ bool HttpServer::Request::parseStatus(const String& line)
     return false;
 }
 
-bool HttpServer::Request::parseHeader(const String& line)
+bool HttpServer::Request::parseHeader(const String& line, uint32_t max)
 {
+    if (++mParsed > max)
+        return false;
     const int eq = line.indexOf(':');
     if (eq < 1)
         return false;
