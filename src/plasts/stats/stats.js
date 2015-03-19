@@ -78,10 +78,11 @@ LogMode.prototype = {
 
         var span;
         if (msg.start) {
-            var bottom = this._log.scrollTop === this._log.scrollHeight;
+            var bottom = this._log.scrollTop + this._log.clientHeight >= this._log.scrollHeight;
+            // console.log(this._log.scrollTop + " " + this._log.scrollHeight);
             span = document.createElement("span");
-            span.style.color = "red";
-            var content = document.createTextNode(msg.local + " builds " + msg.file + " for " + msg.peer);
+            span.setAttribute("class", "active");
+            var content = document.createTextNode(msg.local + " builds " + msg.file + (msg.local !== msg.peer ? (" for " + msg.peer) : ""));
             span.appendChild(content);
             this._log.appendChild(span);
             this._log.appendChild(document.createElement("br"));
@@ -92,8 +93,10 @@ LogMode.prototype = {
             span = this._active[msg.jobid];
             if (!span)
                 return;
+
+            span.firstChild.textContent = span.firstChild.textContent.replace(" builds ", " built ");
+            span.setAttribute("class", "inactive");
             delete this._active[msg.jobid];
-            span.style.color = "green";
         }
     }
 };

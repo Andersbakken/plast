@@ -1,5 +1,6 @@
 body {
-    background-color: #bbc
+    background-color: #bbc;
+    overflow: hidden;
 }
 
 #disconnected {
@@ -108,4 +109,16 @@ h1 {
     position: fixed;
     right: 0;
     top: 0;
+    overflow-y: scroll;
+    overflow-x: hidden;
+    height: 100%;
 }
+
+#log > span.active {
+    color: #666;
+}
+
+#log > span.inactive {
+    color: white;
+}
+
