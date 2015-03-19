@@ -106,12 +106,24 @@ h1 {
 }
 
 #log {
+    font: 0.8em arial, helvetica, sans-serif;
     position: fixed;
     right: 0;
+    padding-right: 5;
     top: 0;
     overflow-y: scroll;
     overflow-x: hidden;
     height: 100%;
+}
+
+@keyframes logspanfinish {
+    0% { color: #666; }
+    100% { color: white; }
+}
+
+@-webkit-keyframes logspanfinish {
+    0% { color: #666; }
+    100% { color: white; }
 }
 
 #log > span.active {
@@ -120,5 +132,11 @@ h1 {
 
 #log > span.inactive {
     color: white;
+    animation-duration: 1s;
+    animation-name: logspanfinish;
+    animation-iteration-count: 1;
+    -webkit-animation-name: logspanfinish;
+    -webkit-animation-duration: 1s;
+    -webkit-animation-iteration-count: 1;
 }
 

@@ -71,27 +71,62 @@ function LogMode()
 LogMode.prototype = {
     constructor: LogMode,
     _log: undefined,
+    _count: 0,
+    _maxCount: 1024,
     _active: Object.create(null),
     processMessage: function(msg) {
         if (msg.type !== "build")
             return;
 
+        function fileName() {
+            var lastSlash = msg.file.lastIndexOf('/');
+            return lastSlash === -1 ? msg.file : msg.file.substr(lastSlash + 1);
+        }
+
+        var now = new Date();
+        function formatTooltip()
+        {
+            var str = ("Local: " + msg.local +
+                       "\nPeer: " + msg.peer +
+                       "\nJobId: " + msg.jobid +
+                       "\nStarted: " + now.toString() +
+                       "\nArgs: " + msg.args ? msg.args : "");
+            return str;
+        }
         var span;
         if (msg.start) {
-            var bottom = this._log.scrollTop + this._log.clientHeight >= this._log.scrollHeight;
-            // console.log(this._log.scrollTop + " " + this._log.scrollHeight);
-            span = document.createElement("span");
-            span.setAttribute("class", "active");
-            var content = document.createTextNode(msg.local + " builds " + msg.file + (msg.local !== msg.peer ? (" for " + msg.peer) : ""));
-            span.appendChild(content);
-            this._log.appendChild(span);
-            this._log.appendChild(document.createElement("br"));
-            this._active[msg.jobid] = span;
-            if (bottom)
-                this._log.scrollTop = this._log.scrollHeight;
+            span = this._active[msg.jobid];
+            if (!span) {
+                while (this._count >= this._maxCount) {
+                    --this._count;
+                    delete this._active[this._log.firstChild.jobid];
+                    this._log.removeChild(this._log.firstChild);
+                    this._log.removeChild(this._log.firstChild);
+                }
+
+                ++this._count;
+                var bottom = this._log.scrollTop + this._log.clientHeight >= this._log.scrollHeight;
+                // console.log(this._log.scrollTop + " " + this._log.scrollHeight);
+                span = document.createElement("span");
+                span.jobid = msg.jobid;
+                span.setAttribute("class", "active");
+                span.title = formatTooltip();
+                var content = document.createTextNode(msg.local + " builds " + fileName() + (msg.local !== msg.peer ? (" for " + msg.peer) : ""));
+                span.appendChild(content);
+                this._log.appendChild(span);
+                this._log.appendChild(document.createElement("br"));
+                span.msg = msg;
+                this._active[msg.jobid] = span;
+                if (bottom)
+                    this._log.scrollTop = this._log.scrollHeight;
+            } else {
+                span.msg = msg;
+                span.title = formatTooltip();
+                span.firstChild.textContent = msg.local + " builds " + fileName() + (msg.local !== msg.peer ? (" for " + msg.peer) : "");
+            }
         } else {
             span = this._active[msg.jobid];
-            if (!span)
+            if (!span || span.msg.local != msg.local)
                 return;
 
             span.firstChild.textContent = span.firstChild.textContent.replace(" builds ", " built ");
