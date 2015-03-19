@@ -1,7 +1,7 @@
 /*global paper, console, JSON, WebSocket*/
 
 var ws, scheduler;
-var mode, mainmode, common;
+var mode, mainmode, common, logmode;
 var colors = [ "red", "blue", "yellow", "green", "cyan" ];
 var unusedColor = "purple";
 var curColor = 0;
@@ -21,17 +21,17 @@ function peerClicked()
     window.location.hash = '#detail-' + this.peerName;
 }
 
-function Common(stats)
+function Common(canvas)
 {
-    this.stats = stats;
+    this.canvas = canvas;
     this.init();
 };
 
 Common.prototype = {
-    stats: undefined,
+    canvas: undefined,
     _pixelRatio: undefined,
     init: function() {
-        var ctx = this.stats.getContext("2d");
+        var ctx = this.canvas.getContext("2d");
         this._pixelRatio = ctx.webkitBackingStorePixelRatio
             || ctx.mozBackingStorePixelRatio
             || ctx.msBackingStorePixelRatio
@@ -56,10 +56,45 @@ Common.prototype = {
         return r;
     },
     width: function() {
-        return this.stats.width / ((window.devicePixelRatio || 1) / this._pixelRatio);
+        return this.canvas.width / ((window.devicePixelRatio || 1) / this._pixelRatio);
     },
     height: function() {
-        return this.stats.height / ((window.devicePixelRatio || 1) / this._pixelRatio);
+        return this.canvas.height / ((window.devicePixelRatio || 1) / this._pixelRatio);
+    }
+};
+
+function LogMode()
+{
+    this._log = document.getElementById('log');
+}
+
+LogMode.prototype = {
+    constructor: LogMode,
+    _log: undefined,
+    _active: Object.create(null),
+    processMessage: function(msg) {
+        if (msg.type !== "build")
+            return;
+
+        var span;
+        if (msg.start) {
+            var bottom = this._log.scrollTop === this._log.scrollHeight;
+            span = document.createElement("span");
+            span.style.color = "red";
+            var content = document.createTextNode(msg.local + " builds " + msg.file + " for " + msg.peer);
+            span.appendChild(content);
+            this._log.appendChild(span);
+            this._log.appendChild(document.createElement("br"));
+            this._active[msg.jobid] = span;
+            if (bottom)
+                this._log.scrollTop = this._log.scrollHeight;
+        } else {
+            span = this._active[msg.jobid];
+            if (!span)
+                return;
+            delete this._active[msg.jobid];
+            span.style.color = "green";
+        }
     }
 };
 
@@ -72,7 +107,7 @@ function Pie(args)
 
     var pie = this;
     paper.view.onFrame = function(e) { pie._onframe.call(pie, e); };
-};
+}
 
 Pie.prototype = {
     _peers: Object.create(null),
@@ -426,6 +461,7 @@ var callbacks = {
                 mode.processMessage(obj);
             }
             mainmode.processMessage(obj);
+            logmode.processMessage(obj);
         }
     },
     websocketError: function(evt) {
@@ -443,7 +479,7 @@ function peerClicked(peer)
 };
 
 function init() {
-    mapper[""] = document.getElementById('stats');
+    mapper[""] = document.getElementById('canvas');
     mapper["detail"] = document.getElementById('detail');
 
     var url = "ws://" + window.location.hostname + ":" + window.location.port + "/";
@@ -453,11 +489,12 @@ function init() {
     ws.onmessage = callbacks.websocketMessage;
     ws.onerror = callbacks.websocketError;
 
-    var canvas = document.getElementById('stats');
+    var canvas = document.getElementById('canvas');
     paper.setup(canvas);
     common = new Common(canvas);
     mode = new Pie();
     mainmode = mode;
+    logmode = new LogMode();
 
     // var path = new paper.Path();
     // path.strokeColor = 'black';
