@@ -145,6 +145,7 @@ public:
         enum Method { Get, Post };
         Method method() const { return mMethod; }
         String path() const { return mPath; }
+        String query() const { return mQuery; }
         Protocol protocol() const { return mProtocol; }
 
         const Headers& headers() const { return mHeaders; }
@@ -168,7 +169,7 @@ public:
         uint64_t mId, mSeq;
         Protocol mProtocol;
         Method mMethod;
-        String mPath;
+        String mPath, mQuery;
         Headers mHeaders;
         Body mBody;
         HttpServer* mServer;

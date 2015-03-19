@@ -503,10 +503,16 @@ bool HttpServer::Request::parseStatus(const String& line)
                 return false;
             parsing = ParsePath;
             break;
-        case ParsePath:
-            mPath = part;
+        case ParsePath: {
+            const int q = part.indexOf('?');
+            if (q == -1) {
+                mPath = part;
+            } else {
+                mPath = part.left(q);
+                mQuery = part.mid(q);
+            }
             parsing = ParseHttp;
-            break;
+            break; }
         case ParseHttp:
             if (!parseHttp(part))
                 return false;
