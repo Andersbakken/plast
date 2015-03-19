@@ -103,3 +103,9 @@ h1 {
     font-style: italic;
     display: inline-block;
 }
+
+#log {
+    position: fixed;
+    right: 0;
+    top: 0;
+}
