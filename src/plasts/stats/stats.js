@@ -1,19 +1,73 @@
-/*global paper, console, JSON, WebSocket*/
+/*global paper, console, JSON, WebSocket, location*/
 
 var ws, scheduler;
 var mode, mainmode, common, logmode;
-var colors = [ "red", "blue", "yellow", "green", "cyan" ];
 var unusedColor = "purple";
-var curColor = 0;
-var peerColors = Object.create(null);
+
+function getParameterByName(name)
+{
+    name = name.replace(/[\[]/, "\\[").replace(/[\]]/, "\\]");
+    var regex = new RegExp("[\\?&]" + name + "=([^&#]*)"),
+        results = regex.exec(location.search);
+    return results === null ? "" : decodeURIComponent(results[1].replace(/\+/g, " "));
+}
+
+var colorOverrides = (function() {
+    var ret = Object.create(null);
+    var overrides = getParameterByName("colors").split(',');
+    for (var i=0; i<overrides.length; ++i) {
+        var split = overrides[i].split(':');
+        if (split.length == 2) {
+            ret[split[0]] = split[1];
+        }
+    }
+    return ret;
+})();
 
 function generateColor(peer)
 {
-    if (peer in peerColors)
-        return peerColors[peer];
-    var c = colors[curColor++ % colors.length];
-    peerColors[peer] = c;
-    return c;
+    function rainbow(numOfSteps, step) {
+
+        // This function generates vibrant, "evenly spaced" colours (i.e. no clustering). This is ideal for creating easily distinguishable vibrant markers in Google Maps and other apps.
+        // Adam Cole, 2011-Sept-14
+        // HSV to RBG adapted from: http://mjijackson.com/2008/02/rgb-to-hsl-and-rgb-to-hsv-color-model-conversion-algorithms-in-javascript
+        var r, g, b;
+        var h = step / numOfSteps;
+        var i = ~~(h * 6);
+        var f = h * 6 - i;
+        var q = 1 - f;
+        switch (i % 6 ){
+        case 0: r = 1, g = f, b = 0; break;
+        case 1: r = q, g = 1, b = 0; break;
+        case 2: r = 0, g = 1, b = f; break;
+        case 3: r = 0, g = q, b = 1; break;
+        case 4: r = f, g = 0, b = 1; break;
+        case 5: r = 1, g = 0, b = q; break;
+        }
+        var c = "#" + ("00" + (~ ~(r * 255)).toString(16)).slice(-2) + ("00" + (~ ~(g * 255)).toString(16)).slice(-2) + ("00" + (~ ~(b * 255)).toString(16)).slice(-2);
+        return (c);
+    }
+
+    if (peer in colorOverrides) {
+        return colorOverrides[peer];
+    }
+    var hash = 0;
+    // var codes = [];
+    function hashCharCode(idx) {
+        // console.log("hashing " + idx + " " + peer.charAt(idx) + " " + peer.charCodeAt(idx));
+        hash = ((hash << 5) - hash) + peer.charCodeAt(idx);
+    }
+    var count = Math.floor(peer.length / 2);
+    for (var i=0; i<count; ++i) {
+        hashCharCode(i);
+        hashCharCode(peer.length - i - 1);
+    }
+    if (peer % 2 == 1) {
+        hashCharCode(count);
+    }
+    hash = Math.abs(hash);
+    var mod = 1024 * 1024 * 16;
+    return rainbow(mod, hash % mod);
 }
 
 function peerClicked()
@@ -211,7 +265,7 @@ Pie.prototype = {
             this._running[peer].count += 1;
         } else {
             var path = new paper.Path(common.center());
-            path.fillColor = peerColors[peer];
+            path.fillColor = generateColor(peer);
             var text = new paper.PointText();
             text.content = peer;
             text.fillColor = "black";
