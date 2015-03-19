@@ -39,7 +39,7 @@ done
 
 function install ()
 {
-    deb=`curl --silent $SERVER/apt/pool/main/p/$1/ | grep -o "$1[A-Za-z0-9_]*\.deb" | head -n1`
+    deb=`curl --silent $SERVER/apt/pool/main/p/$1/ | grep -o "$1[A-Za-z0-9_]*\.changelog" | tail -n1 | sed -e 's,\.changelog,.deb,'`
     if [ -z "$deb" ]; then
         echo "Can't parse output from $SERVER/apt/pool/main/p/$1"
         exit 1
