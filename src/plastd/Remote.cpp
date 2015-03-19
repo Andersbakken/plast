@@ -73,7 +73,7 @@ void Remote::init()
                 }));
         mConnection->connected().connect(std::bind([this, opts]() {
                     mReconnectTimeout = 1000;
-                    error() << "connected to scheduler";
+                    error() << "connected to scheduler" << String::format("%s:%d", opts.serverHost.constData(), opts.serverPort);
                     String hn;
                     hn.resize(sysconf(_SC_HOST_NAME_MAX));
                     if (gethostname(hn.data(), hn.size()) == 0) {
