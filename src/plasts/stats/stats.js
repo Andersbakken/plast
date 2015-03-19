@@ -90,7 +90,7 @@ LogMode.prototype = {
                        "\nPeer: " + msg.peer +
                        "\nJobId: " + msg.jobid +
                        "\nStarted: " + now.toString() +
-                       "\nArgs: " + msg.args ? msg.args : "");
+                       "\nArgs: " + (msg.args ? msg.args : ""));
             return str;
         }
         var span;
