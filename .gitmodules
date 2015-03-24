@@ -7,3 +7,6 @@
 [submodule "src/json"]
 	path = src/json
 	url = https://github.com/nlohmann/json.git
+[submodule "src/plasts/stats/josh"]
+	path = src/plasts/stats/josh
+	url = https://github.com/sdether/josh.js

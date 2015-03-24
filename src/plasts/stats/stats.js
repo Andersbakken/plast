@@ -1,4 +1,4 @@
-/*global paper, console, JSON, WebSocket, window, localStorage*/
+/*global paper, console, JSON, WebSocket, window, localStorage, Josh*/
 
 var ws, scheduler;
 var mode, mainmode, common, logmode, config;
@@ -96,13 +96,103 @@ function peerClicked()
 function Config(ws)
 {
     this._ws = ws;
+    this._input = document.querySelector('#console > input');
+    this._ctx = document.querySelector('#console > div.inputctx');
+    this._readline = new Josh.ReadLine();
+    this._readline.onChange(function(line) {
+        config._line = line;
+        config._render();
+    });
+    this._readline.onCompletion(function(line, callback) {
+        if(!line || !line.text) {
+            return callback();
+        }
+        if (line.text[0] === '/') {
+            // before and after cursor;
+            var before = line.text.substring(1, line.cursor);
+            var after = line.text.substr(line.cursor);
+            // find suggestions that starts with before and ends with after
+            var alts = [], maxlen = 0, max;
+            for (var k in config._handlers) {
+                if (k.substr(0, before.length) === before) {
+                    if (k.substr(k.length - after.length, after.length) === after) {
+                        alts.push(k);
+                        if (k.length > maxlen) {
+                            max = k;
+                            maxlen = k.length;
+                        }
+                    }
+                }
+            }
+            if (alts.length === 1) {
+                if (alts[0] === line.text.substr(1)) {
+                    return callback(' ');
+                } else {
+                    return callback(alts[0].substr(line.text.length - 1) + ' ');
+                }
+            } else if (alts.length) {
+                // find common stem
+                var sz = alts.length, i;
+                var done = false, test;
+                while (!done) {
+                    test = max.substr(0, maxlen);
+                    if (!maxlen)
+                        break;
+                    done = true;
+                    for (i = 0; i < sz; ++i) {
+                        if (alts[i].substr(0, maxlen) !== test) {
+                            --maxlen;
+                            done = false;
+                            break;
+                        }
+                    }
+                }
+                for (i = 0; i < sz; ++i) {
+                    config.log('/' + alts[i]);
+                }
+                return callback(test.substr(line.text.length - 1));
+            }
+            return callback();
+        } else {
+            return callback();
+        }
+    });
+    this._readline.onEnter(function(cmdtext, callback) {
+        // console.log("enter", cmdtext);
+        config._line = undefined;
+        config._render();
+        config.run(cmdtext);
+        callback("");
+    });
+    this._readline.onClear(function() {
+        // console.log("clear");
+        config._input.value = "";
+    });
+    this._readline.onSearchStart(function() {
+        config._prefix = "bck-i-search: ";
+        // console.log("search start");
+    });
+    this._readline.onSearchEnd(function() {
+        config._search = undefined;
+        config._prefix = "";
+        // console.log("search end");
+    });
+    this._readline.onSearchChange(function(search) {
+        config._search = search;
+        config._render();
+        // console.log("search change", search);
+    });
 };
 
 Config.prototype = {
     constructor: Config,
+    _readline: undefined,
     _ws: undefined,
-    _stack: [],
-    _stackPos: -1,
+    _input: undefined,
+    _ctx: undefined,
+    _prefix: "",
+    _search: undefined,
+    _line: undefined,
     _handlers: {
         help: function() {
             console.log('help here');
@@ -117,27 +207,30 @@ Config.prototype = {
             config._sendCommand('unblock', args);
         }
     },
-    _sendCommand: function(cmd, args)
-    {
-        this._ws.send(JSON.stringify({ cmd: cmd, args: args }));
-    },
-    history: function(txt, dir) {
-        if (this._stack.length === 0)
-            return;
-        var pos = this._stackPos;
-        if (pos === -1)
-            pos = this._stack.length;
-        pos += dir;
-        if (pos < 0)
-            return;
-        if (pos >= this._stack.length) {
-            pos = -1;
-            txt.value = "";
-            this._stackPos = pos;
-            return;
+    _render: function() {
+        var c;
+        if (this._search) {
+            if (this._search.text)
+                this._input.value = this._search.text;
+            // set the cursor position
+            c = this._search.cursoridx || 0;
+            this._input.selectionStart = c;
+            this._input.selectionEnd = c;
+            this._ctx.innerHTML = this._prefix + (this._search.term || "");
+        } else if (this._line) {
+            this._input.value = this._line.text;
+            // set the cursor position
+            c = this._line.cursor || 0;
+            this._input.selectionStart = this._prefix.length + c;
+            this._input.selectionEnd = this._prefix.length + c;
+            this._ctx.innerHTML = "";
+        } else {
+            this._input.value = "";
+            this._ctx.innerHTML = "";
         }
-        this._stackPos = pos;
-        txt.value = this._stack[pos];
+    },
+    _sendCommand: function(cmd, args) {
+        this._ws.send(JSON.stringify({ cmd: cmd, args: args }));
     },
     handleCommand: function(cmd) {
         var args = cmd.split(' ');
@@ -150,11 +243,13 @@ Config.prototype = {
         var cfg = document.getElementById('config');
         if (cfg.getAttribute('class') === 'active') {
             cfg.setAttribute('class', 'inactive');
+            this._readline.deactivate();
         } else {
             cfg.setAttribute('class', 'active');
             window.setTimeout(function() {
                 document.querySelector('#console > input').focus();
             }, 100);
+            this._readline.activate();
         }
     },
     log: function(txt) {
@@ -172,11 +267,6 @@ Config.prototype = {
         } else {
             this.log(line);
         }
-        this._stack.push(line);
-        if (this._stackPos !== -1 && this._stack[this._stackPos] === line) {
-            this._stack.splice(this._stackPos, 1);
-        }
-        this._stackPos = -1;
     }
 };
 
@@ -716,29 +806,6 @@ function peerClicked(peer)
 };
 
 function init() {
-    var txt = document.querySelector('#console > input');
-    txt.addEventListener('keydown', function(e) {
-        if (e.keyCode === 38 || e.keyCode === 40) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (e.keyCode == 38) {
-                config.history(txt, -1);
-            } else {
-                config.history(txt, 1);
-            }
-        }
-    });
-    txt.addEventListener('keypress', function(e) {
-        if (e.charCode === 0x60) {
-            e.preventDefault();
-            e.stopPropagation();
-            config.toggle();
-        } else if (e.charCode === 13) {
-            config.run(txt.value);
-            txt.value = "";
-        }
-    });
-
     var checks = document.querySelectorAll('#options > input[type=checkbox]');
     for (var i = 0; i < checks.length; ++i) {
         var check = checks[i];
@@ -826,7 +893,11 @@ window.addEventListener('resize', function() {
 window.addEventListener('keypress', function(e) {
     if (e.charCode == 0x60) { // U+0060: GRAVE ACCENT
         config.toggle();
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
     }
+    return true;
 });
 
 window.location.hash = "";

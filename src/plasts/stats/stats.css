@@ -206,6 +206,13 @@ h1 {
     font-size: 1.5em;
 }
 
+#console > div.inputctx {
+    color: white;
+    font: 0.8em arial, helvetica, sans-serif;
+    font-size: 1.1em;
+    min-height: 1.2em;
+}
+
 #console > div.content {
     color: white;
     font: 0.8em arial, helvetica, sans-serif;
