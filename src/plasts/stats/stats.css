@@ -141,6 +141,7 @@ h1 {
 }
 
 #config {
+    padding: 0.5em;
     display: flex;
     background-color: green;
     position: fixed;
@@ -186,6 +187,14 @@ h1 {
 #options {
     color: white;
     font: 0.8em arial, helvetica, sans-serif;
+    margin: 0 0 0 1em;
+    font-size: 1.1em;
+}
+
+#options > input {
+    vertical-align: bottom;
+    position: relative;
+    top: -2px;
 }
 
 #console > input {
