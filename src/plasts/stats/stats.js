@@ -1,14 +1,15 @@
-/*global paper, console, JSON, WebSocket, location*/
+/*global paper, console, JSON, WebSocket, window, localStorage*/
 
 var ws, scheduler;
 var mode, mainmode, common, logmode;
 var unusedColor = "purple";
+var options = Object.create(null);
 
 function getParameterByName(name)
 {
     name = name.replace(/[\[]/, "\\[").replace(/[\]]/, "\\]");
     var regex = new RegExp("[\\?&]" + name + "=([^&#]*)"),
-        results = regex.exec(location.search);
+        results = regex.exec(window.location.search);
     return results === null ? "" : decodeURIComponent(results[1].replace(/\+/g, " "));
 }
 
@@ -131,6 +132,29 @@ Common.prototype = {
     },
     height: function() {
         return this.canvas.height / ((window.devicePixelRatio || 1) / this._pixelRatio);
+    },
+    toggleConfig: function() {
+        var cfg = document.getElementById('config');
+        if (cfg.getAttribute('class') === 'active') {
+            cfg.setAttribute('class', 'inactive');
+        } else {
+            cfg.setAttribute('class', 'active');
+            window.setTimeout(function() {
+                document.querySelector('#console > input').focus();
+            }, 100);
+        }
+    },
+    addConsole: function(txt) {
+        var p = document.createElement('p');
+        p.appendChild(document.createTextNode(txt));
+        var content = document.querySelector('#console > div.content');
+        var bottom = content.scrollTop + content.clientHeight >= content.scrollHeight;
+        content.appendChild(p);
+        if (bottom)
+            content.scrollTop = content.scrollHeight;
+    },
+    runCommand: function(cmd) {
+        this.addConsole(cmd);
     }
 };
 
@@ -226,6 +250,8 @@ function Pie(args)
     this._circle.fillColor = unusedColor;
     this._legends = new paper.Group({ position: new paper.Point(20, 20) });
 
+    this._addConfig();
+
     var pie = this;
     paper.view.onFrame = function(e) { pie._onframe.call(pie, e); };
 }
@@ -278,6 +304,17 @@ Pie.prototype = {
         group.addChild(txt);
         this._legends.addChild(group);
         this._rearrangeLegends();
+    },
+    _addConfig: function() {
+        var cfg = new paper.PointText({point: new paper.Point(common.width() - 50, common.height() - 10),
+                                       justification: 'left',
+                                       fontSize: 45,
+                                       fillColor: '#555',
+                                       content: '\u2699'});
+        var that = this;
+        cfg.onClick = function() { common.toggleConfig(); };
+        paper.project.activeLayer.addChild(cfg);
+        paper.view.draw();
     },
     _rearrangeLegends: function() {
         var cnt = 0;
@@ -381,12 +418,25 @@ Pie.prototype = {
             text.position = new paper.Point(labelTurn.x - 15, labelTurn.y);
         }
     },
-    _recalc: function() {
+    _recalc: function(force) {
         // make a pie
+        if (force) {
+            paper.project.activeLayer.removeChildren();
+            this._radius = Math.min(common.width(), common.height()) / 3;
+            this._circle = new paper.Path.Circle(common.center(), this._radius);
+            this._circle.fillColor = unusedColor;
+            this._addConfig();
+            this._rearrangeLegends();
+        }
         if (Object.keys(this._running).length === 0) {
+            if (force) {
+                paper.project.activeLayer.addChild(this._circle);
+                return;
+            }
             // noone is building, make a circle
             paper.project.activeLayer.removeChildren();
             paper.project.activeLayer.addChild(this._circle);
+            this._addConfig();
             this._rearrangeLegends();
         } else {
             paper.project.activeLayer.addChild(this._circle);
@@ -572,6 +622,8 @@ var callbacks = {
         disconnected();
     },
     websocketMessage: function(evt) {
+        if (!mainmode)
+            return;
         var obj;
         try {
             obj = JSON.parse(evt.data);
@@ -600,6 +652,30 @@ function peerClicked(peer)
 };
 
 function init() {
+    var txt = document.querySelector('#console > input');
+    txt.onkeydown = function(e) {
+        if (e.charCode === 0x60 || e.keyCode === 0xC0) {
+            e.preventDefault();
+            common.toggleConfig();
+        } else if (e.keyCode === 13) {
+            common.runCommand(txt.value);
+            txt.value = "";
+        }
+    };
+
+    var checks = document.querySelectorAll('#options > input[type=checkbox]');
+    for (var i = 0; i < checks.length; ++i) {
+        var check = checks[i];
+        var name = check.name;
+        var checked = (localStorage.getItem("options." + name) === "on");
+        check.checked = checked;
+        options[name] = checked;
+        check.onchange = function() {
+            options[this.name] = this.checked;
+            localStorage.setItem("options." + this.name, this.checked ? "on" : "off");
+        };
+    }
+
     mapper[""] = document.getElementById('canvas');
     mapper["detail"] = document.getElementById('detail');
 
@@ -663,6 +739,17 @@ window.addEventListener('hashchange', function() {
     data.dom.style.display = 'block';
     update(data.data);
     oldHash = window.location.hash;
+});
+
+window.addEventListener('resize', function() {
+    if (mainmode)
+        mainmode._recalc(true);
+});
+
+window.addEventListener('keypress', function(e) {
+    if (e.charCode == 0x60) { // U+0060: GRAVE ACCENT
+        common.toggleConfig();
+    }
 });
 
 window.location.hash = "";

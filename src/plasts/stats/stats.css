@@ -140,3 +140,92 @@ h1 {
     -webkit-animation-iteration-count: 1;
 }
 
+#config {
+    display: flex;
+    background-color: green;
+    position: fixed;
+    top: 1em;
+    left: 1em;
+    right: 2em;
+    height: 20em;
+    max-height: 20em;
+}
+
+@keyframes configactive {
+    0% { opacity: 0; }
+    1% { visibility: visible; opacity: 0; }
+    100% { visibility: visible; opacity: 0.8; }
+}
+
+@-webkit-keyframes configactive {
+    0% { opacity: 0; }
+    1% { visibility: visible; opacity: 0; }
+    100% { visibility: visible; opacity: 0.8; }
+}
+
+@keyframes configinactive {
+    0% { opacity: 0.8; }
+    99% { opacity: 0; }
+    100% { visibility: hidden; opacity: 0; }
+}
+
+@-webkit-keyframes configinactive {
+    0% { opacity: 0.8; }
+    99% { opacity: 0; }
+    100% { visibility: hidden; opacity: 0; }
+}
+
+#console {
+    width: 100%;
+    flex: 1;
+    max-height: inherit;
+    display: flex;
+    flex-direction: column;
+}
+
+#options {
+    color: white;
+    font: 0.8em arial, helvetica, sans-serif;
+}
+
+#console > input {
+    background-color: green;
+    color: white;
+    font: 0.8em arial, helvetica, sans-serif;
+    width: 100%;
+    min-height: 1.5em;
+    font-size: 1.5em;
+}
+
+#console > div.content {
+    color: white;
+    font: 0.8em arial, helvetica, sans-serif;
+    font-size: 1.1em;
+    width: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    line-height: 0;
+}
+
+#config.initial {
+    visibility: hidden;
+    opacity: 0;
+}
+
+#config.active {
+    animation-duration: 1s;
+    animation-name: configactive;
+    animation-fill-mode: forwards;
+    -webkit-animation-duration: 1s;
+    -webkit-animation-name: configactive;
+    -webkit-animation-fill-mode: forwards;
+}
+
+#config.inactive {
+    animation-duration: 1s;
+    animation-name: configinactive;
+    animation-fill-mode: forwards;
+    -webkit-animation-duration: 1s;
+    -webkit-animation-name: configinactive;
+    -webkit-animation-fill-mode: forwards;
+}
