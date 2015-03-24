@@ -1,7 +1,7 @@
 /*global paper, console, JSON, WebSocket, window, localStorage*/
 
 var ws, scheduler;
-var mode, mainmode, common, logmode;
+var mode, mainmode, common, logmode, config;
 var unusedColor = "purple";
 var options = Object.create(null);
 
@@ -93,6 +93,93 @@ function peerClicked()
     window.location.hash = '#detail-' + this.peerName;
 }
 
+function Config(ws)
+{
+    this._ws = ws;
+};
+
+Config.prototype = {
+    constructor: Config,
+    _ws: undefined,
+    _stack: [],
+    _stackPos: -1,
+    _handlers: {
+        help: function() {
+            console.log('help here');
+        },
+        peers: function() {
+            config._sendCommand('peers');
+        },
+        block: function(args) {
+            config._sendCommand('block', args);
+        },
+        unblock: function(args) {
+            config._sendCommand('unblock', args);
+        }
+    },
+    _sendCommand: function(cmd, args)
+    {
+        this._ws.send(JSON.stringify({ cmd: cmd, args: args }));
+    },
+    history: function(txt, dir) {
+        if (this._stack.length === 0)
+            return;
+        var pos = this._stackPos;
+        if (pos === -1)
+            pos = this._stack.length;
+        pos += dir;
+        if (pos < 0)
+            return;
+        if (pos >= this._stack.length) {
+            pos = -1;
+            txt.value = "";
+            this._stackPos = pos;
+            return;
+        }
+        this._stackPos = pos;
+        txt.value = this._stack[pos];
+    },
+    handleCommand: function(cmd) {
+        var args = cmd.split(' ');
+        var h = this._handlers[args.shift()];
+        if (typeof h === 'function') {
+            h(args);
+        }
+    },
+    toggle: function() {
+        var cfg = document.getElementById('config');
+        if (cfg.getAttribute('class') === 'active') {
+            cfg.setAttribute('class', 'inactive');
+        } else {
+            cfg.setAttribute('class', 'active');
+            window.setTimeout(function() {
+                document.querySelector('#console > input').focus();
+            }, 100);
+        }
+    },
+    log: function(txt) {
+        var p = document.createElement('p');
+        p.appendChild(document.createTextNode(txt));
+        var content = document.querySelector('#console > div.content');
+        var bottom = content.scrollTop + content.clientHeight >= content.scrollHeight;
+        content.appendChild(p);
+        if (bottom)
+            content.scrollTop = content.scrollHeight;
+    },
+    run: function(line) {
+        if (line.length > 0 && line[0] === '/') {
+            this.handleCommand(line.substr(1));
+        } else {
+            this.log(line);
+        }
+        this._stack.push(line);
+        if (this._stackPos !== -1 && this._stack[this._stackPos] === line) {
+            this._stack.splice(this._stackPos, 1);
+        }
+        this._stackPos = -1;
+    }
+};
+
 function Common(canvas)
 {
     this.canvas = canvas;
@@ -132,29 +219,6 @@ Common.prototype = {
     },
     height: function() {
         return this.canvas.height / ((window.devicePixelRatio || 1) / this._pixelRatio);
-    },
-    toggleConfig: function() {
-        var cfg = document.getElementById('config');
-        if (cfg.getAttribute('class') === 'active') {
-            cfg.setAttribute('class', 'inactive');
-        } else {
-            cfg.setAttribute('class', 'active');
-            window.setTimeout(function() {
-                document.querySelector('#console > input').focus();
-            }, 100);
-        }
-    },
-    addConsole: function(txt) {
-        var p = document.createElement('p');
-        p.appendChild(document.createTextNode(txt));
-        var content = document.querySelector('#console > div.content');
-        var bottom = content.scrollTop + content.clientHeight >= content.scrollHeight;
-        content.appendChild(p);
-        if (bottom)
-            content.scrollTop = content.scrollHeight;
-    },
-    runCommand: function(cmd) {
-        this.addConsole(cmd);
     }
 };
 
@@ -288,7 +352,7 @@ Pie.prototype = {
                 this._removeRunning(msg.peer);
             this._recalc();
         } else {
-            console.log("unhandled message", msg);
+            config.log(JSON.stringify(msg));
         }
     },
 
@@ -312,7 +376,7 @@ Pie.prototype = {
                                        fillColor: '#555',
                                        content: '\u2699'});
         var that = this;
-        cfg.onClick = function() { common.toggleConfig(); };
+        cfg.onClick = function() { config.toggle(); };
         paper.project.activeLayer.addChild(cfg);
         paper.view.draw();
     },
@@ -653,15 +717,27 @@ function peerClicked(peer)
 
 function init() {
     var txt = document.querySelector('#console > input');
-    txt.onkeydown = function(e) {
-        if (e.charCode === 0x60 || e.keyCode === 0xC0) {
+    txt.addEventListener('keydown', function(e) {
+        if (e.keyCode === 38 || e.keyCode === 40) {
             e.preventDefault();
-            common.toggleConfig();
-        } else if (e.keyCode === 13) {
-            common.runCommand(txt.value);
+            e.stopPropagation();
+            if (e.keyCode == 38) {
+                config.history(txt, -1);
+            } else {
+                config.history(txt, 1);
+            }
+        }
+    });
+    txt.addEventListener('keypress', function(e) {
+        if (e.charCode === 0x60) {
+            e.preventDefault();
+            e.stopPropagation();
+            config.toggle();
+        } else if (e.charCode === 13) {
+            config.run(txt.value);
             txt.value = "";
         }
-    };
+    });
 
     var checks = document.querySelectorAll('#options > input[type=checkbox]');
     for (var i = 0; i < checks.length; ++i) {
@@ -689,6 +765,7 @@ function init() {
     var canvas = document.getElementById('canvas');
     paper.setup(canvas);
     common = new Common(canvas);
+    config = new Config(ws);
     mode = new Pie();
     mainmode = mode;
     logmode = new LogMode();
@@ -748,7 +825,7 @@ window.addEventListener('resize', function() {
 
 window.addEventListener('keypress', function(e) {
     if (e.charCode == 0x60) { // U+0060: GRAVE ACCENT
-        common.toggleConfig();
+        config.toggle();
     }
 });
 
