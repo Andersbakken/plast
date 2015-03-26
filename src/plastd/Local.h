@@ -22,6 +22,7 @@ public:
 
 private:
     void takeRemoteJobs();
+    void handleJobAborted(Job* job);
 
 private:
     ProcessPool mPool;

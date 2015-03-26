@@ -54,6 +54,7 @@ Job::Job(const Path& path, const List<String>& args, Type type,
 
 Job::~Job()
 {
+    mAborted(this);
 }
 
 Job::SharedPtr Job::create(const Path& path, const List<String>& args, Type type,

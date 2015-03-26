@@ -40,6 +40,7 @@ public:
     Signal<std::function<void(Job*, Status)> >& statusChanged() { return mStatusChanged; }
     Signal<std::function<void(Job*)> >& readyReadStdOut() { return mReadyReadStdOut; }
     Signal<std::function<void(Job*)> >& readyReadStdErr() { return mReadyReadStdErr; }
+    Signal<std::function<void(Job*)> >& aborted() { return mAborted; }
 
     plast::CompilerType compilerType() const { return mCompilerType; }
     int compilerMajor() const { return mCompilerMajor; }
@@ -81,7 +82,7 @@ private:
 
 private:
     Signal<std::function<void(Job*, Status)> > mStatusChanged;
-    Signal<std::function<void(Job*)> > mReadyReadStdOut, mReadyReadStdErr;
+    Signal<std::function<void(Job*)> > mReadyReadStdOut, mReadyReadStdErr, mAborted;
     String mError;
     List<String> mArgs;
     std::shared_ptr<CompilerArgs> mCompilerArgs;

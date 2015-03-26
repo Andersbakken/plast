@@ -19,7 +19,7 @@ void ProcessPool::setCount(int count)
     mCount = count;
 }
 
-bool ProcessPool::runProcess(Process*& proc, const Job& job, bool except)
+bool ProcessPool::runProcess(Process*& proc, Job& job, bool except)
 {
     static Hash<Process*, Id> ids;
     if (!proc) {
@@ -39,15 +39,25 @@ bool ProcessPool::runProcess(Process*& proc, const Job& job, bool except)
                 const Id id = idit->second;
                 ids.erase(idit);
                 mFinished(id, proc);
+
+                // erase from mRunningJobs
+                {
+                    auto it = mRunningJobs.find(id);
+                    assert(it != mRunningJobs.end());
+                    mRunningJobs.erase(it);
+                }
+
                 if (except) {
                     EventLoop::eventLoop()->deleteLater(proc);
                 } else {
                     while (!mPending.isEmpty()) {
                         // take one from the back of mPending if possible
-                        if (!runProcess(proc, mPending.front(), false)) {
-                            mError(mPending.front().id);
+                        Job& job = mPending.front();
+                        if (!runProcess(proc, job, false)) {
+                            mError(job.id);
                             mPending.pop_front();
                         } else {
+                            mRunningJobs[job.id] = job;
                             mPending.pop_front();
                             return;
                         }
@@ -65,12 +75,15 @@ bool ProcessPool::runProcess(Process*& proc, const Job& job, bool except)
     }
     const bool ok = proc->start(job.command, job.arguments, job.environ);
     if (ok) {
+        job.process = proc;
         ++mRunning;
         if (!job.stdin.isEmpty()) {
             proc->write(job.stdin);
             proc->closeStdIn();
         }
         mStarted(job.id, proc);
+    } else {
+        job.process = 0;
     }
     return ok;
 }
@@ -79,7 +92,7 @@ ProcessPool::Id ProcessPool::prepare(const Path& path, const Path &command, cons
                                      const List<String> &environ, const String& stdin)
 {
     const Id id = ++mNextId;
-    Job job = { id, path, command, arguments, environ, stdin };
+    Job job = { id, path, command, arguments, environ, stdin, 0 };
     mPrepared[id] = job;
     return id;
 }
@@ -88,7 +101,7 @@ void ProcessPool::post(Id id)
 {
     Hash<Id, Job>::iterator it = mPrepared.find(id);
     assert(it != mPrepared.end());
-    const Job& job = it->second;
+    Job& job = it->second;
 
     if (!mAvail.isEmpty()) {
         Process* proc = mAvail.back();
@@ -98,6 +111,7 @@ void ProcessPool::post(Id id)
             mPrepared.erase(it);
             return;
         }
+        mRunningJobs[id] = job;
     } else if (mProcs.size() < mCount) {
         mProcs.push_back(0);
         if (!runProcess(mProcs.back(), job, false)) {
@@ -105,6 +119,7 @@ void ProcessPool::post(Id id)
             mPrepared.erase(it);
             return;
         }
+        mRunningJobs[id] = job;
     } else {
         mPending.push_back(job);
     }
@@ -115,7 +130,7 @@ void ProcessPool::run(Id id)
 {
     Hash<Id, Job>::iterator it = mPrepared.find(id);
     assert(it != mPrepared.end());
-    const Job& job = it->second;
+    Job& job = it->second;
     if (!mAvail.isEmpty()) {
         Process* proc = mAvail.back();
         mAvail.pop_back();
@@ -141,5 +156,17 @@ void ProcessPool::run(Id id)
             return;
         }
     }
+    mRunningJobs[id] = job;
     mPrepared.erase(it);
+}
+
+bool ProcessPool::kill(Id id, int sig)
+{
+    const auto it = mRunningJobs.find(id);
+    if (it == mRunningJobs.end())
+        return false;
+    if (!it->second.process)
+        return false;
+    it->second.process->kill(sig);
+    return true;
 }

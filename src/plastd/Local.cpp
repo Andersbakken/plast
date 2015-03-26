@@ -142,6 +142,8 @@ void Local::init()
 
 void Local::post(const Job::SharedPtr& job)
 {
+    job->aborted().connect(std::bind(&Local::handleJobAborted, this, std::placeholders::_1));
+
     error() << "local post";
     std::shared_ptr<CompilerArgs> args = job->compilerArgs();
     List<String> cmdline = args->commandLine;
@@ -235,6 +237,8 @@ void Local::post(const Job::SharedPtr& job)
 
 void Local::run(const Job::SharedPtr& job)
 {
+    job->aborted().connect(std::bind(&Local::handleJobAborted, this, std::placeholders::_1));
+
     assert(!job->isPreprocessed());
     warning() << "local run";
     List<String> args = job->args();
@@ -250,6 +254,20 @@ void Local::run(const Job::SharedPtr& job)
     const ProcessPool::Id id = mPool.prepare(job->path(), cmd, args);
     mJobs[id] = Data(job, false);
     mPool.run(id);
+}
+
+void Local::handleJobAborted(Job* job)
+{
+    // not very efficient
+    auto it = mJobs.begin();
+    const auto end = mJobs.cend();
+    while (it != end) {
+        if (it->second.jobid == job->id()) {
+            mPool.kill(it->first);
+            return;
+        }
+        ++it;
+    }
 }
 
 void Local::takeRemoteJobs()

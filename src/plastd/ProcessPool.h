@@ -8,6 +8,7 @@
 #include <rct/Path.h>
 #include <rct/SignalSlot.h>
 #include <cstdint>
+#include <signal.h>
 
 class Process;
 
@@ -28,6 +29,7 @@ public:
                const String& stdin = String());
     void post(Id id);
     void run(Id id);
+    bool kill(Id id, int sig = SIGTERM);
 
     Signal<std::function<void(Id, Process*)> >& started() { return mStarted; }
     Signal<std::function<void(Id, Process*)> >& readyReadStdOut() { return mReadyReadStdOut; }
@@ -48,9 +50,10 @@ private:
         Path path, command;
         List<String> arguments, environ;
         String stdin;
+        Process* process;
     };
 
-    bool runProcess(Process*& proc, const Job& job, bool except);
+    bool runProcess(Process*& proc, Job& job, bool except);
 
 private:
     int mCount;
@@ -62,7 +65,7 @@ private:
     Signal<std::function<void(ProcessPool*)> > mIdle;
 
     LinkedList<Job> mPending;
-    Hash<Id, Job> mPrepared;
+    Hash<Id, Job> mPrepared, mRunningJobs;
 };
 
 #endif

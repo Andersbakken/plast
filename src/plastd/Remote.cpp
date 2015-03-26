@@ -1,6 +1,7 @@
 #include "Remote.h"
 #include "Daemon.h"
 #include "CompilerVersion.h"
+#include <rct/EventLoop.h>
 #include <rct/Log.h>
 #include <unistd.h>
 
@@ -602,6 +603,17 @@ std::shared_ptr<Connection> Remote::addClient(const SocketClient::SharedPtr& cli
     return conn;
 }
 
+void Remote::handleJobAborted(Job* job)
+{
+    error() << "job dead" << job->id();
+    removeJob(job->id());
+    if (job->isPreprocessed()) {
+        assert(mCurPreprocessed > 0);
+        --mCurPreprocessed;
+        EventLoop::eventLoop()->callLater(std::bind(&Remote::preprocessMore, this));
+    }
+}
+
 void Remote::compilingLocally(const Job::SharedPtr& job)
 {
     assert(job->isPreprocessed());
@@ -614,6 +626,8 @@ void Remote::compilingLocally(const Job::SharedPtr& job)
 void Remote::post(const Job::SharedPtr& job)
 {
     error() << "remote post";
+    job->aborted().connect(std::bind(&Remote::handleJobAborted, this, std::placeholders::_1));
+
     // queue for preprocess if not already done
     const plast::CompilerKey k = { job->compilerType(), job->compilerMajor(), job->compilerTarget() };
     if (!job->isPreprocessed()) {
