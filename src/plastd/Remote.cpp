@@ -163,7 +163,7 @@ void Remote::handleJobMessage(const JobMessage::SharedPtr& msg, const std::share
                                      msg->id(), msg->preprocessed(), msg->serial(),
                                      msg->compilerType(), msg->compilerMajor(), msg->compilerTarget());
     std::weak_ptr<Connection> weakConn = conn;
-    job->statusChanged().connect([weakConn](Job* job, Job::Status status) {
+    job->statusChanged().connect([weakConn](Job* job, Job::Status status, Job::Status /*oldStatus*/) {
             const std::shared_ptr<Connection> conn = weakConn.lock();
             if (!conn) {
                 error() << "no connection" << __FILE__ << __LINE__;
@@ -171,6 +171,7 @@ void Remote::handleJobMessage(const JobMessage::SharedPtr& msg, const std::share
             }
             assert(job->type() == Job::RemoteJob);
             error() << "remote job status changed" << job << "local" << job->id() << "serial" << job->serial() << "remote" << job->remoteId() << status;
+#warning should tell remote side to abort the job if status == Aborted
             switch (status) {
             case Job::Compiled:
                 conn->send(JobResponseMessage(JobResponseMessage::Compiled, job->remoteId(),
@@ -420,13 +421,23 @@ void Remote::preprocessMore()
         const Job::SharedPtr job = pre.job.lock();
         if (job) {
             const plast::CompilerKey k = pre.key;
-            job->statusChanged().connect([this, k](Job* job, Job::Status status) {
-                    if (status == Job::Preprocessed) {
+            job->statusChanged().connect([this, k](Job* job, Job::Status status, Job::Status oldStatus) {
+                    switch (status) {
+                    case Job::Aborted:
+                        if (oldStatus == Job::Preprocessed || oldStatus == Job::Preprocessing) {
+                            --mCurPreprocessed;
+                            preprocessMore();
+                        }
+                        break;
+                    case Job::Preprocessed:
                         error() << "preproc size" << job->preprocessed().size();
                         mPendingBuild[k].push_back(job->shared_from_this());
                         // send a HasJobsMessage to the scheduler
                         mConnection->send(HasJobsMessage(k.type, k.major, k.target, mPendingBuild[k].size(),
                                                          Daemon::instance()->options().localPort));
+                        break;
+                    default:
+                        break;
                     }
                 });
             ++mCurPreprocessed;
@@ -603,7 +614,7 @@ std::shared_ptr<Connection> Remote::addClient(const SocketClient::SharedPtr& cli
     return conn;
 }
 
-void Remote::handleJobAborted(Job* job)
+void Remote::handleJobDestroyed(Job* job)
 {
     error() << "job dead" << job->id();
     removeJob(job->id());
@@ -626,26 +637,13 @@ void Remote::compilingLocally(const Job::SharedPtr& job)
 void Remote::post(const Job::SharedPtr& job)
 {
     error() << "remote post";
-    job->aborted().connect(std::bind(&Remote::handleJobAborted, this, std::placeholders::_1));
+    job->destroyed().connect(std::bind(&Remote::handleJobDestroyed, this, std::placeholders::_1));
 
     // queue for preprocess if not already done
     const plast::CompilerKey k = { job->compilerType(), job->compilerMajor(), job->compilerTarget() };
     if (!job->isPreprocessed()) {
-        if (mCurPreprocessed >= mMaxPreprocessPending) {
-            mPendingPreprocess.push_back({ k, job });
-            return;
-        }
-        job->statusChanged().connect([this, k](Job* job, Job::Status status) {
-                if (status == Job::Preprocessed) {
-                    error() << "preproc size" << job->preprocessed().size();
-                    mPendingBuild[k].push_back(job->shared_from_this());
-                    // send a HasJobsMessage to the scheduler
-                    mConnection->send(HasJobsMessage(k.type, k.major, k.target, mPendingBuild[k].size(),
-                                                    Daemon::instance()->options().localPort));
-                }
-            });
-        ++mCurPreprocessed;
-        mPreprocessor.preprocess(job);
+        mPendingPreprocess.push_back({ k, job });
+        preprocessMore();
     } else {
         mPendingBuild[k].push_back(job);
         // send a HasJobsMessage to the scheduler

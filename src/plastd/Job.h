@@ -35,12 +35,12 @@ public:
     void start();
     void abort();
 
-    enum Status { Idle, Preprocessing, Preprocessed, RemotePending, RemoteReceiving, Compiling, Compiled, Error };
+    enum Status { Idle, Preprocessing, Preprocessed, RemotePending, RemoteReceiving, Compiling, Compiled, Error, Aborted };
     static const char *statusName(Status status);
-    Signal<std::function<void(Job*, Status)> >& statusChanged() { return mStatusChanged; }
+    Signal<std::function<void(Job*, Status, Status)> >& statusChanged() { return mStatusChanged; }
     Signal<std::function<void(Job*)> >& readyReadStdOut() { return mReadyReadStdOut; }
     Signal<std::function<void(Job*)> >& readyReadStdErr() { return mReadyReadStdErr; }
-    Signal<std::function<void(Job*)> >& aborted() { return mAborted; }
+    Signal<std::function<void(Job*)> >& destroyed() { return mDestroyed; }
 
     plast::CompilerType compilerType() const { return mCompilerType; }
     int compilerMajor() const { return mCompilerMajor; }
@@ -81,8 +81,8 @@ private:
     static void finish(Job* job);
 
 private:
-    Signal<std::function<void(Job*, Status)> > mStatusChanged;
-    Signal<std::function<void(Job*)> > mReadyReadStdOut, mReadyReadStdErr, mAborted;
+    Signal<std::function<void(Job*, Status, Status)> > mStatusChanged;
+    Signal<std::function<void(Job*)> > mReadyReadStdOut, mReadyReadStdErr, mDestroyed;
     String mError;
     List<String> mArgs;
     std::shared_ptr<CompilerArgs> mCompilerArgs;
@@ -109,8 +109,12 @@ private:
 
 inline void Job::updateStatus(Status status)
 {
-    mStatus = status;
-    mStatusChanged(this, status);
+    assert(status != mStatus);
+    if (mStatus != Aborted) {
+        const Status old = mStatus;
+        mStatus = status;
+        mStatusChanged(this, status, old);
+    }
 }
 
 inline Log operator<<(Log log, Job::Status status)

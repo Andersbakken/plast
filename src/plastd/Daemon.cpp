@@ -128,7 +128,7 @@ void Daemon::handleJobMessage(const JobMessage::SharedPtr& msg, const std::share
             if (Job::SharedPtr job = weak.lock())
                 job->abort();
         });
-    job->statusChanged().connect([weakConn](Job* job, Job::Status status) {
+    job->statusChanged().connect([weakConn](Job* job, Job::Status status, Job::Status) {
             const std::shared_ptr<Connection> conn = weakConn.lock();
             if (!conn) {
                 error() << "no connection" << __FILE__ << __LINE__;

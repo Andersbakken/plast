@@ -142,7 +142,7 @@ void Local::init()
 
 void Local::post(const Job::SharedPtr& job)
 {
-    job->aborted().connect(std::bind(&Local::handleJobAborted, this, std::placeholders::_1));
+    job->destroyed().connect(std::bind(&Local::handleJobDestroyed, this, std::placeholders::_1));
 
     error() << "local post";
     std::shared_ptr<CompilerArgs> args = job->compilerArgs();
@@ -237,7 +237,7 @@ void Local::post(const Job::SharedPtr& job)
 
 void Local::run(const Job::SharedPtr& job)
 {
-    job->aborted().connect(std::bind(&Local::handleJobAborted, this, std::placeholders::_1));
+    job->destroyed().connect(std::bind(&Local::handleJobDestroyed, this, std::placeholders::_1));
 
     assert(!job->isPreprocessed());
     warning() << "local run";
@@ -256,7 +256,7 @@ void Local::run(const Job::SharedPtr& job)
     mPool.run(id);
 }
 
-void Local::handleJobAborted(Job* job)
+void Local::handleJobDestroyed(Job* job)
 {
     // not very efficient
     auto it = mJobs.begin();

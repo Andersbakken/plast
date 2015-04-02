@@ -22,7 +22,7 @@ public:
 
 private:
     void takeRemoteJobs();
-    void handleJobAborted(Job* job);
+    void handleJobDestroyed(Job* job);
 
 private:
     ProcessPool mPool;
@@ -34,9 +34,9 @@ private:
         {
         }
 
-        String filename, remoteName;
         Job::WeakPtr job;
         uint64_t jobid;
+        String filename, remoteName;
         bool posted;
     };
     Hash<ProcessPool::Id, Data> mJobs;

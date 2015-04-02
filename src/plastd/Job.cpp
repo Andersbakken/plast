@@ -54,7 +54,7 @@ Job::Job(const Path& path, const List<String>& args, Type type,
 
 Job::~Job()
 {
-    mAborted(this);
+    mDestroyed(this);
 }
 
 Job::SharedPtr Job::create(const Path& path, const List<String>& args, Type type,
@@ -145,12 +145,13 @@ const char* Job::statusName(Status status)
     case Compiling: return "compiling";
     case Compiled: return "compiled";
     case Error: return "error";
+    case Aborted: return "aborted";
     }
     return "";
 }
 
 void Job::abort()
 {
-#warning implement me
+    updateStatus(Aborted);
     Job::finish(this);
 }

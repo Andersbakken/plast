@@ -41,7 +41,7 @@ private:
     void handleHandshakeMessage(const HandshakeMessage::SharedPtr& msg, const std::shared_ptr<Connection>& conn);
     void handleJobResponseMessage(const JobResponseMessage::SharedPtr& msg, const std::shared_ptr<Connection>& conn);
     void handleLastJobMessage(const LastJobMessage::SharedPtr& msg, const std::shared_ptr<Connection>& conn);
-    void handleJobAborted(Job* job);
+    void handleJobDestroyed(Job* job);
     void removeJob(uint64_t id);
     void preprocessMore();
 
