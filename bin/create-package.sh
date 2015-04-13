@@ -6,10 +6,12 @@ function usage ()
     echo "  --help|-h"
     echo "  --repo=...|-r=..."
     echo "  --no-build|-n"
+    echo "  --no-push|-p"
     echo "  --build-flags|-b"
     echo "  --message=...|-m=..."
 }
 BUILD=1
+PUSH=1
 REPO=
 BUILD_FLAGS="$MAKEFLAGS"
 MESSAGE=
@@ -20,6 +22,9 @@ while [ -n "$1" ]; do
             ;;
         --no-build|-n)
             BUILD=0
+            ;;
+        --no-push|-p)
+            PUSH=0
             ;;
         --help|-h)
             usage
@@ -86,4 +91,6 @@ sed -i -e "s,Version: $CURRENTVERSION,Version: $VERSION," ./plast/DEBIAN/control
 git add .
 [ -z "$MESSAGE" ] && MESSAGE="Bumped plast to version: $VERSION"
 git commit -m "$MESSAGE"
-git push origin
+if [ "$PUSH" = "1" ]; then
+    git push origin
+fi
