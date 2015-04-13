@@ -76,7 +76,7 @@ cp -r "$GITROOT/bin/plastc" "$GITROOT/bin/plastd" "$GITROOT/bin/plast_prefix.sh"
 cp -r "$GITROOT/bin/plasts" "$SERVER_PREFIX/bin"
 
 find "$GITROOT/bin/stats/" -type f \( -name "*.css" -or -name "*.js" -or -name "*.html" \) | while read i; do
-    target=`echo $i | sed -e "s,^$GITROOT/bin/,$SERVER_PREFIX/bin,"`
+    target=`echo $i | sed -e "s,^$GITROOT/bin/,$SERVER_PREFIX/bin/,"`
     mkdir -p "`dirname \"$target\"`"
     cp "$i" "$target"
 done
