@@ -67,16 +67,16 @@ dir=`mktemp -d -t plast-XXXXX`
 echo "cd $dir"
 cd "$dir"
 git clone "$REPO" .
-PREFIX="$PWD/plast32/usr"
-SERVER_PREFIX="$PWD/plast-server32/usr"
+PREFIX="$PWD/plast32/usr/bin"
+SERVER_PREFIX="$PWD/plast-server32/usr/bin"
 git rm -rf "$PREFIX" "$SERVER_PREFIX" 2>/dev/null
 mkdir -p "$PREFIX"
 mkdir -p "$SERVER_PREFIX"
 cp -r "$GITROOT/bin/plastc" "$GITROOT/bin/plastd" "$GITROOT/bin/plast_prefix.sh" "$PREFIX"
-cp -r "$GITROOT/bin/plasts" "$SERVER_PREFIX/bin"
+cp -r "$GITROOT/bin/plasts" "$SERVER_PREFIX"
 
 find "$GITROOT/bin/stats/" -type f \( -name "*.css" -or -name "*.js" -or -name "*.html" \) | while read i; do
-    target=`echo $i | sed -e "s,^$GITROOT/bin/,$SERVER_PREFIX/bin/,"`
+    target=`echo $i | sed -e "s,^$GITROOT/bin/,$SERVER_PREFIX,"`
     mkdir -p "`dirname \"$target\"`"
     cp "$i" "$target"
 done
