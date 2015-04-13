@@ -64,15 +64,25 @@ if [ "$BUILD" = "1" ]; then
 fi
 
 dir=`mktemp -d -t plast-XXXXX`
+echo "cd $dir"
 cd "$dir"
 git clone "$REPO" .
-PREFIX="$PWD/plast32/usr/local/plast/"
-git rm -rf "$PREFIX" 2>/dev/null
+PREFIX="$PWD/plast32/usr"
+SERVER_PREFIX="$PWD/plast-server32/usr"
+git rm -rf "$PREFIX" "$SERVER_PREFIX" 2>/dev/null
 mkdir -p "$PREFIX"
-cp -r "$GITROOT/bin/plastc" "$GITROOT/bin/plastd" "$GITROOT/bin/plasts" "$GITROOT/bin/plast_prefix.sh" "$GITROOT/src/plastsh/plastsh.js" "$GITROOT/src/plastsh/package.json" "$GITROOT/src/plasts/stats" "$PREFIX"
+mkdir -p "$SERVER_PREFIX"
+cp -r "$GITROOT/bin/plastc" "$GITROOT/bin/plastd" "$GITROOT/bin/plast_prefix.sh" "$PREFIX"
+cp -r "$GITROOT/bin/plasts" "$SERVER_PREFIX/bin"
+
+find "$GITROOT/bin/stats/" -type f \( -name "*.css" -or -name "*.js" -or -name "*.html" \) | while read i; do
+    target=`echo $i | sed -e "s,^$GITROOT/bin/,$SERVER_PREFIX/bin,"`
+    mkdir -p "`dirname \"$target\"`"
+    cp "$i" "$target"
+done
 CURRENTVERSION=`grep ^Version: ./plast/DEBIAN/control | sed -e 's,Version: ,,'`
 VERSION=`expr $CURRENTVERSION + 1`
-sed -i -e "s,Version: $CURRENTVERSION,Version: $VERSION," ./plast/DEBIAN/control ./plast32/DEBIAN/control
+sed -i -e "s,Version: $CURRENTVERSION,Version: $VERSION," ./plast/DEBIAN/control ./plast32/DEBIAN/control ./plast-server/DEBIAN/control ./plast-server32/DEBIAN/control
 git add .
 [ -z "$MESSAGE" ] && MESSAGE="Bumped plast to version: $VERSION"
 git commit -m "$MESSAGE"
