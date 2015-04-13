@@ -29,14 +29,20 @@ int main(int argc, char** argv)
     Rct::findExecutablePath(*argv);
 
     Config::registerOption<bool>("help", "Display this page", 'h');
+    Config::registerOption<bool>("syslog", "Log to syslog", 'S');
     Config::registerOption<int>("port", String::format<129>("Use this port, (default %d)", plast::DefaultServerPort),'p', plast::DefaultServerPort,
                                 [](const int &count, String &err) { return validate<uint16_t>(count, "port", err); });
 
+    if (!Config::parse(argc, argv, List<Path>() << (Path::home() + ".config/plasts.conf") << "/etc/plasts.conf")) {
+        return 1;
+    }
+
+    const int logMode = Config::isEnabled("syslog") ? LogSyslog : LogStderr;
     const char *logFile = 0;
     int logLevel = 0;
     unsigned int logFlags = 0;
     Path logPath;
-    if (!initLogging(argv[0], LogStderr, logLevel, logPath.constData(), logFlags)) {
+    if (!initLogging(argv[0], logMode, logLevel, logPath.constData(), logFlags)) {
         fprintf(stderr, "Can't initialize logging with %d %s 0x%0x\n",
                 logLevel, logFile ? logFile : "", logFlags);
         return 1;
@@ -44,9 +50,6 @@ int main(int argc, char** argv)
 
     ensurePath(Path::home() + ".config");
 
-    if (!Config::parse(argc, argv, List<Path>() << (Path::home() + ".config/plasts.conf") << "/etc/plasts.conf")) {
-        return 1;
-    }
     if (Config::isEnabled("help")) {
         Config::showHelp(stdout);
         return 2;
