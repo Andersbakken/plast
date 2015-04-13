@@ -29,7 +29,7 @@ int main(int argc, char** argv)
     Rct::findExecutablePath(*argv);
 
     Config::registerOption<bool>("help", "Display this page", 'h');
-    Config::registerOption<bool>("syslog", "Log to syslog", 'S');
+    Config::registerOption<bool>("syslog", "Log to syslog", 'y');
     Config::registerOption<int>("port", String::format<129>("Use this port, (default %d)", plast::DefaultServerPort),'p', plast::DefaultServerPort,
                                 [](const int &count, String &err) { return validate<uint16_t>(count, "port", err); });
 

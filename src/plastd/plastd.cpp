@@ -44,6 +44,7 @@ int main(int argc, char** argv)
     const String socketPath = plast::defaultSocketFile();
 
     Config::registerOption<bool>("help", "Display this page", 'h');
+    Config::registerOption<bool>("syslog", "Log to syslog", 'y');
     Config::registerOption<bool>("no-sighandler", "Don't use a signal handler", 'S');
     Config::registerOption<int>("job-count", String::format<128>("Job count (defaults to %d)", idealThreadCount), 'j', idealThreadCount,
                                 [](const int &count, String &err) { return validate<int>(count, "job-count", err); });
@@ -77,11 +78,12 @@ int main(int argc, char** argv)
         return 2;
     }
 
+    const int logMode = Config::isEnabled("syslog") ? LogSyslog : LogStderr;
     const char *logFile = 0;
     int logLevel = 0;
     unsigned int logFlags = 0;
     Path logPath;
-    if (!initLogging(argv[0], LogStderr, logLevel, logPath.constData(), logFlags)) {
+    if (!initLogging(argv[0], logMode, logLevel, logPath.constData(), logFlags)) {
         fprintf(stderr, "Can't initialize logging with %d %s 0x%0x\n",
                 logLevel, logFile ? logFile : "", logFlags);
         return 1;
