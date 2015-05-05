@@ -107,6 +107,7 @@ void Local::init()
         });
     mPool.error().connect([this](ProcessPool::Id id) {
             error() << "pool error for" << id;
+            assert(mJobs.contains(id));
             const Data data = mJobs[id];
             const bool localForRemote = !data.filename.isEmpty();
             if (localForRemote) {
