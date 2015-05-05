@@ -31,6 +31,7 @@ Daemon::Daemon(const Options& opts)
                 case plast::GCC: {
                     // does this gcc support both 64 and 32?
                     const Set<String>& multis = ver->multiLibs();
+                    error() << "Multis" << multis;
                     if (multis.contains("m32") && multis.contains("m64")) {
                         // assume we support i686-linux-gnu
                         ver = CompilerVersion::version(r, CompilerArgs::HasDashM32, "i686-linux-gnu");
@@ -46,6 +47,7 @@ Daemon::Daemon(const Options& opts)
                 if (ver->compiler() == plast::GCC) {
                     // does this gcc support both 64 and 32?
                     const Set<String>& multis = ver->multiLibs();
+                    error() << "Multis 2" << multis;
                     if (multis.contains("m32") && multis.contains("m64")) {
                         // assume we support x86_64-linux-gnu
                         ver = CompilerVersion::version(r, CompilerArgs::HasDashM64, "x86_64-linux-gnu");
