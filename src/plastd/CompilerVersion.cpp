@@ -85,7 +85,7 @@ CompilerVersion::SharedPtr CompilerVersion::version(const Path& path, uint32_t f
     return it->second;
 }
 
-CompilerVersion::SharedPtr CompilerVersion::version(plast::CompilerType compiler, int major, const String& target)
+CompilerVersion::SharedPtr CompilerVersion::version(plast::CompilerType compiler, int32_t major, const String& target)
 {
     const auto v = sVersionsByKey.find({ compiler, major, target });
     if (v == sVersionsByKey.end())

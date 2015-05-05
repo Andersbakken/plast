@@ -19,14 +19,14 @@ public:
     typedef std::weak_ptr<CompilerVersion> WeakPtr;
 
     static SharedPtr version(const Path& path, uint32_t flags = 0, const String& target = String());
-    static SharedPtr version(plast::CompilerType compiler, int major, const String& target);
-    static bool hasCompiler(plast::CompilerType compiler, int major, const String& target);
+    static SharedPtr version(plast::CompilerType compiler, int32_t major, const String& target);
+    static bool hasCompiler(plast::CompilerType compiler, int32_t major, const String& target);
 
     plast::CompilerType compiler() const { return mCompiler; }
 
-    int major() const { return mVersion.major; }
-    int minor() const { return mVersion.minor; }
-    int patch() const { return mVersion.patch; }
+    int32_t major() const { return mVersion.major; }
+    int32_t minor() const { return mVersion.minor; }
+    int32_t patch() const { return mVersion.patch; }
     String versionString() const { return mVersion.str; }
 
     String target() const { return mKey.target; }
@@ -41,9 +41,9 @@ public:
 private:
     plast::CompilerType mCompiler;
     struct {
-        int major;
-        int minor;
-        int patch;
+        int32_t major;
+        int32_t minor;
+        int32_t patch;
         String str;
     } mVersion;
     Set<String> mMultiLibs;
@@ -77,7 +77,7 @@ private:
     CompilerVersion& operator=(const CompilerVersion&) = delete;
 };
 
-inline bool CompilerVersion::hasCompiler(plast::CompilerType compiler, int major, const String& target)
+inline bool CompilerVersion::hasCompiler(plast::CompilerType compiler, int32_t major, const String& target)
 {
     return (version(compiler, major, target).get() != 0);
 }

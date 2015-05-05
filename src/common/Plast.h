@@ -14,7 +14,7 @@ enum CompilerType {
 struct CompilerKey
 {
     CompilerType type;
-    int major;
+    int32_t major;
     String target;
 
     bool operator<(const CompilerKey& other) const

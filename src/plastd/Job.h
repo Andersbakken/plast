@@ -29,7 +29,7 @@ public:
                             const String& preprocessed = String(),
                             uint32_t serial = 0,
                             plast::CompilerType ctype = plast::Unknown,
-                            int cmajor = -1, const String& ctarget = String());
+                            int32_t cmajor = 0, const String& ctarget = String());
     static SharedPtr job(uint64_t j);
 
     void start();
@@ -43,7 +43,7 @@ public:
     Signal<std::function<void(Job*)> >& destroyed() { return mDestroyed; }
 
     plast::CompilerType compilerType() const { return mCompilerType; }
-    int compilerMajor() const { return mCompilerMajor; }
+    int32_t compilerMajor() const { return mCompilerMajor; }
     String compilerTarget() const { return mCompilerTarget; }
 
     Status status() const { return mStatus; }
@@ -73,7 +73,7 @@ public:
 private:
     Job(const Path& path, const List<String>& args, Type type, uint64_t remoteId,
         const String& preprocessed, uint32_t serial, const String& remoteName,
-        plast::CompilerType ctype, int cmajor, const String& ctarget);
+        plast::CompilerType ctype, int32_t cmajor, const String& ctarget);
 
     void writeFile(const String& data);
     void updateStatus(Status status);
@@ -96,7 +96,7 @@ private:
     uint64_t mId;
     String mRemoteName;
     plast::CompilerType mCompilerType;
-    int mCompilerMajor;
+    int32_t mCompilerMajor;
     String mCompilerTarget;
 
     static Hash<uint64_t, SharedPtr> sJobs;

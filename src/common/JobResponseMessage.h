@@ -37,17 +37,17 @@ private:
 
 inline int JobResponseMessage::encodedSize() const
 {
-    return sizeof(int) + sizeof(mId) + sizeof(mSerial) + sizeof(int) + mData.size();
+    return sizeof(int32_t) + sizeof(mId) + sizeof(mSerial) + sizeof(uint32_t) + mData.size();
 }
 
 inline void JobResponseMessage::encode(Serializer& serializer) const
 {
-    serializer << static_cast<int>(mMode) << mId << mSerial << mData;
+    serializer << static_cast<uint32_t>(mMode) << mId << mSerial << mData;
 }
 
 inline void JobResponseMessage::decode(Deserializer& deserializer)
 {
-    int mode;
+    uint32_t mode;
     deserializer >> mode >> mId >> mSerial >> mData;
     mMode = static_cast<Mode>(mode);
 }

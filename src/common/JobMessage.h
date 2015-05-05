@@ -51,7 +51,7 @@ private:
     uint32_t mSerial;
     String mRemoteName;
     plast::CompilerType mCompilerType;
-    int mCompilerMajor;
+    int32_t mCompilerMajor;
     String mCompilerTarget;
 };
 
@@ -59,11 +59,11 @@ inline int JobMessage::encodedSize() const
 {
     int size = 0;
     auto addString = [&size](const String &str) {
-        size += sizeof(int) + str.size();
+        size += sizeof(uint32_t) + str.size();
     };
 
     addString(mPath);
-    size += sizeof(int);
+    size += sizeof(uint32_t);
     for (const auto &arg : mArgs) {
         addString(arg);
     }
@@ -71,19 +71,19 @@ inline int JobMessage::encodedSize() const
     addString(mPreprocessed);
     size += sizeof(mSerial);
     addString(mRemoteName);
-    size += sizeof(int) + sizeof(mCompilerMajor);
+    size += sizeof(int32_t) + sizeof(mCompilerMajor);
     addString(mCompilerTarget);
     return size;
 }
 
 inline void JobMessage::encode(Serializer& serializer) const
 {
-    serializer << mPath << mArgs << mId << mPreprocessed << mSerial << mRemoteName << static_cast<int>(mCompilerType) << mCompilerMajor << mCompilerTarget;
+    serializer << mPath << mArgs << mId << mPreprocessed << mSerial << mRemoteName << static_cast<int32_t>(mCompilerType) << mCompilerMajor << mCompilerTarget;
 }
 
 inline void JobMessage::decode(Deserializer& deserializer)
 {
-    int ctype;
+    int32_t ctype;
     deserializer >> mPath >> mArgs >> mId >> mPreprocessed >> mSerial >> mRemoteName >> ctype >> mCompilerMajor >> mCompilerTarget;
     mCompilerType = static_cast<plast::CompilerType>(ctype);
 }

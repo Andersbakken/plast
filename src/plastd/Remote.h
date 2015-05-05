@@ -49,7 +49,7 @@ private:
     {
         std::weak_ptr<Connection> conn;
         plast::CompilerType type;
-        int major;
+        int32_t major;
         String target;
 
         bool operator<(const ConnectionKey& other) const
