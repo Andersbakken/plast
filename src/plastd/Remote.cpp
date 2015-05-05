@@ -222,7 +222,6 @@ void Remote::handleRequestJobsMessage(const RequestJobsMessage::SharedPtr& msg, 
     assert(!pending.isEmpty());
 
     int rem = msg->count();
-    bool sent = false, empty = false;
     for (;;) {
         Job::SharedPtr job = pending.front().lock();
         pending.removeFirst();
