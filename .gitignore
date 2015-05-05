@@ -44,3 +44,4 @@ scheduler/scheduler
 wslay-prefix
 /src/include/
 /src/plastsh/node_modules/
+/src/wslay-install/
