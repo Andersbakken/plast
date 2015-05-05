@@ -21,7 +21,6 @@ void Local::init()
 {
     mPool.setCount(Daemon::instance()->options().jobCount);
     mPool.readyReadStdOut().connect([this](ProcessPool::Id id, Process* proc) {
-            mJobs.remove(id);
             const Data& data = mJobs[id];
             Job::SharedPtr job = data.job.lock();
             if (!job)
