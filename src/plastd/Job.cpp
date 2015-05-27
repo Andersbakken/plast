@@ -29,14 +29,12 @@ Job::Job(const Path& path, const List<String>& args, Type type,
             }
         } else {
 #warning handle me
-            abort();
             return;
         }
     } else {
         CompilerVersion::SharedPtr version = CompilerVersion::version(ctype, cmajor, ctarget);
         if (!version) {
 #warning handle me
-            abort();
             return;
         }
         mResolvedCompiler = version->path();
