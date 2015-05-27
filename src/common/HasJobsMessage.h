@@ -40,11 +40,11 @@ private:
 
 inline void HasJobsMessage::encode(Serializer& serializer) const
 {
-    String foobar;
-    Serializer s(foobar);
-    s << static_cast<int32_t>(mCompilerType) << mCompilerMajor << mCompilerTarget << mCount << mPeer << mPort;
-    error() << static_cast<int32_t>(mCompilerType) << mCompilerMajor << mCompilerTarget << mCount << mPeer << mPort << "\n"
-            << String::toHex(foobar);
+    // String foobar;
+    // Serializer s(foobar);
+    // s << static_cast<int32_t>(mCompilerType) << mCompilerMajor << mCompilerTarget << mCount << mPeer << mPort;
+    // error() << static_cast<int32_t>(mCompilerType) << mCompilerMajor << mCompilerTarget << mCount << mPeer << mPort << "\n"
+    //         << String::toHex(foobar);
     serializer << static_cast<int32_t>(mCompilerType) << mCompilerMajor << mCompilerTarget << mCount << mPeer << mPort;
 }
 
@@ -52,7 +52,7 @@ inline void HasJobsMessage::decode(Deserializer& deserializer)
 {
     int32_t ctype;
     deserializer >> ctype >> mCompilerMajor >> mCompilerTarget >> mCount >> mPeer >> mPort;
-    error() << "Decoding 32" << ctype << mCompilerMajor << mCompilerTarget << mCount << mPeer << mPort;
+    // error() << "Decoding 32" << ctype << mCompilerMajor << mCompilerTarget << mCount << mPeer << mPort;
     mCompilerType = static_cast<plast::CompilerType>(ctype);
 }
 
