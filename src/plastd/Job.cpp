@@ -152,6 +152,8 @@ const char* Job::statusName(Status status)
 
 void Job::abort()
 {
-    updateStatus(Aborted);
-    Job::finish(this);
+    if (mStatus != Aborted) {
+        updateStatus(Aborted);
+        Job::finish(this);
+    }
 }
