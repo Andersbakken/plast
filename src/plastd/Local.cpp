@@ -60,8 +60,6 @@ void Local::init()
             Job::SharedPtr job = data.job.lock();
             const bool localForRemote = !fn.isEmpty();
 
-            mJobs.erase(id);
-
             if (data.posted) {
                 std::shared_ptr<Connection> scheduler = Daemon::instance()->remote().scheduler();
                 scheduler->send(BuildingMessage(data.remoteName, BuildingMessage::Stop, data.jobid));
