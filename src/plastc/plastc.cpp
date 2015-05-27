@@ -7,11 +7,11 @@ int main(int argc, char** argv)
 {
     const char *logFile = 0;
     int logLevel = 0;
-    unsigned int logFlags = 0;
+    Flags<LogFileFlag> logFlags;
     Path logPath;
     if (!initLogging(argv[0], LogStderr, logLevel, logPath.constData(), logFlags)) {
-        fprintf(stderr, "Can't initialize logging with %d %s 0x%0x\n",
-                logLevel, logFile ? logFile : "", logFlags);
+        fprintf(stderr, "Can't initialize logging with %d %s %s\n",
+                logLevel, logFile ? logFile : "", logFlags.toString().constData());
         return 1;
     }
 
