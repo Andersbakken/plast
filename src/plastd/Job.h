@@ -35,7 +35,18 @@ public:
     void start();
     void abort();
 
-    enum Status { Idle, Preprocessing, Preprocessed, RemotePending, RemoteReceiving, Compiling, Compiled, Error, Aborted };
+    enum Status {
+        Idle,
+        StartingPreprocessing,
+        Preprocessing,
+        Preprocessed,
+        RemotePending,
+        RemoteReceiving,
+        Compiling,
+        Compiled,
+        Error,
+        Aborted
+    };
     static const char *statusName(Status status);
     Signal<std::function<void(Job*, Status, Status)> >& statusChanged() { return mStatusChanged; }
     Signal<std::function<void(Job*)> >& readyReadStdOut() { return mReadyReadStdOut; }

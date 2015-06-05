@@ -16,7 +16,7 @@ public:
     ~Preprocessor();
 
     void setCount(int count) { mPool.setCount(count); }
-    void preprocess(const Job::SharedPtr& job);
+    bool preprocess(const Job::SharedPtr& job);
 
 private:
     ProcessPool mPool;

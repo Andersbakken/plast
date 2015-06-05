@@ -78,7 +78,7 @@ Preprocessor::~Preprocessor()
 {
 }
 
-void Preprocessor::preprocess(const Job::SharedPtr& job)
+bool Preprocessor::preprocess(const Job::SharedPtr& job)
 {
     Data data(job);
     data.filename = "/tmp/plastXXXXXXpre";
@@ -87,7 +87,7 @@ void Preprocessor::preprocess(const Job::SharedPtr& job)
         // badness happened
         job->mError = "Unable to mkstemps preprocess file";
         job->updateStatus(Job::Error);
-        return;
+        return false;
     }
     close(fd);
 
@@ -106,4 +106,5 @@ void Preprocessor::preprocess(const Job::SharedPtr& job)
     const ProcessPool::Id id = mPool.prepare(job->path(), compiler, cmdline);
     mJobs[id] = data;
     mPool.post(id);
+    return true;
 }

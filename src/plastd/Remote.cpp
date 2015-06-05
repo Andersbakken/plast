@@ -326,13 +326,13 @@ void Remote::handleJobResponseMessage(const JobResponseMessage::SharedPtr& msg, 
         --mCurPreprocessed;
         job->clearPreprocessed();
         preprocessMore();
-        // fall through
+        break;
     case Job::RemoteReceiving:
         // accept the above statuses
         break;
     default:
         error() << "job no longer remote compiling";
-        removeJob(job->id());
+        assert(!mBuildingById.contains(job->id()));
         return;
     }
     switch (msg->mode()) {
@@ -423,8 +423,9 @@ void Remote::preprocessMore()
             job->statusChanged().connect([this, k](Job* job, Job::Status status, Job::Status oldStatus) {
                     switch (status) {
                     case Job::Aborted:
-                        if (oldStatus == Job::Preprocessed || oldStatus == Job::Preprocessing) {
+                        if (oldStatus == Job::Preprocessed || oldStatus == Job::Preprocessing || oldStatus == Job::StartingPreprocessing) {
                             --mCurPreprocessed;
+                            job->clearPreprocessed();
                             preprocessMore();
                         }
                         break;
@@ -439,6 +440,7 @@ void Remote::preprocessMore()
                         break;
                     }
                 });
+            job->updateStatus(Job::StartingPreprocessing);
             ++mCurPreprocessed;
             mPreprocessor.preprocess(job);
         }
@@ -483,6 +485,7 @@ Job::SharedPtr Remote::take()
         if (p->second.isEmpty())
             mPendingBuild.erase(p);
         if (job) {
+            job->clearPreprocessed();
             assert(mCurPreprocessed > 0);
             --mCurPreprocessed;
             preprocessMore();
@@ -503,6 +506,7 @@ Job::SharedPtr Remote::take()
                 const uint64_t id = cand->jobid;
                 assert(id == job->id());
                 removeJob(id);
+                job->clearPreprocessed();
                 assert(mCurPreprocessed > 0);
                 --mCurPreprocessed;
                 preprocessMore();

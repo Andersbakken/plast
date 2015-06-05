@@ -90,6 +90,7 @@ void Job::start()
 void Job::finish(Job* job)
 {
     sJobs.erase(job->id());
+    assert(job->shared_from_this().use_count() == 2);
 }
 
 String Job::readAllStdOut()
@@ -136,6 +137,7 @@ const char* Job::statusName(Status status)
 {
     switch (status) {
     case Idle: return "idle";
+    case StartingPreprocessing: return "startingpreprocessing";
     case Preprocessing: return "preprocessing";
     case Preprocessed: return "preprocessed";
     case RemotePending: return "remotepending";
