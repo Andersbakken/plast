@@ -90,7 +90,10 @@ void Job::start()
 void Job::finish(Job* job)
 {
     sJobs.erase(job->id());
-    assert(job->shared_from_this().use_count() == 2);
+    if (job->shared_from_this().use_count() != 2) {
+        ::error() << "Job Dying" << job->statusName(job->status()) << job->shared_from_this().use_count();
+    }
+    // assert(job->shared_from_this().use_count() == 2);
 }
 
 String Job::readAllStdOut()
