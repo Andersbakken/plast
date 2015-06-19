@@ -5,32 +5,6 @@
 
 namespace plast {
 
-enum CompilerType {
-    Unknown,
-    Clang,
-    GCC
-};
-
-struct CompilerKey
-{
-    CompilerType type;
-    int32_t major;
-    String target;
-
-    bool operator<(const CompilerKey& other) const
-    {
-        if (type < other.type)
-            return true;
-        if (type > other.type)
-            return false;
-        if (major < other.major)
-            return true;
-        if (major > other.major)
-            return false;
-        return target < other.target;
-    }
-};
-
 Path resolveCompiler(const Path &path);
 Path defaultSocketFile();
 enum {
@@ -56,6 +30,7 @@ enum {
     JobResponseMessageId,
     PeerMessageId,
     BuildingMessageId,
+    CompilerMessageId
 };
 
 } // namespace plast

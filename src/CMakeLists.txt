@@ -8,6 +8,7 @@ include(common/common.cmake)
 add_subdirectory(plasts)
 add_subdirectory(plastd)
 add_subdirectory(plastc)
+add_subdirectory(plastuc)
 
 include(ExternalProject)
 ExternalProject_Add(
@@ -24,3 +25,4 @@ add_dependencies(common wslay)
 add_dependencies(plasts rct common)
 add_dependencies(plastd rct common)
 add_dependencies(plastc rct common)
+add_dependencies(plastuc rct common)
