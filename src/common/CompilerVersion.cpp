@@ -3,18 +3,18 @@
 #include <rct/Log.h>
 #include <regex>
 
-Map<Path, List<CompilerVersion::WeakPtr> > CompilerVersion::sByPath;
-Map<CompilerVersion::Key, CompilerVersion::SharedPtr> CompilerVersion::sByKey;
+// Map<Path, List<CompilerVersion::WeakPtr> > CompilerVersion::sByPath;
+// Map<CompilerVersion::Key, CompilerVersion::SharedPtr> CompilerVersion::sByKey;
 
-CompilerVersion::CompilerVersion(const Key &key, const String &versionString,
-                                 const Path &path, const Set<String> &multilibs,
-                                 const List<String> &extraArgs)
-    : mKey(key), mVersionString(versionString), mMultiLibs(multilibs), mExtraArgs(extraArgs)
+CompilerVersion::CompilerVersion()
+    : mMajorVersion(0), mMinorVersion(0), mPatchVersion(0),
+      mBits(Bits_None), mType(Unknown)
 {
 }
 
 void CompilerVersion::create(const Path &path, const List<String> &targets)
 {
+#if 0
     if (sByPath.contains(path))
         return;
     List<CompilerVersion::WeakPtr> &weakList = sByPath[path];
@@ -68,13 +68,13 @@ void CompilerVersion::create(const Path &path, const List<String> &targets)
                     error() << "Can't parse this type" << c;
                     return CompilerVersion::SharedPtr();
                 }
-                key.major = std::stoi(match[2].str());
-                key.minor = std::stoi(match[3].str());
+                key.majorVersion = std::stoi(match[2].str());
+                key.minorVersion = std::stoi(match[3].str());
                 if (match.size() == 5 && !match[4].str().empty()) {
                     assert(match[4].str().size() > 1);
-                    key.patch = std::stoi(match[4].str().substr(1));
+                    key.patchVersion = std::stoi(match[4].str().substr(1));
                 } else {
-                    key.patch = 0;
+                    key.patchVersion = 0;
                 }
                 versionString = line;
             };
@@ -137,6 +137,7 @@ void CompilerVersion::create(const Path &path, const List<String> &targets)
             add("x86_64-linux-gnu");
         }
     }
+#endif
 }
 
 void CompilerVersion::loadDB(const Path &path)
@@ -149,38 +150,40 @@ void CompilerVersion::saveDB(const Path &path)
 #warning need to do
 }
 
-CompilerVersion::SharedPtr CompilerVersion::create(const std::shared_ptr<CompilerArgs> &args)
+CompilerVersion CompilerVersion::create(const std::shared_ptr<CompilerArgs> &args)
 {
-    const Path resolved = plast::resolveCompiler(args->commandLine.first());
-    auto it = sByPath.find(resolved);
-    if (it != sByPath.end()) {
-        while (it != sByPath.end()) {
-            for (auto weak : it->second) {
-                auto compiler = weak.lock();
-#warning match against args
-                assert(compiler);
-            }
-        }
+//     const Path resolved = plast::resolveCompiler(args->commandLine.first());
+//     auto it = sByPath.find(resolved);
+//     if (it != sByPath.end()) {
+//         while (it != sByPath.end()) {
+//             for (auto weak : it->second) {
+//                 auto compiler = weak.lock();
+// #warning match against args
+//                 assert(compiler);
+//             }
+//         }
+//     }
+
+    // if (!com
+    //     for (int i=0; i<10; ++i) {
+    //     }
+
+}
+
+#if 0
+CompilerVersion::SharedPtr CompilerVersion::find(const Key &key)
+{
+    return sByKey.value(key);
+}
+
+CompilerVersion::SharedPtr CompilerVersion::create(const Key &key, const String &versionString, const Set<String> &multiLibs,
+                                                   const List<String> &extraArgs, const Path &path)
+{
+    auto &ref = sByKey[key];
+    if (!ref) {
+        ref.reset(new CompilerVersion(key, versionString, path, multiLibs, extraArgs));
+        // ### should not add to path
     }
-
-    if (!com
-        for (int i=0; i<10; ++i) {
-        }
-
-        }
-
-    CompilerVersion::SharedPtr CompilerVersion::find(const Key &key)
-    {
-        return sByKey.value(key);
-    }
-
-    CompilerVersion::SharedPtr CompilerVersion::create(const Key &key, const String &versionString, const Set<String> &multiLibs,
-                                                       const List<String> &extraArgs, const Path &path)
-    {
-        auto &ref = sByKey[key];
-        if (!ref) {
-            ref.reset(new CompilerVersion(key, versionString, path, multiLibs, extraArgs));
-            // ### should not add to path
-        }
-        return ref;
-    }
+    return ref;
+}
+#endif

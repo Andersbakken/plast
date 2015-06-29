@@ -11,13 +11,13 @@ public:
 
     enum { MessageId = plast::HasJobsMessageId };
 
-    HasJobsMessage() : Message(MessageId), mCompilerType(plast::Unknown), mCompilerMajor(-1), mCount(0), mPort(0) {}
-    HasJobsMessage(plast::CompilerType ctype, int32_t cmajor, const String& ctarget, int count, uint16_t port = 0)
+    HasJobsMessage() : Message(MessageId), mCompilerType(CompilerVersion::Unknown), mCompilerMajor(-1), mCount(0), mPort(0) {}
+    HasJobsMessage(CompilerVersion::Type ctype, int32_t cmajor, const String& ctarget, int count, uint16_t port = 0)
         : Message(MessageId), mCompilerType(ctype), mCompilerMajor(cmajor), mCount(count), mCompilerTarget(ctarget), mPort(port)
     {
     }
 
-    plast::CompilerType compilerType() const { return mCompilerType; }
+    CompilerVersion::Type compilerType() const { return mCompilerType; }
     int32_t compilerMajor() const { return mCompilerMajor; }
     String compilerTarget() const { return mCompilerTarget; }
 
@@ -32,7 +32,7 @@ public:
     virtual void decode(Deserializer& deserializer);
 
 private:
-    plast::CompilerType mCompilerType;
+    CompilerVersion::Type mCompilerType;
     int32_t mCompilerMajor, mCount;
     String mCompilerTarget, mPeer;
     uint16_t mPort;
@@ -53,7 +53,7 @@ inline void HasJobsMessage::decode(Deserializer& deserializer)
     int32_t ctype;
     deserializer >> ctype >> mCompilerMajor >> mCompilerTarget >> mCount >> mPeer >> mPort;
     // error() << "Decoding 32" << ctype << mCompilerMajor << mCompilerTarget << mCount << mPeer << mPort;
-    mCompilerType = static_cast<plast::CompilerType>(ctype);
+    mCompilerType = static_cast<CompilerVersion::Type>(ctype);
 }
 
 #endif

@@ -48,7 +48,7 @@ private:
     struct ConnectionKey
     {
         std::weak_ptr<Connection> conn;
-        plast::CompilerType type;
+        CompilerVersion::Type type;
         int32_t major;
         String target;
 
@@ -95,10 +95,10 @@ private:
         Job::WeakPtr job;
         std::weak_ptr<Connection> conn;
     };
-    Map<plast::CompilerKey, List<Job::WeakPtr> > mPendingBuild;
+    Map<CompilerVersion, List<Job::WeakPtr> > mPendingBuild;
     struct PendingPreprocess
     {
-        plast::CompilerKey key;
+        CompilerVersion key;
         Job::WeakPtr job;
     };
     LinkedList<PendingPreprocess> mPendingPreprocess;

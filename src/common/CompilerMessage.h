@@ -17,6 +17,7 @@
 #define CompilerMessage_h
 
 #include <rct/Message.h>
+#include <rct/Flags.h>
 #include "Plast.h"
 #include <CompilerVersion.h>
 
@@ -51,6 +52,8 @@ private:
     CompilerVersion::SharedPtr mVersion;
     Hash<Path, FileData> mContents;
 };
+
+RCT_FLAGS(CompilerMessage::FileData::Flag);
 
 inline Serializer &operator<<(Serializer &s, const CompilerMessage::FileData &fileData)
 {

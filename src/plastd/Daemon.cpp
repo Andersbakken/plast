@@ -17,6 +17,8 @@ Daemon::Daemon(const Options& opts)
         cmplist << "/usr/bin/cc";
         cmplist << "/usr/bin/c++";
     }
+#warning not done
+#if 0
     for (const String& c : cmplist) {
         auto entry = c.split(' '); // assume compilers don't have spaces in the file names
         const Path r = static_cast<Path>(entry[0]).resolved();
@@ -39,7 +41,7 @@ Daemon::Daemon(const Options& opts)
                             ver->setExtraArgs(List<String>() << "-m32");
                     }
                     break; }
-                case plast::Unknown:
+                case CompilerVersion::Unknown:
                     break;
                 }
             } else {
@@ -58,6 +60,7 @@ Daemon::Daemon(const Options& opts)
             }
         }
     }
+#endif
 }
 
 bool Daemon::init()

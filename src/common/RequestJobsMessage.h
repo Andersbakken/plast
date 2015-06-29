@@ -11,13 +11,13 @@ public:
 
     enum { MessageId = plast::RequestJobsMessageId };
 
-    RequestJobsMessage() : Message(MessageId), mCompilerType(plast::Unknown), mCompilerMajor(-1), mCount(0) {}
-    RequestJobsMessage(plast::CompilerType ctype, int32_t cmajor, const String& ctarget, int32_t count)
+    RequestJobsMessage() : Message(MessageId), mCompilerType(CompilerVersion::Unknown), mCompilerMajor(-1), mCount(0) {}
+    RequestJobsMessage(CompilerVersion::Type ctype, int32_t cmajor, const String& ctarget, int32_t count)
         : Message(MessageId), mCompilerType(ctype), mCompilerTarget(ctarget), mCompilerMajor(cmajor), mCount(count)
     {
     }
 
-    plast::CompilerType compilerType() const { return mCompilerType; }
+    CompilerVersion::Type compilerType() const { return mCompilerType; }
     int32_t compilerMajor() const { return mCompilerMajor; }
     String compilerTarget() const { return mCompilerTarget; }
     int32_t count() const { return mCount; }
@@ -26,7 +26,7 @@ public:
     virtual void decode(Deserializer& deserializer);
 
 private:
-    plast::CompilerType mCompilerType;
+    CompilerVersion::Type mCompilerType;
     String mCompilerTarget;
     int32_t mCompilerMajor, mCount;
 };
@@ -40,7 +40,7 @@ inline void RequestJobsMessage::decode(Deserializer& deserializer)
 {
     int32_t ctype;
     deserializer >> mCount >> mCompilerMajor >> mCompilerTarget >> ctype;
-    mCompilerType = static_cast<plast::CompilerType>(ctype);
+    mCompilerType = static_cast<CompilerVersion::Type>(ctype);
 }
 
 #endif

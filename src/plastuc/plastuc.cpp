@@ -31,6 +31,7 @@ static inline bool printFileName(const Path &path, const String &prog, Set<Path>
 
 std::shared_ptr<CompilerMessage> createCompilerMessage(const Path &compiler)
 {
+#if 0
     const Path resolved = compiler.resolved();
     c.reset(new Compiler);
     Hash<Path, std::pair<String, uint32_t> > contents;
@@ -134,25 +135,26 @@ std::shared_ptr<CompilerMessage> createCompilerMessage(const Path &compiler)
         }
     }
     return c;
+#endif
 }
 
 
 int main(int argc, char** argv)
 {
-    const char *logFile = 0;
-    Flags<LogFileFlag> logFlags;
-    Path logPath;
-    const LogLevel logLevel = LogLevel::Error;
-    if (!initLogging(argv[0], LogStderr, logLevel, logPath.constData(), logFlags)) {
-        fprintf(stderr, "Can't initialize logging with %d %s %s\n",
-                logLevel.toInt(), logFile ? logFile : "", logFlags.toString().constData());
-        return 1;
-    }
+    // const char *logFile = 0;
+    // Flags<LogFileFlag> logFlags;
+    // Path logPath;
+    // const LogLevel logLevel = LogLevel::Error;
+    // if (!initLogging(argv[0], LogStderr, logLevel, logPath.constData(), logFlags)) {
+    //     fprintf(stderr, "Can't initialize logging with %d %s %s\n",
+    //             logLevel.toInt(), logFile ? logFile : "", logFlags.toString().constData());
+    //     return 1;
+    // }
 
-    EventLoop::SharedPtr loop(new EventLoop);
-    loop->init(EventLoop::MainEventLoop|EventLoop::EnableSigIntHandler);
+    // EventLoop::SharedPtr loop(new EventLoop);
+    // loop->init(EventLoop::MainEventLoop|EventLoop::EnableSigIntHandler);
 
-    loop->exec();
+    // loop->exec();
 
-    return client.exitCode();
+    // return client.exitCode();
 }

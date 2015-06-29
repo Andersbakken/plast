@@ -10,14 +10,16 @@ uint64_t Job::sNextId = 0;
 
 Job::Job(const Path& path, const List<String>& args, Type type,
          uint64_t remoteId, const String& preprocessed, uint32_t serial, const String& remoteName,
-         plast::CompilerType ctype, int cmajor, const String& ctarget)
+         CompilerVersion::Type ctype, int cmajor, const String& ctarget)
     : mArgs(args), mPath(path), mRemoteId(remoteId), mPreprocessed(preprocessed),
       mStatus(Idle), mType(type), mSerial(serial), mId(++sNextId), mRemoteName(remoteName),
       mCompilerType(ctype), mCompilerMajor(cmajor), mCompilerTarget(ctarget)
 {
     assert(!mArgs.isEmpty());
 
-    if (mCompilerType == plast::Unknown) {
+#warning not done
+#if 0
+    if (mCompilerType == CompilerVersion::Unknown) {
         mCompilerArgs = CompilerArgs::create(mArgs);
         mResolvedCompiler = plast::resolveCompiler(mArgs.front());
         if (!mResolvedCompiler.isEmpty()) {
@@ -48,6 +50,7 @@ Job::Job(const Path& path, const List<String>& args, Type type,
         mArgs << version->extraArgs();
         mCompilerArgs = CompilerArgs::create(mArgs);
     }
+#endif
 }
 
 Job::~Job()
@@ -58,7 +61,7 @@ Job::~Job()
 Job::SharedPtr Job::create(const Path& path, const List<String>& args, Type type,
                            const String& remoteName, uint64_t remoteId,
                            const String& preprocessed, uint32_t serial,
-                           plast::CompilerType ctype, int cmajor, const String& ctarget)
+                           CompilerVersion::Type ctype, int cmajor, const String& ctarget)
 {
     Job::SharedPtr job(new Job(path, args, type, remoteId, preprocessed, serial, remoteName, ctype, cmajor, ctarget));
     sJobs[job->id()] = job;

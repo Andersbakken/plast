@@ -8,6 +8,7 @@
 #include <rct/String.h>
 #include <rct/Log.h>
 #include <cstdint>
+#include <CompilerVersion.h>
 
 class JobMessage : public Message
 {
@@ -17,11 +18,12 @@ public:
     enum { MessageId = plast::JobMessageId };
 
     JobMessage()
-        : Message(MessageId), mId(0), mSerial(0), mCompilerType(plast::Unknown), mCompilerMajor(-1)
+        : Message(MessageId), mId(0), mSerial(0), mCompilerType(CompilerVersion::Unknown), mCompilerMajor(-1)
     {
     }
     JobMessage(const Path& path, const List<String>& args, uint64_t id = 0, const String& pre = String(),
-               uint32_t serial = 0, const String& remoteName = String(), plast::CompilerType ctype = plast::Unknown,
+               uint32_t serial = 0, const String& remoteName = String(),
+               CompilerVersion::Type ctype = CompilerVersion::Unknown,
                int cmajor = 0, const String& ctarget = String())
         : Message(MessageId), mPath(path), mArgs(args), mId(id),
           mPreprocessed(pre), mSerial(serial), mRemoteName(remoteName),
@@ -35,7 +37,7 @@ public:
     uint64_t id() const { return mId; }
     uint32_t serial() const { return mSerial; }
     String remoteName() const { return mRemoteName; }
-    plast::CompilerType compilerType() const { return mCompilerType; }
+    CompilerVersion::Type compilerType() const { return mCompilerType; }
     int compilerMajor() const { return mCompilerMajor; }
     String compilerTarget() const { return mCompilerTarget; }
 
@@ -50,7 +52,7 @@ private:
     String mPreprocessed;
     uint32_t mSerial;
     String mRemoteName;
-    plast::CompilerType mCompilerType;
+    CompilerVersion::Type mCompilerType;
     int32_t mCompilerMajor;
     String mCompilerTarget;
 };
@@ -85,7 +87,7 @@ inline void JobMessage::decode(Deserializer& deserializer)
 {
     int32_t ctype;
     deserializer >> mPath >> mArgs >> mId >> mPreprocessed >> mSerial >> mRemoteName >> ctype >> mCompilerMajor >> mCompilerTarget;
-    mCompilerType = static_cast<plast::CompilerType>(ctype);
+    mCompilerType = static_cast<CompilerVersion::Type>(ctype);
 }
 
 #endif

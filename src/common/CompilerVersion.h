@@ -12,7 +12,6 @@
 #include <memory>
 #include <cstdint>
 
-
 class CompilerVersion
 {
 public:
@@ -26,146 +25,104 @@ public:
     };
 
     enum Bits {
+        Bits_None = 0x0,
         Bits_32 = 0x1,
         Bits_64 = 0x2
     };
 
-    struct Key
+    bool operator==(const CompilerVersion &other) const
     {
-        Key()
-            : major(0), minor(0), patch(0), bits(Bits_32), type(Unknown)
-        {}
-        int32_t major, minor, patch;
-        Bits bits;
-        Type type;
-        String target;
+        return (mMajorVersion == other.mMajorVersion
+                && mMinorVersion == other.mMinorVersion
+                && mPatchVersion == other.mPatchVersion
+                && mBits == other.mBits
+                && mType == other.mType
+                && mTarget == other.mTarget);
+    }
+    bool operator!=(const CompilerVersion &other) const { return !operator==(other); }
+    bool operator<(const CompilerVersion &other) const
+    {
+        if (mMajorVersion < other.mMajorVersion)
+            return true;
+        if (mMajorVersion > other.mMajorVersion)
+            return false;
+        if (mMinorVersion < other.mMinorVersion)
+            return true;
+        if (mMinorVersion > other.mMinorVersion)
+            return false;
+        if (mPatchVersion < other.mPatchVersion)
+            return true;
+        if (mPatchVersion > other.mPatchVersion)
+            return false;
+        if (mBits < other.mBits)
+            return true;
+        if (mBits > other.mBits)
+            return false;
+        if (mType < other.mType)
+            return true;
+        if (mType > other.mType)
+            return false;
+        return mTarget < other.mTarget;
+    }
 
-        bool operator==(const Key &other) const
-        {
-            return (major == other.major
-                    && minor == other.minor
-                    && patch == other.patch
-                    && bits == other.bits
-                    && type == other.type
-                    && target == other.target);
-        }
-        bool operator!=(const Key &other) const { return !operator==(other); }
-        bool operator<(const Key &other) const
-        {
-            if (major < other.major)
-                return true;
-            if (major > other.major)
-                return false;
-            if (minor < other.minor)
-                return true;
-            if (minor > other.minor)
-                return false;
-            if (patch < other.patch)
-                return true;
-            if (patch > other.patch)
-                return false;
-            if (bits < other.bits)
-                return true;
-            if (bits > other.bits)
-                return false;
-            if (type < other.type)
-                return true;
-            if (type > other.type)
-                return false;
-            return target < other.target;
-        }
-    };
 
-    Key key() const { return mKey; }
-    int32_t major() const { return mKey.major; }
-    int32_t minor() const { return mKey.minor; }
-    int32_t patch() const { return mKey.patch; }
+    int32_t majorVersion() const { return mMajorVersion; }
+    int32_t minorVersion() const { return mMinorVersion; }
+    int32_t patchVersion() const { return mPatchVersion; }
     String versionString() const { return mVersionString; }
-    Bits bits() const { return mKey.bits; }
-    Type type() const { return mKey.type; }
+    Bits bits() const { return mBits; }
+    Type type() const { return mType; }
 
-    String target() const { return mKey.target; }
+    String target() const { return mTarget; }
     Set<String> multiLibs() const { return mMultiLibs; }
     List<String> extraArgs() const { return mExtraArgs; }
     void setExtraArgs(const List<String>& extra) { mExtraArgs = extra; }
 
     Path path() const { return mPath; }
-    bool isValid() { return mKey.type != Unknown; }
+    bool isValid() { return mType != Unknown; }
 
-    SharedPtr clone() const
-    {
-        return SharedPtr(new CompilerVersion(mKey, mVersionString, mPath, mMultiLibs, mExtraArgs));
-    }
-
-    static SharedPtr create(const std::shared_ptr<CompilerArgs> &args);
+    static CompilerVersion create(const std::shared_ptr<CompilerArgs> &args);
     static void create(const Path &path, const List<String> &targets = List<String>());
-    static SharedPtr find(const Key &key);
-    static SharedPtr create(const Key &key, const String &versionString, const Set<String> &multiLibs,
-                            const List<String> &extraArgs, const Path &path);
+    static bool resolve(CompilerVersion &version);
     static void loadDB(const Path &path);
     static void saveDB(const Path &path);
 private:
-    Key mKey;
+    int32_t mMajorVersion, mMinorVersion, mPatchVersion;
+    Bits mBits;
+    Type mType;
+    String mTarget;
     String mVersionString;
     Path mPath;
     Set<String> mMultiLibs;
     List<String> mExtraArgs;
 
-    static Map<Path, List<CompilerVersion::WeakPtr> > sByPath;
-    static Map<Key, CompilerVersion::SharedPtr> sByKey;
+    // static Map<Path, List<CompilerVersion::WeakPtr> > sByPath;
+    // static Map<Key, List<CompilerVersion::SharedPtr> > sByKey;
+    friend Serializer &operator<<(Serializer &, const CompilerVersion &);
+    friend Deserializer &operator>>(Deserializer &, CompilerVersion &);
 private:
-    CompilerVersion(const Key &key, const String &versionString,
-                    const Path &path, const Set<String> &multiLibs,
-                    const List<String> &extraArgs);
+    CompilerVersion();
     CompilerVersion(const CompilerVersion&) = delete;
     CompilerVersion& operator=(const CompilerVersion&) = delete;
 };
 
-inline Serializer &operator<<(Serializer &s, const CompilerVersion::Key &key)
+inline Serializer &operator<<(Serializer &s, const CompilerVersion &version)
 {
-    s << key.major << key.minor << key.patch << static_cast<uint8_t>(key.bits)
-      << static_cast<uint8_t>(key.type) << key.target;
+    s << version.mMajorVersion << version.mMinorVersion << version.mPatchVersion << static_cast<uint8_t>(version.mBits)
+      << static_cast<uint8_t>(version.mType) << version.mTarget
+      << version.mVersionString << version.mMultiLibs << version.mExtraArgs << version.mPath;
     return s;
 }
 
-inline Deserializer &operator>>(Deserializer &d, CompilerVersion::Key &key)
+inline Deserializer &operator>>(Deserializer &d, CompilerVersion &version)
 {
     uint8_t bits, type;
-    d >> key.major >> key.minor >> key.patch >> bits >> type >> key.target;
-    key.bits = static_cast<CompilerVersion::Bits>(bits);
-    key.type = static_cast<CompilerVersion::Type>(type);
-    return d;
-}
+    d >> version.mMajorVersion >> version.mMinorVersion >> version.mPatchVersion >> bits >> type >> version.mTarget
+      >> version.mVersionString >> version.mMultiLibs >> version.mExtraArgs >> version.mPath;
 
-inline Serializer &operator<<(Serializer &s, const CompilerVersion::SharedPtr &version)
-{
-    assert(version);
-    s << version->key() << version->versionString() << version->multiLibs() << version->extraArgs() << version->path();
-    return s;
-}
-
-inline Deserializer &operator>>(Deserializer &d, CompilerVersion::SharedPtr &version)
-{
-    assert(!version);
-    CompilerVersion::Key key;
-    d >> key;
-    version = CompilerVersion::find(key);
-    String versionString;
-    Set<String> multiLibs;
-    List<String> extraArgs;
-    Path path;
-    d >> versionString >> multiLibs >> extraArgs >> path;
-    if (!version) {
-        version = CompilerVersion::create(key, versionString, multiLibs, extraArgs, path);
-        assert(version);
-    }
+    version.mBits = static_cast<CompilerVersion::Bits>(bits);
+    version.mType = static_cast<CompilerVersion::Type>(type);
     return d;
-    return d;
-}
-
-inline bool CompilerVersion::hasCompiler(plast::CompilerType compiler, int32_t major, const String& target)
-{
-    return (version(compiler, major, target).get() != 0);
 }
 
 #endif

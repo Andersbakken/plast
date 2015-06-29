@@ -310,7 +310,7 @@ void Scheduler::addPeer(const Peer::SharedPtr& peer)
     peer->event().connect([this](const Peer::SharedPtr& peer, Peer::Event event, const json& value) {
             switch (event) {
             case Peer::JobsAvailable: {
-                HasJobsMessage msg(static_cast<plast::CompilerType>(value["type"].get<int>()),
+                HasJobsMessage msg(static_cast<CompilerVersion::Type>(value["type"].get<int>()),
                                    value["major"].get<int>(),
                                    value["target"].get<json::string_t>(),
                                    value["count"].get<int>(),
