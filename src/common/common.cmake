@@ -1,6 +1,7 @@
 set(MESSAGES_SOURCES
   ${CMAKE_CURRENT_LIST_DIR}/CompilerArgs.cpp
   ${CMAKE_CURRENT_LIST_DIR}/CompilerVersion.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/CompilerCache.cpp
   ${CMAKE_CURRENT_LIST_DIR}/HttpServer.cpp
   ${CMAKE_CURRENT_LIST_DIR}/Messages.cpp
   ${CMAKE_CURRENT_LIST_DIR}/Plast.cpp
