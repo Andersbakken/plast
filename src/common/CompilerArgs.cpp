@@ -77,6 +77,11 @@ std::shared_ptr<CompilerArgs> CompilerArgs::create(const List<String> &args)
         } else if (arg == "-MT") {
             ret->flags |= HasDashMT;
             ++i;
+        } else if (arg.startsWith("--target=")) {
+            ret->target = arg.mid(9);
+            ++i;
+        } else if (arg == "-target") {
+            ret->target = args[(++i)++];
         } else if (arg == "-x") {
             ret->flags |= HasDashX;
             if (++i == args.size())

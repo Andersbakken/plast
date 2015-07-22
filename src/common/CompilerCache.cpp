@@ -198,10 +198,11 @@ void CompilerCache::clear()
 // #endif
 // }
 
-static List<String> invokeCompiler(const Path &path, const List<String> &args)
+static List<String> invokeCompiler(const Path &path, List<String> args = List<String>())
 {
     List<String> ret;
     Process proc;
+    args << "-v";
     if (proc.exec(path, args) != Process::Done) {
         error() << "Couldn't exec" << path << args;
         return ret;
@@ -226,7 +227,7 @@ CompilerInvocation CompilerCache::createInvocation(const std::shared_ptr<Compile
         versions.resize(1);
         CompilerVersion &version = versions.front();
 
-        for (const auto &line : invokeCompiler(resolved, List<String>() << "-v" << "-m32")) {
+        for (const auto &line : invokeCompiler(resolved)) {
             auto parse = [&](const String &line, const std::smatch& match) {
                 assert(match.size() >= 4);
                 const String c = match[1].str();
@@ -277,18 +278,27 @@ CompilerInvocation CompilerCache::createInvocation(const std::shared_ptr<Compile
         };
 
         switch (version.type()) {
-        case CompilerVersion::Clang:
-            for (const auto &line : invokeCompiler(resolved, (List<String>() << "-v" << "-m64"))) {
+        case CompilerVersion::Clang: {
+            List<String> args;
+            bool is64;
+            if (version.mTarget.startsWith("x86_64")) {
+                is64 = false;
+                args << "-m64";
+            } else {
+                is64 = true;
+                args << "-m32";
+            }
+            for (const auto &line : invokeCompiler(resolved, args)) {
                 if (std::regex_match(line.ref(), match, targetrx)) {
                     assert(match.size() == 2);
                     if (match[1].str() != version.mTarget.ref()) { // What if it's only 64-bit?
-                        add(match[1].str(), "-m64");
-                        version.mExtraArgs << "-m32";
+                        add(match[1].str(), is64 ? "-m64" : "-m32");
+                        version.mExtraArgs << args;
                     }
                     break;
                 }
             }
-            break;
+            break; }
         case CompilerVersion::GCC:
             if (version.mTarget == "x86_64-linux-gnu" && version.mMultiLibs.contains("m32")) {
                 add("i686-linux-gnu", "-m32");
@@ -303,15 +313,31 @@ CompilerInvocation CompilerCache::createInvocation(const std::shared_ptr<Compile
         }
         std::shared_ptr<Compiler> compiler(new Compiler(resolved));
     }
-    for (const auto &version : it->second) {
-        const int bits = version.bits();
-        if (bits == 32) {
 
-        } else if (bits == 64) {
+    if (!it->second.isEmpty())
+        return CompilerInvocation();
 
-
+    int desiredBits = -1;
+    if (compilerArgs->target.isEmpty()) {
+        if (compilerArgs->flags & CompilerArgs::HasDashM32) {
+            desiredBits = 32;
+        } else if (compilerArgs->flags & CompilerArgs::HasDashM64) {
+            desiredBits = 64;
+        } else {
+            return CompilerInvocation(mCompilers.value(it->second.first()), it->second.first());
         }
+    }
 
+    for (const auto &version : it->second) {
+        bool ok = false;
+        if (!compilerArgs->target.isEmpty()) {
+            ok = version.target() == compilerArgs->target;
+        } else {
+            ok = version.bits() == desiredBits;
+        }
+        if (ok) {
+            return CompilerInvocation(mCompilers.value(version), version);
+        }
     }
     return CompilerInvocation();
 }

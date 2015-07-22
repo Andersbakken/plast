@@ -28,6 +28,7 @@ struct CompilerArgs
     List<String> commandLine;
     List<int> sourceFileIndexes;
     int objectFileIndex;
+    String target;
     List<Path> sourceFiles() const
     {
         List<Path> ret;
