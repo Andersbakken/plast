@@ -26,15 +26,20 @@ public:
     struct FileData {
         mode_t mode;
         enum Flag {
-            File = 0x1,
-            Link = 0x2,
-            Compiler = 0x4
+            Link = 0x1,
+            Compiler = 0x2
         };
         Flags<Flag> flags;
         String contents;
     };
 
-    const Hash<Path, FileData> &files() const { return mFiles; }
+    Compiler(const Path &basePath = Path(), const Hash<Path, FileData> &files = Hash<Path, FileData>())
+        : mBasePath(basePath), mFiles(files)
+    {}
+    bool init(const Path &executable);
+
+    Hash<Path, FileData> files() const;
+    Path basePath() const { return mBasePath; }
     Path executable() const
     {
         for (const auto &f : mFiles) {
@@ -43,11 +48,12 @@ public:
         }
         return Path();
     }
+
 private:
-    Compiler() = delete;
     Compiler(const Compiler &) = delete;
     Compiler &operator=(const Compiler &) = delete;
 
+    Path mBasePath;
     Hash<Path, FileData> mFiles;
     friend class CompilerCache;
 };

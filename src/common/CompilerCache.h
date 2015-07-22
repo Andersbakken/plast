@@ -26,7 +26,7 @@ class CompilerCache
 {
 public:
     CompilerCache(const Path &path);
-    bool load();
+    void load();
     void clear();
     Path path() const { return mPath; }
     CompilerInvocation createInvocation(const std::shared_ptr<CompilerArgs> &args);
@@ -36,6 +36,7 @@ private:
     CompilerCache &operator=(const CompilerCache &) = delete;
 
     Map<CompilerVersion, std::shared_ptr<Compiler> > mCompilers;
+    Hash<Path, List<CompilerVersion> > mByPath;
     Path mPath;
 };
 

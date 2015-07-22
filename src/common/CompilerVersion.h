@@ -15,8 +15,10 @@
 class CompilerVersion
 {
 public:
-    typedef std::shared_ptr<CompilerVersion> SharedPtr;
-    typedef std::weak_ptr<CompilerVersion> WeakPtr;
+    CompilerVersion()
+        : mMajorVersion(0), mMinorVersion(0), mPatchVersion(0), mType(Unknown)
+    {
+    }
 
     enum Type {
         Unknown,
@@ -24,19 +26,22 @@ public:
         GCC
     };
 
-    enum Bits {
-        Bits_None = 0x0,
-        Bits_32 = 0x1,
-        Bits_64 = 0x2
-    };
+    unsigned char bits() const
+    {
+        if (mExtraArgs.contains("-m32") || mTarget.startsWith("i686") || mTarget.startsWith("i386")) {
+            return 32;
+        } else if (mExtraArgs.contains("-m64") || mTarget.startsWith("x86_64") || mTarget.startsWith("amd64")) {
+            return 64;
+        } else {
+            assert(0);
+            return -1;
+        }
+    }
 
     bool operator==(const CompilerVersion &other) const
     {
-        return (mMajorVersion == other.mMajorVersion
-                && mMinorVersion == other.mMinorVersion
-                && mPatchVersion == other.mPatchVersion
-                && mBits == other.mBits
-                && mType == other.mType
+        return (mMajorVersion == other.mMajorVersion && mMinorVersion == other.mMinorVersion
+                && mPatchVersion == other.mPatchVersion && mType == other.mType
                 && mTarget == other.mTarget);
     }
     bool operator!=(const CompilerVersion &other) const { return !operator==(other); }
@@ -54,10 +59,6 @@ public:
             return true;
         if (mPatchVersion > other.mPatchVersion)
             return false;
-        if (mBits < other.mBits)
-            return true;
-        if (mBits > other.mBits)
-            return false;
         if (mType < other.mType)
             return true;
         if (mType > other.mType)
@@ -70,7 +71,6 @@ public:
     int32_t minorVersion() const { return mMinorVersion; }
     int32_t patchVersion() const { return mPatchVersion; }
     String versionString() const { return mVersionString; }
-    Bits bits() const { return mBits; }
     Type type() const { return mType; }
 
     String target() const { return mTarget; }
@@ -88,7 +88,6 @@ public:
     static void saveDB(const Path &path);
 private:
     int32_t mMajorVersion, mMinorVersion, mPatchVersion;
-    Bits mBits;
     Type mType;
     String mTarget;
     String mVersionString;
@@ -96,19 +95,14 @@ private:
     Set<String> mMultiLibs;
     List<String> mExtraArgs;
 
-    // static Map<Path, List<CompilerVersion::WeakPtr> > sByPath;
-    // static Map<Key, List<CompilerVersion::SharedPtr> > sByKey;
     friend Serializer &operator<<(Serializer &, const CompilerVersion &);
     friend Deserializer &operator>>(Deserializer &, CompilerVersion &);
-private:
-    CompilerVersion();
-    CompilerVersion(const CompilerVersion&) = delete;
-    CompilerVersion& operator=(const CompilerVersion&) = delete;
+    friend class CompilerCache;
 };
 
 inline Serializer &operator<<(Serializer &s, const CompilerVersion &version)
 {
-    s << version.mMajorVersion << version.mMinorVersion << version.mPatchVersion << static_cast<uint8_t>(version.mBits)
+    s << version.mMajorVersion << version.mMinorVersion << version.mPatchVersion
       << static_cast<uint8_t>(version.mType) << version.mTarget
       << version.mVersionString << version.mMultiLibs << version.mExtraArgs << version.mPath;
     return s;
@@ -116,11 +110,10 @@ inline Serializer &operator<<(Serializer &s, const CompilerVersion &version)
 
 inline Deserializer &operator>>(Deserializer &d, CompilerVersion &version)
 {
-    uint8_t bits, type;
-    d >> version.mMajorVersion >> version.mMinorVersion >> version.mPatchVersion >> bits >> type >> version.mTarget
+    uint8_t type;
+    d >> version.mMajorVersion >> version.mMinorVersion >> version.mPatchVersion >> type >> version.mTarget
       >> version.mVersionString >> version.mMultiLibs >> version.mExtraArgs >> version.mPath;
 
-    version.mBits = static_cast<CompilerVersion::Bits>(bits);
     version.mType = static_cast<CompilerVersion::Type>(type);
     return d;
 }

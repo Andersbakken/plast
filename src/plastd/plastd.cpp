@@ -34,6 +34,7 @@ static inline void ensurePath(const Path& p)
     p.mkdir();
 }
 
+#include <Compiler.h>
 int main(int argc, char** argv)
 {
     Rct::findExecutablePath(*argv);
@@ -130,6 +131,13 @@ int main(int argc, char** argv)
     if (!Config::isEnabled("no-sighandler"))
         flags |= EventLoop::EnableSigIntHandler;
     loop->init(flags);
+
+    // Compiler compiler;
+    // compiler.init("/usr/bin/g++-4.9");
+    // for (const auto &f : compiler.files()) {
+    //     printf("%s (%s) %d\n", f.first.constData(), f.second.flags.toString().constData(), f.second.contents.size());
+    // }
+    // return 0;
 
     Daemon::SharedPtr daemon = std::make_shared<Daemon>(options);
     if (!daemon->init())

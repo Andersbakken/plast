@@ -24,13 +24,15 @@
 class CompilerInvocation
 {
 public:
+    bool isValid() const { return mCompiler.get(); }
     std::shared_ptr<Compiler> compiler() const { return mCompiler; }
     const CompilerVersion &version() const { return mVersion; }
     std::shared_ptr<Process> invoke(const std::shared_ptr<CompilerArgs> &args);
 private:
-    CompilerInvocation() = delete;
-    CompilerInvocation(const CompilerInvocation &) = delete;
-    CompilerInvocation &operator=(const CompilerInvocation &) = delete;
+    CompilerInvocation(const std::shared_ptr<Compiler> &compiler = std::shared_ptr<Compiler>(),
+                       const CompilerVersion &version = CompilerVersion())
+        : mCompiler(compiler), mVersion(version)
+    {}
 
     std::shared_ptr<Compiler> mCompiler;
     CompilerVersion mVersion;
