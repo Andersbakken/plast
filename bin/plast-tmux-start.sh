@@ -11,14 +11,18 @@ if [ ! -x "$FILE" ]; then
 fi
 HELP="$0 <command> (--detach|-d|--attach|-a|--help|-h)"
 shift
-mode=detach
+post=
 while [ -n "$1" ]; do
     case "$1" in
-        --detach|-d)
-            mode=detach
+        --post=*|-p=*)
+            post=`echo $1  | sed -e 's,^[^=]*=,,'`
+            ;;
+        --post|-p)
+            shift
+            post="$1"
             ;;
         --attach|-a)
-            mode=attach
+            post="tmux attach-session -t `basename $FILE`"
             ;;
         --help|-h)
             echo "$HELP"
@@ -33,5 +37,6 @@ while [ -n "$1" ]; do
     shift
 done
 
-tmux new-session -s `basename $FILE` -d "$FILE" \; "$mode"
+tmux new-session -s `basename $FILE` -d "$FILE" \; "detach"
+[ -n "$post" ] && $post
 
