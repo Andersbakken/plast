@@ -78,7 +78,7 @@ mkdir -p "$PREFIX"
 cp -r "$GITROOT/bin/plastc" "$GITROOT/bin/plastd" "$GITROOT/bin/plasts" "$GITROOT/bin/plast_prefix.sh" "$GITROOT/bin/plast-tmux-start.sh" "$GITROOT/bin/plastd-tmux-start.sh" "$GITROOT/bin/plasts-tmux-start.sh" "$PREFIX"
 
 find "$GITROOT/bin/stats/" -type f \( -name "*.css" -or -name "*.js" -or -name "*.html" \) | while read i; do
-    target=`echo $i | sed -e "s,^$GITROOT/bin/,$PREFIX,"`
+    target=`echo $i | sed -e "s,^$GITROOT/bin/,$PREFIX/,"`
     mkdir -p "`dirname \"$target\"`"
     cp "$i" "$target"
 done
