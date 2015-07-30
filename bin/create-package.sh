@@ -77,7 +77,7 @@ SERVER_PREFIX="$PWD/plast-server32/usr/bin"
 git rm -rf "$PREFIX" "$SERVER_PREFIX" 2>/dev/null
 mkdir -p "$PREFIX"
 mkdir -p "$SERVER_PREFIX"
-cp -r "$GITROOT/bin/plastc" "$GITROOT/bin/plastd" "$GITROOT/bin/plast_prefix.sh" "$PREFIX"
+cp -r "$GITROOT/bin/plastc" "$GITROOT/bin/plastd" "$GITROOT/bin/plast_prefix.sh" "$GITROOT/bin/plast-tmux-start.sh" "$GITROOT/bin/plastd-tmux-start.sh" "$GITROOT/bin/plasts-tmux-start.sh""$PREFIX"
 cp -r "$GITROOT/bin/plasts" "$SERVER_PREFIX"
 
 find "$GITROOT/bin/stats/" -type f \( -name "*.css" -or -name "*.js" -or -name "*.html" \) | while read i; do
