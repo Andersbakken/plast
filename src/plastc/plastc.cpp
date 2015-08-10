@@ -23,5 +23,16 @@ int main(int argc, char** argv)
 
     loop->exec();
 
+#if 0
+    FILE *f = fopen("/tmp/out", "a");
+    for (int i=0; i<argc; ++i) {
+        if (i)
+            fwrite(" ", 1, 1, f);
+        fwrite(argv[i], strlen(argv[i]), 1, f);
+    }
+    fprintf(f, " => %d\n", client.exitCode());
+    fclose(f);
+#endif
+
     return client.exitCode();
 }
