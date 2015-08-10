@@ -80,6 +80,7 @@ void Local::init()
                     // this is bad
                     job->mError = "Invalid return code for local compile";
                 }
+                job->setExitCode(retcode);
                 job->updateStatus(Job::Error);
             } else {
                 if (localForRemote) {
@@ -90,6 +91,7 @@ void Local::init()
                     fclose(f);
                     if (job->mObjectCode.isEmpty()) {
                         job->mError = "Got no object code for compile";
+                        job->setExitCode(1); // ???
                         job->updateStatus(Job::Error);
                     } else {
                         job->updateStatus(Job::Compiled);

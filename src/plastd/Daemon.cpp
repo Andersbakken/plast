@@ -140,11 +140,11 @@ void Daemon::handleJobMessage(const JobMessage::SharedPtr& msg, const std::share
             error() << "job status changed" << job << "local" << job->id() << status;
             switch (status) {
             case Job::Compiled:
-                conn->finish();
+                conn->finish(job->exitCode());
                 break;
             case Job::Error:
                 conn->write(job->error(), ResponseMessage::Stderr);
-                conn->finish(-1);
+                conn->finish(job->exitCode());
                 break;
             default:
                 break;

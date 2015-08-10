@@ -174,12 +174,12 @@ void Remote::handleJobMessage(const JobMessage::SharedPtr& msg, const std::share
 #warning should tell remote side to abort the job if status == Aborted
             switch (status) {
             case Job::Compiled:
-                conn->send(JobResponseMessage(JobResponseMessage::Compiled, job->remoteId(),
-                                              job->serial(), job->objectCode()));
+                conn->send(JobResponseMessage(JobResponseMessage::Compiled, job->exitCode(),
+                                              job->remoteId(), job->serial(), job->objectCode()));
                 break;
             case Job::Error:
-                conn->send(JobResponseMessage(JobResponseMessage::Error, job->remoteId(),
-                                              job->serial(), job->error()));
+                conn->send(JobResponseMessage(JobResponseMessage::Error, job->exitCode(),
+                                              job->remoteId(), job->serial(), job->error()));
                 break;
             default:
                 break;
@@ -192,8 +192,8 @@ void Remote::handleJobMessage(const JobMessage::SharedPtr& msg, const std::share
                 return;
             }
             warning() << "remote job ready stdout";
-            conn->send(JobResponseMessage(JobResponseMessage::Stdout, job->remoteId(),
-                                          job->serial(), job->readAllStdOut()));
+            conn->send(JobResponseMessage(JobResponseMessage::Stdout, job->exitCode(),
+                                          job->remoteId(), job->serial(), job->readAllStdOut()));
         });
     job->readyReadStdErr().connect([weakConn](Job* job) {
             const std::shared_ptr<Connection> conn = weakConn.lock();
@@ -202,8 +202,8 @@ void Remote::handleJobMessage(const JobMessage::SharedPtr& msg, const std::share
                 return;
             }
             warning() << "remote job ready stderr";
-            conn->send(JobResponseMessage(JobResponseMessage::Stderr, job->remoteId(),
-                                          job->serial(), job->readAllStdErr()));
+            conn->send(JobResponseMessage(JobResponseMessage::Stderr, job->exitCode(),
+                                          job->remoteId(), job->serial(), job->readAllStdErr()));
         });
     job->start();
 }
@@ -318,6 +318,7 @@ void Remote::handleJobResponseMessage(const JobResponseMessage::SharedPtr& msg, 
         error() << msg->serial() << "vs" << job->serial();
         return;
     }
+    job->setExitCode(msg->exitCode());
     const Job::Status status = job->status();
     switch (status) {
     case Job::RemotePending:

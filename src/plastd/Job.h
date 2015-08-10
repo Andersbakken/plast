@@ -81,6 +81,9 @@ public:
     uint32_t serial() const { return mSerial; }
     void increaseSerial() { mSerial += 1; }
 
+    int exitCode() const { return mExitCode; }
+    void setExitCode(int exitCode) { mExitCode = exitCode; }
+
 private:
     Job(const Path& path, const List<String>& args, Type type, uint64_t remoteId,
         const String& preprocessed, uint32_t serial, const String& remoteName,
@@ -109,6 +112,7 @@ private:
     plast::CompilerType mCompilerType;
     int32_t mCompilerMajor;
     String mCompilerTarget;
+    int mExitCode;
 
     static Hash<uint64_t, SharedPtr> sJobs;
     static uint64_t sNextId;

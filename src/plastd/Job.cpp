@@ -13,7 +13,7 @@ Job::Job(const Path& path, const List<String>& args, Type type,
          plast::CompilerType ctype, int cmajor, const String& ctarget)
     : mArgs(args), mPath(path), mRemoteId(remoteId), mPreprocessed(preprocessed),
       mStatus(Idle), mType(type), mSerial(serial), mId(++sNextId), mRemoteName(remoteName),
-      mCompilerType(ctype), mCompilerMajor(cmajor), mCompilerTarget(ctarget)
+      mCompilerType(ctype), mCompilerMajor(cmajor), mCompilerTarget(ctarget), mExitCode(0)
 {
     assert(!mArgs.isEmpty());
 
