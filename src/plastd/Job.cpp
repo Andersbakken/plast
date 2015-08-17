@@ -122,7 +122,7 @@ void Job::writeFile(const String& data)
     out = mPath.ensureTrailingSlash() + out;
     FILE* file = fopen(out.constData(), "w");
     if (!file) {
-        mError = "fopen failed";
+        mError = String::format("fopen failed: %d (%s)", errno, out.constData());
         updateStatus(Error);
         return;
     }
