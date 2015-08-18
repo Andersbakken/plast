@@ -424,6 +424,7 @@ void Remote::preprocessMore()
             job->statusChanged().connect([this, k](Job* job, Job::Status status, Job::Status oldStatus) {
                     switch (status) {
                     case Job::Aborted:
+                    case Job::Error:
                         if (oldStatus == Job::Preprocessed || oldStatus == Job::Preprocessing || oldStatus == Job::StartingPreprocessing) {
                             --mCurPreprocessed;
                             job->clearPreprocessed();
@@ -441,9 +442,10 @@ void Remote::preprocessMore()
                         break;
                     }
                 });
-            job->updateStatus(Job::StartingPreprocessing);
-            ++mCurPreprocessed;
-            mPreprocessor.preprocess(job);
+            if (mPreprocessor.preprocess(job)) {
+                job->updateStatus(Job::StartingPreprocessing);
+                ++mCurPreprocessed;
+            }
         }
         mPendingPreprocess.pop_front();
     }
