@@ -27,6 +27,7 @@ CompilerVersion::CompilerVersion(const Path& path, uint32_t flags, const String&
 
     const std::regex verrx("^(clang|gcc) version (\\d+)\\.(\\d+)(\\.\\d+)?.*", std::regex_constants::ECMAScript);
     const std::regex aaplrx("^(Apple LLVM).*based on LLVM (\\d+)\\.(\\d+)(\\.\\d+)?.*", std::regex_constants::ECMAScript);
+    const std::regex aaplrxnover("^Apple LLVM.*", std::regex_constants::ECMAScript);
     const std::regex targetrx("^Target: (.*)", std::regex_constants::ECMAScript);
     const std::regex confrx("^Configured with.+--with-multilib-list=([^ $]+).*$", std::regex_constants::ECMAScript);
     std::smatch match;
@@ -55,6 +56,12 @@ CompilerVersion::CompilerVersion(const Path& path, uint32_t flags, const String&
             parse(line, match);
         } else if (std::regex_match(line.ref(), match, aaplrx)) {
             parse(line, match);
+        } else if (std::regex_match(line.ref(), match, aaplrxnover)) {
+            mCompiler = plast::Clang;
+            mVersion.major = 3;
+            mVersion.minor = 7;
+            mVersion.patch = 0;
+            mVersion.str = line;
         } else if (mKey.target.isEmpty() && std::regex_match(line.ref(), match, targetrx)) {
             assert(match.size() == 2);
             mKey.target = match[1].str();
