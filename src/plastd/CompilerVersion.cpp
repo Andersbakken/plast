@@ -85,10 +85,16 @@ CompilerVersion::SharedPtr CompilerVersion::version(const Path& path, uint32_t f
     return it->second;
 }
 
-CompilerVersion::SharedPtr CompilerVersion::version(plast::CompilerType compiler, int32_t major, const String& target)
+CompilerVersion::SharedPtr CompilerVersion::version(plast::CompilerType type, int32_t major, const String& target)
 {
-    const auto v = sVersionsByKey.find({ compiler, major, target });
-    if (v == sVersionsByKey.end())
+    const auto v = std::find_if(sVersionsByKey.begin(), sVersionsByKey.end(),
+                                [&target, major, type](const std::pair<plast::CompilerKey, WeakPtr> &val) {
+                                    return (type == val.first.type
+                                            && major == val.first.major
+                                            && Rct::wildCmp(val.first.target.constData(), target.constData()));
+                                });
+    if (v == sVersionsByKey.end()) {
         return SharedPtr();
+    }
     return v->second.lock();
 }

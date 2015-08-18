@@ -90,59 +90,66 @@ void Daemon::updateCompilers()
         }
     }
 
-    auto processCompilerFile = [](const Path &cmp) {
-        auto cmplist = cmp.readAll().split('\n', String::SkipEmpty);
-        if (cmplist.isEmpty()) {
-            cmplist << "/usr/bin/cc";
-            cmplist << "/usr/bin/c++";
-        }
-        for (const String& c : cmplist) {
-            auto entry = c.split(' '); // assume compilers don't have spaces in the file names
-            const Path r = static_cast<Path>(entry[0]).resolved();
-            const String target = (entry.size() > 1) ? entry[1] : String();
-            CompilerVersion::SharedPtr ver = CompilerVersion::version(r, 0, target);
-            if (ver) {
-                if (Rct::is64Bit) {
-                    switch (ver->compiler()) {
-                    case plast::Clang:
-                        CompilerVersion::version(r, CompilerArgs::HasDashM32, target);
-                        break;
-                    case plast::GCC: {
-                        // does this gcc support both 64 and 32?
-                        const Set<String>& multis = ver->multiLibs();
-                        error() << "Multis" << multis;
-                        if (multis.contains("m32") && multis.contains("m64")) {
-                            // assume we support i686-linux-gnu
-                            ver = CompilerVersion::version(r, CompilerArgs::HasDashM32, "i686-linux-gnu");
-                            if (ver)
-                                ver->setExtraArgs(List<String>() << "-m32");
-                        }
-                        break; }
-                    case plast::Unknown:
-                        break;
+    auto processCompiler = [](const String &desc) {
+        if (desc.isEmpty())
+            return;
+        auto entry = desc.split(' '); // assume compilers don't have spaces in the file names
+        const Path r = static_cast<Path>(entry[0]).resolved();
+        if (!r.isExecutable())
+            return;
+
+        const String target = (entry.size() > 1) ? entry[1] : String();
+        CompilerVersion::SharedPtr ver = CompilerVersion::version(r, 0, target);
+        if (ver) {
+            if (Rct::is64Bit) {
+                switch (ver->compiler()) {
+                case plast::Clang:
+                    CompilerVersion::version(r, CompilerArgs::HasDashM32, target);
+                    break;
+                case plast::GCC: {
+                    // does this gcc support both 64 and 32?
+                    const Set<String>& multis = ver->multiLibs();
+                    warning() << "Multis" << multis;
+                    if (multis.contains("m32") && multis.contains("m64")) {
+                        // assume we support i686-linux-gnu
+                        ver = CompilerVersion::version(r, CompilerArgs::HasDashM32, "i686-linux-gnu");
+                        if (ver)
+                            ver->setExtraArgs(List<String>() << "-m32");
                     }
-                } else {
-                    // assume that the only alternative to 64bit is 32bit
-                    if (ver->compiler() == plast::GCC) {
-                        // does this gcc support both 64 and 32?
-                        const Set<String>& multis = ver->multiLibs();
-                        error() << "Multis 2" << multis;
-                        if (multis.contains("m32") && multis.contains("m64")) {
-                            // assume we support x86_64-linux-gnu
-                            ver = CompilerVersion::version(r, CompilerArgs::HasDashM64, "x86_64-linux-gnu");
-                            if (ver)
-                                ver->setExtraArgs(List<String>() << "-m64");
-                        }
+                    break; }
+                case plast::Unknown:
+                    break;
+                }
+            } else {
+                // assume that the only alternative to 64bit is 32bit
+                if (ver->compiler() == plast::GCC) {
+                    // does this gcc support both 64 and 32?
+                    const Set<String>& multis = ver->multiLibs();
+                    warning() << "Multis 2" << multis;
+                    if (multis.contains("m32") && multis.contains("m64")) {
+                        // assume we support x86_64-linux-gnu
+                        ver = CompilerVersion::version(r, CompilerArgs::HasDashM64, "x86_64-linux-gnu");
+                        if (ver)
+                            ver->setExtraArgs(List<String>() << "-m64");
                     }
                 }
             }
         }
     };
 
-    for (const Path &path : (List<Path>() << "/etc/plast/compilers"
-                             << Path("/etc/plast/compilers.d/").files(Path::File)
-                             << Path::home() + ".config/plastd.compilers")) {
-        processCompilerFile(path);
+    error() << Path(PLAST_DATA_PREFIX "/etc/plast/compilers.d/").files(Path::File);
+
+    processCompiler("/usr/bin/cc");
+    processCompiler("/usr/bin/c++");
+    List<Path> files;
+    files << PLAST_DATA_PREFIX "/etc/plast/compilers"
+          << Path(PLAST_DATA_PREFIX "/etc/plast/compilers.d/").files(Path::File)
+          << Path::home() + ".config/plast/plastd.compilers";
+
+    for (const Path &path : files) {
+        for (const String &line : path.readAll().split('\n', String::SkipEmpty)) {
+            processCompiler(line);
+        }
     }
 }
 
@@ -185,7 +192,6 @@ bool Daemon::init()
         return false;
     }
 
-#warning should this really be a weak_ptr?
     sInstance = shared_from_this();
     messages::init();
     mLocal.init();

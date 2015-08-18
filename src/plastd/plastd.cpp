@@ -80,7 +80,7 @@ int main(int argc, char** argv)
                        (List<Path>()
                         << (Path::home() + ".config/plastd.conf") // ### remove me
                         << (Path::home() + ".config/plast/plastd.conf")
-                        << "/etc/plast/plastd.conf"))) {
+                        << PLAST_DATA_PREFIX "/etc/plast/plastd.conf"))) {
         return 1;
     }
     if (Config::isEnabled("help")) {

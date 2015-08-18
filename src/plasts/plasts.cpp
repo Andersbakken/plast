@@ -33,7 +33,7 @@ int main(int argc, char** argv)
     Config::registerOption<int>("port", String::format<129>("Use this port, (default %d)", plast::DefaultServerPort),'p', plast::DefaultServerPort,
                                 [](const int &count, String &err) { return validate<uint16_t>(count, "port", err); });
 
-    if (!Config::parse(argc, argv, List<Path>() << (Path::home() + ".config/plasts.conf") << "/etc/plasts.conf")) {
+    if (!Config::parse(argc, argv, List<Path>() << (Path::home() + ".config/plasts.conf") << (PLAST_DATA_PREFIX "/etc/plasts.conf"))) {
         return 1;
     }
 
