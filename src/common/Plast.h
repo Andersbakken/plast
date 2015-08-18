@@ -46,6 +46,7 @@ enum {
     ConnectionVersion = 1
 };
 const String DefaultServerHost = "127.0.0.1";
+const String DefaultCacheDirectory = "/var/cache/plast/";
 
 enum {
     HasJobsMessageId = 32,

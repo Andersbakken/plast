@@ -5,12 +5,91 @@
 #include <rct/Log.h>
 #include <rct/QuitMessage.h>
 #include <rct/Rct.h>
+#include "Http.h"
+#include <stdlib.h>
+#include <rct/Config.h>
 
 Daemon::WeakPtr Daemon::sInstance;
 
 Daemon::Daemon(const Options& opts)
     : mLocal(opts.overcommit), mOptions(opts), mExitCode(0)
 {
+    if (Config::isEnabled("download-compilers"))
+        updateCompilers();
+}
+
+void Daemon::updateCompilers()
+{
+    Http::Request req;
+    req.url = "http://lgux-pnavarro3.corp.netflix.com/toolchains/";
+    Http::Response response = Http::get(req);
+    size_t offset = 0;
+    std::cmatch match;
+    std::regex rx("<a href=\"([^\"]+LATEST[^\"]+)\"");
+    const Path compilerDir = mOptions.cacheDirectory + "compilers/";
+    while (std::regex_search(response.contents.constData() + offset, match, rx)) {
+        const String m(match[1].str());
+        int dot = m.lastIndexOf(".tar", -1, String::CaseInsensitive);
+        if (dot == -1)
+            dot = m.lastIndexOf(".tgz", -1, String::CaseInsensitive);
+        if (dot == -1)
+            dot = m.lastIndexOf(".tbz2", -1, String::CaseInsensitive);
+
+        if (dot != -1) {
+            Http::Request request;
+            request.url = req.url + m;
+            char tempBuf[PATH_MAX];
+            Path fileOutput = compilerDir + m;
+            // request.fileOutput = mOptions.cacheDirectory + "compilers/" + m;
+            const Path manifest = fileOutput.left(dot + (fileOutput.size() - m.size()) + 1) + "manifest";
+            // error() << url << fileName << manifest;
+            bool hadEtag = false;
+            for (const auto &line : manifest.readAll().split("\n")) {
+                if (line.startsWith("ETag: ")) {
+                    request.headers["If-None-Match"] = line.mid(6);
+                    snprintf(tempBuf, sizeof(tempBuf), "%s_plast_compiler_download_XXXXXX", compilerDir.constData());
+                    const int fd = mkstemp(tempBuf);
+                    if (fd != -1) {
+                        request.output = fdopen(fd, "w");
+                        assert(request.output);
+                        hadEtag = true;
+                    }
+                    break;
+                }
+            }
+            if (!request.output) {
+                request.output = fopen(fileOutput.constData(), "w");
+                assert(request.output);
+                if (!request.output)
+                    continue;
+            }
+
+            const Http::Response response = Http::get(request);
+
+            fclose(request.output);
+
+            if (response.statusCode == 304) {
+                error() << "File was golden" << fileOutput;
+                unlink(tempBuf);
+            } else if (response.statusCode >= 200 && response.statusCode < 300) {
+                if (hadEtag) {
+                    int r = rename(tempBuf, fileOutput.constData());
+                    (void)r;
+                    assert(!r);
+                }
+                error() << "Got new file" << request.url << fileOutput << response.responseHeaders.value("ETag");
+                FILE *f = fopen(manifest.constData(), "w");
+                assert(f);
+                fprintf(f, "ETag: %s", response.responseHeaders.value("ETag").constData());
+                fclose(f);
+            } else {
+                error() << "Something went wrong for" << request.url << response.error;
+            }
+        }
+        offset += match.position() + match.length();
+    }
+    exit(0);
+
     const Path cmp = Path::home() + ".config/plastd.compilers";
     auto cmplist = cmp.readAll().split('\n', String::SkipEmpty);
     if (cmplist.isEmpty()) {

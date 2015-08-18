@@ -27,6 +27,7 @@ public:
         int rescheduleCheck;
         int overcommit;
         int maxPreprocessPending;
+        Path cacheDirectory;
     };
 
     Daemon(const Options& opts);
@@ -45,6 +46,7 @@ public:
 private:
     void addClient(const SocketClient::SharedPtr& client);
     void handleJobMessage(const JobMessage::SharedPtr& msg, const std::shared_ptr<Connection>& conn);
+    void updateCompilers();
 
 private:
     SocketServer mServer;

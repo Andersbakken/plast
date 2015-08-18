@@ -5,6 +5,7 @@
 #include <rct/ThreadPool.h>
 #include <stdio.h>
 #include <signal.h>
+#include <curl/curl.h>
 
 static void sigSegvHandler(int signal)
 {
@@ -46,12 +47,17 @@ int main(int argc, char** argv)
     Config::registerOption<bool>("help", "Display this page", 'h');
     Config::registerOption<bool>("syslog", "Log to syslog", 'y');
     Config::registerOption<bool>("no-sighandler", "Don't use a signal handler", 'S');
+    Config::registerOption<bool>("download-compilers", "Download compilers", 'd', false);
     Config::registerOption<int>("job-count", String::format<128>("Job count (defaults to %d)", idealThreadCount), 'j', idealThreadCount,
                                 [](const int &count, String &err) { return validate<int>(count, "job-count", err); });
     Config::registerOption<int>("preprocess-count", String::format<128>("Preprocess count (defaults to %d)", idealThreadCount * 5), 'E', idealThreadCount * 5,
                                 [](const int &count, String &err) { return validate<int>(count, "preprocess-count", err); });
     Config::registerOption<String>("server",
                                    String::format<128>("Server to connect to. (defaults to port %d if hostname doesn't contain a port)", plast::DefaultServerPort), 's');
+    Config::registerOption<String>("cache-directory",
+                                   String::format<128>("Directory to use for caches. (defaults to %s)", plast::DefaultCacheDirectory.constData()),
+                                   'C', plast::DefaultCacheDirectory);
+
     Config::registerOption<int>("port", String::format<128>("Use this port, (default %d)", plast::DefaultDaemonPort), 'p', plast::DefaultDaemonPort,
                                 [](const int &count, String &err) { return validate<uint16_t>(count, "port", err); });
     Config::registerOption<String>("socket",
@@ -70,12 +76,24 @@ int main(int argc, char** argv)
                                                                               plast::DefaultMaxPreprocessPending), 'P', plast::DefaultMaxPreprocessPending,
                                 [](const int& count, String& err) { return validate<int, 10>(count, "max-preprocess-pending", err); });
 
-    if (!Config::parse(argc, argv, List<Path>() << (Path::home() + ".config/plastd.conf") << "/etc/plastd.conf")) {
+    if (!Config::parse(argc, argv,
+                       (List<Path>()
+                        << (Path::home() + ".config/plastd.conf")
+                        << (Path::home() + ".config/plast/plastd.conf")
+                        << "/etc/plastd.conf"))) {
         return 1;
     }
     if (Config::isEnabled("help")) {
         Config::showHelp(stdout);
         return 2;
+    }
+
+    {
+        const CURLcode code = curl_global_init(CURL_GLOBAL_ALL);
+        if (code != CURLE_OK) {
+            fprintf(stderr, "Failed to init curl %d (%s)\n", code, curl_easy_strerror(code));
+            return 3;
+        }
     }
 
     const Flags<LogMode> logMode = Config::isEnabled("syslog") ? LogSyslog : LogStderr;
@@ -106,8 +124,15 @@ int main(int argc, char** argv)
         Config::value<int>("reschedule-timeout"),
         Config::value<int>("reschedule-check"),
         std::min(jobs, over),
-        Config::value<int>("max-preprocess-pending")
+        Config::value<int>("max-preprocess-pending"),
+        Path(Config::value<String>("cache-directory")).ensureTrailingSlash()
     };
+
+    if (!Path(options.cacheDirectory + "compilers/").mkdir(Path::Recursive)) {
+        fprintf(stderr, "Failed to mkdir --cache \"%s\"",
+                options.cacheDirectory.constData());
+        return 2;
+    }
     const String serverValue = Config::value<String>("server");
     if (!serverValue.isEmpty()) {
         const int colon = serverValue.indexOf(':');
