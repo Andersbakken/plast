@@ -507,6 +507,7 @@ Job::SharedPtr Remote::take()
                 const uint64_t id = cand->jobid;
                 assert(id == job->id());
                 removeJob(id);
+                assert(!job->mPreprocessed.isEmpty());
                 job->clearPreprocessed();
                 assert(mCurPreprocessed > 0);
                 --mCurPreprocessed;

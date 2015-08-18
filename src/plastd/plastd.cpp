@@ -128,11 +128,11 @@ int main(int argc, char** argv)
         Path(Config::value<String>("cache-directory")).ensureTrailingSlash()
     };
 
-    if (!Path(options.cacheDirectory + "compilers/").mkdir(Path::Recursive)) {
-        fprintf(stderr, "Failed to mkdir --cache \"%s\"",
-                options.cacheDirectory.constData());
-        return 2;
-    }
+    // if (!Path(options.cacheDirectory + "compilers/").mkdir(Path::Recursive)) {
+    //     fprintf(stderr, "Failed to mkdir --cache \"%s\"",
+    //             options.cacheDirectory.constData());
+    //     return 2;
+    // }
     const String serverValue = Config::value<String>("server");
     if (!serverValue.isEmpty()) {
         const int colon = serverValue.indexOf(':');
