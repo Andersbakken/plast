@@ -40,10 +40,10 @@ Job::Job(const Path& path, const List<String>& args, Type type,
         mResolvedCompiler = version->path();
         assert(ctype == version->compiler());
         assert(cmajor == version->major());
-        assert(ctarget == version->target());
+        assert(Rct::wildCmp(version->target().constData(), ctarget.constData()));
 
         if (version->compiler() == plast::Clang) {
-            mArgs << "-target" << version->target();
+            mArgs << "-target" << ctarget;
         }
         mArgs << version->extraArgs();
         mCompilerArgs = CompilerArgs::create(mArgs);
