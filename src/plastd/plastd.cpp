@@ -78,9 +78,9 @@ int main(int argc, char** argv)
 
     if (!Config::parse(argc, argv,
                        (List<Path>()
-                        << (Path::home() + ".config/plastd.conf")
+                        << (Path::home() + ".config/plastd.conf") // ### remove me
                         << (Path::home() + ".config/plast/plastd.conf")
-                        << "/etc/plastd.conf"))) {
+                        << "/etc/plast/plastd.conf"))) {
         return 1;
     }
     if (Config::isEnabled("help")) {
