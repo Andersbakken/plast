@@ -48,7 +48,7 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    ensurePath(Path::home() + ".config");
+    ensurePath(Path::home() + ".config/plast/");
 
     if (Config::isEnabled("help")) {
         Config::showHelp(stdout);

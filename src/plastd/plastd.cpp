@@ -39,7 +39,7 @@ int main(int argc, char** argv)
 {
     Rct::findExecutablePath(*argv);
 
-    ensurePath(Path::home() + ".config");
+    ensurePath(Path::home() + ".config/plast");
 
     const int idealThreadCount = ThreadPool::idealThreadCount();
     const String socketPath = plast::defaultSocketFile();
