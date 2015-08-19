@@ -464,8 +464,8 @@ List<Scheduler::Compiler> Scheduler::loadCompilers() const
             error() << "Can't parse compiler type" << type;
             continue;
         }
-        cc.major = c["major"].get<int>();
-        cc.minor = c["minor"].get<int>();
+        cc.majorVersion = c["major"].get<int>();
+        cc.minorVersion = c["minor"].get<int>();
         if (!cc.isValid()) {
             error() << "Invalid compiler" << c.dump();
             continue;

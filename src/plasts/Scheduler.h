@@ -39,10 +39,10 @@ private:
     struct Compiler {
         String target, host, link;
         enum Type { Clang, GCC } type;
-        uint16_t major, minor;
+        uint16_t majorVersion, minorVersion;
 
         Compiler()
-            : type(Clang), major(0), minor(0)
+            : type(Clang), majorVersion(0), minorVersion(0)
         {}
 
         nlohmann::json object() const
@@ -51,8 +51,8 @@ private:
                     << "target" << target
                     << "host" << host
                     << "link" << link
-                    << "major" << major
-                    << "minor" << minor
+                    << "major" << majorVersion
+                    << "minor" << minorVersion
                     << "type" << (type == Clang ? "clang" : "gcc")).object();
         }
         bool isValid() const
@@ -60,9 +60,9 @@ private:
             return (!target.isEmpty()
                     && !host.isEmpty()
                     && !link.isEmpty()
-                    && major >= 0
-                    && minor >= 0
-                    && (major > 0 || minor > 0));
+                    && majorVersion >= 0
+                    && minorVersion >= 0
+                    && (majorVersion > 0 || minorVersion > 0));
         }
     };
     List<Compiler> loadCompilers() const;
