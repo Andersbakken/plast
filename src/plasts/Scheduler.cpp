@@ -402,7 +402,7 @@ void Scheduler::handleQuery(const HttpServer::Request::SharedPtr &req)
 
         error() << req->body().done();
         const String body = req->body().read();
-        SafeJson j;
+        json j;
         try {
             j = json::parse(body);
         } catch(const std::exception &e) {
@@ -410,7 +410,7 @@ void Scheduler::handleQuery(const HttpServer::Request::SharedPtr &req)
             return;
         }
 
-        const String cmd = j["command"].get<String>();
+        const String cmd = safe_get<String>(j, "command");
         if (cmd.isEmpty()) {
             send((JsonObject() << "error" << "command is empty").object(), Error);
             return;
@@ -420,24 +420,24 @@ void Scheduler::handleQuery(const HttpServer::Request::SharedPtr &req)
             String target, host;
             Compiler::Type type = Compiler::Unknown;
             std::pair<uint16_t, uint16_t> minVersion, maxVersion;
-            auto convertVersion = [](const SafeJson &j) {
+            auto convertVersion = [](const json &j) {
                 std::pair<uint16_t, uint16_t> version;
                 if (j.is_object()) {
-                    version.first = j["major"].get<uint16_t>();
-                    version.second = j["minor"].get<uint16_t>();
+                    version.first = safe_get<uint16_t>(j, "major");
+                    version.second = safe_get<uint16_t>(j, "minor");
                 }
                 return version;
             };
 
-            SafeJson parameters = j["parameters"];
+            json parameters = j["parameters"];
             if (parameters.is_object()) {
-                target = parameters["target"].get<String>();
-                host = parameters["host"].get<String>();
-                type = Compiler::stringToType(parameters["type"].get<String>());
+                target = safe_get<String>(parameters, "target");
+                host = safe_get<String>(parameters, "host");
+                type = Compiler::stringToType(safe_get<String>(parameters, "type"));
                 minVersion = convertVersion(parameters["minimumVersion"]);
                 maxVersion = convertVersion(parameters["maximumVersion"]);
             }
-            std::vector<SafeJson> jc;
+            std::vector<json> jc;
             for (const Compiler &compiler : mCompilers) {
                 if (!target.isEmpty() && compiler.target != target)
                     continue;
@@ -455,6 +455,7 @@ void Scheduler::handleQuery(const HttpServer::Request::SharedPtr &req)
                         || (compiler.majorVersion == maxVersion.first && compiler.majorVersion > maxVersion.second))) {
                     continue;
                 }
+                assert(compiler.object().is_object());
                 jc.push_back(compiler.object());
             };
 
@@ -484,7 +485,7 @@ void Scheduler::loadCompilers()
     if (contents.isEmpty())
         return;
 
-    SafeJson j;
+    json j;
     try {
         j = json::parse(contents);
     } catch(const std::exception &e) {
@@ -493,9 +494,9 @@ void Scheduler::loadCompilers()
         return;
     }
 
-    for (const SafeJson &c : j.get<std::vector<SafeJson> >("compilers")) {
+    for (const json &c : j.get<std::vector<json> >("compilers")) {
         Compiler cc;
-        cc.target = c.get<String>("target");
+        cc.target = safe_get<String>(c, "target");
         cc.host = c.get<String>("host");
         if (cc.host.isEmpty()) {
             cc.host = cc.target;
