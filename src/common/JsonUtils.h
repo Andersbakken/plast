@@ -33,6 +33,36 @@ private:
     String k;
 };
 
+class SafeJson : public nlohmann::json
+{
+public:
+    SafeJson(const nlohmann::json &obj = nlohmann::json())
+        : nlohmann::json(obj)
+    {}
+
+    SafeJson &operator=(const nlohmann::json &other)
+    {
+        nlohmann::json::operator=(other);
+        return *this;
+    }
+
+    template <typename T>
+    T get(const String &key, bool *ok = 0, const T &defaultValue = T()) const
+    {
+        try {
+            nlohmann::json j = operator[](key);
+            const T ret = j.get<T>();
+            if (ok)
+                *ok = true;
+            return ret;
+        } catch(const std::exception &e) {
+            if (ok)
+                *ok = false;
+            return defaultValue;
+        }
+    }
+};
+
 template<typename T>
 inline JsonObject&& operator<<(JsonObject&& o, const T& t)
 {

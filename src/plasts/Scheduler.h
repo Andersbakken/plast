@@ -13,6 +13,7 @@
 #include <memory>
 #include <rct/Value.h>
 #include <JsonUtils.h>
+#include <rct/FileSystemWatcher.h>
 
 class Scheduler : public std::enable_shared_from_this<Scheduler>
 {
@@ -38,11 +39,30 @@ public:
 private:
     struct Compiler {
         String target, host, link;
-        enum Type { Clang, GCC } type;
+        enum Type { Unknown, Clang, GCC } type;
+        static Type stringToType(const String &string)
+        {
+            if (string == "clang") {
+                return Clang;
+            } else if (string == "GCC") {
+                return GCC;
+            }
+            return Unknown;
+        }
+        static const char *typeToString(Type type)
+        {
+            switch (type) {
+            case GCC: return "gcc";
+            case Clang: return "clang";
+            case Unknown: return "unknown";
+            }
+            assert(0);
+            return 0;
+        }
         uint16_t majorVersion, minorVersion;
 
         Compiler()
-            : type(Clang), majorVersion(0), minorVersion(0)
+            : type(Unknown), majorVersion(0), minorVersion(0)
         {}
 
         nlohmann::json object() const
@@ -53,19 +73,20 @@ private:
                     << "link" << link
                     << "major" << majorVersion
                     << "minor" << minorVersion
-                    << "type" << (type == Clang ? "clang" : "gcc")).object();
+                    << "type" << typeToString(type)).object();
         }
         bool isValid() const
         {
             return (!target.isEmpty()
                     && !host.isEmpty()
                     && !link.isEmpty()
+                    && type != Unknown
                     && majorVersion >= 0
                     && minorVersion >= 0
                     && (majorVersion > 0 || minorVersion > 0));
         }
     };
-    List<Compiler> loadCompilers() const;
+    void loadCompilers();
     void addPeer(const Peer::SharedPtr& peer);
     void sendAllPeers(const WebSocket::SharedPtr& socket);
     void sendToAll(const WebSocket::Message& msg);
@@ -79,6 +100,8 @@ private:
     Set<Peer::SharedPtr> findPeers(const String& name);
 
 private:
+    FileSystemWatcher mWatcher;
+    List<Compiler> mCompilers;
     SocketServer mServer;
     HttpServer mHttpServer;
     Set<Peer::SharedPtr> mPeers;

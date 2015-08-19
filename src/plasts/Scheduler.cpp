@@ -35,6 +35,15 @@ Scheduler::Scheduler(const Options& opts)
     : mOpts(opts)
 {
     readSettings();
+    loadCompilers();
+    auto maybeLoadCompilers = [this](const Path &path) {
+        if (path == mOpts.compilers)
+            loadCompilers();
+    };
+    mWatcher.added().connect(maybeLoadCompilers);
+    mWatcher.removed().connect(maybeLoadCompilers);
+    mWatcher.modified().connect(maybeLoadCompilers);
+    mWatcher.watch(mOpts.compilers.parentDir());
 
     mServer.newConnection().connect([this](SocketServer* server) {
             SocketClient::SharedPtr client;
@@ -374,55 +383,87 @@ void Scheduler::handleQuery(const HttpServer::Request::SharedPtr &req)
             Error,
             Success
         };
-        auto send = [req](const String &data, Type type) {
-            error() << "closing socket" << data << type;
+        auto send = [req](const json &data, Type type) {
+            // error() << "socket" << data.dump() << type;
+            const bool pretty = req->query().contains("pretty=true");
+            String json = data.dump(pretty ? 4 : -1);
+            if (pretty)
+                json.append('\n');
             HttpServer::Response response(req->protocol(), type == Error ? 404 : 200);
             response.headers() = HttpServer::Headers::StringMap {
-                { "Content-Length", String::number(data.size()) },
-                { "Content-Type", type == Error ? "text/plain" : "text/json" },
+                { "Content-Length", String::number(json.size()) },
+                { "Content-Type", "text/json" },
                 { "Connection", type == Error ? "close" : "keep-alive" }
             };
-            response.setBody(data);
+            response.setBody(json);
             req->write(response, HttpServer::Response::Complete);
             req->close();
         };
 
         error() << req->body().done();
         const String body = req->body().read();
-        json j;
+        SafeJson j;
         try {
             j = json::parse(body);
         } catch(const std::exception &e) {
-            send(String("Couldn't parse JSON: ") + e.what() + "\n", Error);
+            send((JsonObject() << "error" << (String("Couldn't parse JSON: ") + e.what())).object(), Error);
             return;
         }
 
         const String cmd = j["command"].get<String>();
         if (cmd.isEmpty()) {
-            send("command is not a string\n", Error);
+            send((JsonObject() << "error" << "command is empty").object(), Error);
             return;
         }
 
         if (cmd == "list-compilers") {
-            const List<Compiler> compilers = loadCompilers();
-            json filters = j["filters"];
-            // if (filters.
-            // String host = j["host"]
-            // json compilers;
-            // try {
-            //     compilers = json::parse(mOpts.compilers.readAll());
-            // } catch(const std::exception &e) {
-            //     send(String::format<1024>("Couldn't parse compilers \"%s\": %s\n",
-            //                               mOpts.compilers.constData(), e.what()), Error);
-            //     return;
-            // }
-            // const String target = j["target"].get<String>();
-            // const String host = j["host"].get<String>();
-            // send(value.toJSON(), Success);
-        } else if (cmd == "get-compiler") {
+            String target, host;
+            Compiler::Type type = Compiler::Unknown;
+            std::pair<uint16_t, uint16_t> minVersion, maxVersion;
+            auto convertVersion = [](const SafeJson &j) {
+                std::pair<uint16_t, uint16_t> version;
+                if (j.is_object()) {
+                    version.first = j["major"].get<uint16_t>();
+                    version.second = j["minor"].get<uint16_t>();
+                }
+                return version;
+            };
 
+            SafeJson parameters = j["parameters"];
+            if (parameters.is_object()) {
+                target = parameters["target"].get<String>();
+                host = parameters["host"].get<String>();
+                type = Compiler::stringToType(parameters["type"].get<String>());
+                minVersion = convertVersion(parameters["minimumVersion"]);
+                maxVersion = convertVersion(parameters["maximumVersion"]);
+            }
+            std::vector<SafeJson> jc;
+            for (const Compiler &compiler : mCompilers) {
+                if (!target.isEmpty() && compiler.target != target)
+                    continue;
+                if (!host.isEmpty() && compiler.host != host)
+                    continue;
+                if (type != Compiler::Unknown && type != compiler.type)
+                    continue;
+                if ((minVersion.first || minVersion.second)
+                    && (compiler.majorVersion < minVersion.first
+                        || (compiler.majorVersion == minVersion.first && compiler.minorVersion < minVersion.second))) {
+                    continue;
+                }
+                if ((maxVersion.first || maxVersion.second)
+                    && (compiler.majorVersion > maxVersion.first
+                        || (compiler.majorVersion == maxVersion.first && compiler.majorVersion > maxVersion.second))) {
+                    continue;
+                }
+                jc.push_back(compiler.object());
+            };
+
+            const json response = {
+                { "compilers", jc }
+            };
+            send(response, Success);
         } else {
-            send("Unknown command: " + cmd, Error);
+            send((JsonObject() << "error" << "unknown command " + cmd).object(), Error);
         }
     };
 
@@ -436,42 +477,40 @@ void Scheduler::handleQuery(const HttpServer::Request::SharedPtr &req)
     }
 }
 
-List<Scheduler::Compiler> Scheduler::loadCompilers() const
+void Scheduler::loadCompilers()
 {
-    List<Compiler> ret;
-    json j;
+    mCompilers.clear();
+    const String contents = mOpts.compilers.readAll();
+    if (contents.isEmpty())
+        return;
+
+    SafeJson j;
     try {
-        j = json::parse(mOpts.compilers.readAll());
+        j = json::parse(contents);
     } catch(const std::exception &e) {
         error("Couldn't parse compilers \"%s\": %s",
               mOpts.compilers.constData(), e.what());
-        return ret;
+        return;
     }
 
-    for (const json &c : j["compilers"].get<std::vector<json> >()) {
+    for (const SafeJson &c : j.get<std::vector<SafeJson> >("compilers")) {
         Compiler cc;
-        cc.target = c["target"].get<String>();
-        cc.host = c["host"].get<String>();
-        if (cc.host.isEmpty())
+        cc.target = c.get<String>("target");
+        cc.host = c.get<String>("host");
+        if (cc.host.isEmpty()) {
             cc.host = cc.target;
-        cc.host = c["link"].get<String>();
-        String type = c["type"].get<String>();
-        if (type == "clang") {
-            cc.type = Compiler::Clang;
-        } else if (type == "gcc") {
-            cc.type = Compiler::GCC;
-        } else {
-            error() << "Can't parse compiler type" << type;
-            continue;
+        } else if (cc.target.isEmpty()) {
+            cc.target = cc.host;
         }
+        cc.link = c["link"].get<String>();
+        cc.type = Compiler::stringToType(c["type"].get<String>());
         cc.majorVersion = c["major"].get<int>();
         cc.minorVersion = c["minor"].get<int>();
         if (!cc.isValid()) {
-            error() << "Invalid compiler" << c.dump();
+            error() << "Invalid compiler" << cc.object().dump();
             continue;
         }
-        ret.push_back(cc);
+        mCompilers.push_back(cc);
     }
-    return ret;
 }
 
