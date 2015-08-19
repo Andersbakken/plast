@@ -11,6 +11,8 @@
 #include <rct/Set.h>
 #include <rct/String.h>
 #include <memory>
+#include <rct/Value.h>
+#include <JsonUtils.h>
 
 class Scheduler : public std::enable_shared_from_this<Scheduler>
 {
@@ -21,6 +23,7 @@ public:
     struct Options
     {
         uint16_t port;
+        Path compilers;
     };
 
     Scheduler(const Options& opts);
@@ -33,10 +36,42 @@ public:
     static SharedPtr instance();
 
 private:
+    struct Compiler {
+        String target, host, link;
+        enum Type { Clang, GCC } type;
+        uint16_t major, minor;
+
+        Compiler()
+            : type(Clang), major(0), minor(0)
+        {}
+
+        nlohmann::json object() const
+        {
+            return (JsonObject()
+                    << "target" << target
+                    << "host" << host
+                    << "link" << link
+                    << "major" << major
+                    << "minor" << minor
+                    << "type" << (type == Clang ? "clang" : "gcc")).object();
+        }
+        bool isValid() const
+        {
+            return (!target.isEmpty()
+                    && !host.isEmpty()
+                    && !link.isEmpty()
+                    && major >= 0
+                    && minor >= 0
+                    && (major > 0 || minor > 0));
+        }
+    };
+    List<Compiler> loadCompilers() const;
     void addPeer(const Peer::SharedPtr& peer);
     void sendAllPeers(const WebSocket::SharedPtr& socket);
     void sendToAll(const WebSocket::Message& msg);
     void sendToAll(const String& msg);
+    void handleWebsocket(const HttpServer::Request::SharedPtr &req);
+    void handleQuery(const HttpServer::Request::SharedPtr &req);
 
     void readSettings();
     void writeSettings();

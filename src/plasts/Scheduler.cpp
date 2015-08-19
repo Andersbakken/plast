@@ -56,139 +56,23 @@ Scheduler::Scheduler(const Options& opts)
     mHttpServer.listen(8089);
     mHttpServer.request().connect([this](const HttpServer::Request::SharedPtr& req) {
             error() << "got request" << req->protocol() << req->method() << req->path();
-            if (req->method() == HttpServer::Request::Get) {
+            if (req->method() == HttpServer::Request::Post) {
+                if (req->path() == "/query") {
+                    handleQuery(req);
+                }
+            } else if (req->method() == HttpServer::Request::Get) {
                 if (req->headers().has("Upgrade")) {
                     error() << "upgrade?";
-                    HttpServer::Response response;
-                    if (WebSocket::response(*req, response)) {
-                        req->write(response);
-                        WebSocket::SharedPtr websocket = std::make_shared<WebSocket>(req->takeSocket());
-                        mWebSockets[websocket.get()] = websocket;
-
-                        Map<String, CmdHandler> cmds = {
-                            { "peers", [this](WebSocket* ws, const List<json>& args) {
-                                    for (const auto& p : mPeers) {
-                                        ws->write((JsonObject()
-                                                   << "peer" << p->name()
-                                                   << "ip" << p->ip()
-                                                   << "jobs" << p->jobs()).dump());
-                                    }
-                                } },
-                            { "block", [this](WebSocket* ws, const List<json>& args) {
-                                    if (args.isEmpty()) {
-                                        // list all blocks
-                                        json::array_t all;
-                                        for (const String& b : mBlackList) {
-                                            all.push_back(b);
-                                        }
-                                        ws->write((JsonObject() << "blacklisted" << all).dump());
-                                        return;
-                                    }
-
-                                    auto block = [this, ws](const String& peer) -> bool {
-                                        if (mWhiteList.contains(peer)) {
-                                            // report error
-                                            ws->write((JsonObject() << "error" << "whitelisted").dump());
-                                            return false;
-                                        }
-                                        mBlackList.insert(peer);
-                                        writeSettings();
-                                        ws->write((JsonObject() << "blacklisted" << peer).dump());
-                                        return true;
-                                    };
-
-                                    // find each peer, get the address
-                                    for (const json& j : args) {
-                                        if (j.is_string()) {
-                                            const String name = j.get<json::string_t>();
-                                            const Set<Peer::SharedPtr> peers = findPeers(name);
-                                            if (peers.isEmpty()) {
-                                                if (Rct::isIP(name))
-                                                    block(name);
-                                                else
-                                                    ws->write((JsonObject() << "error" << ("peer not found: " + name)).dump());
-                                                return;
-                                            }
-                                            for (const auto& p : peers) {
-                                                if (block(p->ip())) {
-                                                    mPeers.erase(p);
-                                                    const json peerj = {
-                                                        { "type", "peer" },
-                                                        { "id", p->id() },
-                                                        { "delete", true }
-                                                    };
-                                                    sendToAll(peerj.dump());
-                                                }
-                                            }
-                                        }
-                                    }
-                                } },
-                            { "unblock", [this](WebSocket* ws, const List<json>& args) {
-                                    for (const json& j : args) {
-                                        if (j.is_string()) {
-                                            const String name = j.get<json::string_t>();
-                                            if (mBlackList.remove(name)) {
-                                                ws->write((JsonObject() << "unblocked" << name).dump());
-                                                writeSettings();
-                                            } else {
-                                                ws->write((JsonObject() << "error" << (name + " not found in blacklist")).dump());
-                                            }
-                                        }
-                                    }
-                                } }
-                        };
-
-                        websocket->message().connect([this, cmds](WebSocket* websocket, const WebSocket::Message& msg) {
-                                if (msg.opcode() == WebSocket::Message::TextFrame) {
-                                    error() << "got message" << msg.opcode() << msg.message();
-                                    json j;
-                                    try {
-                                        j = json::parse(msg.message());
-                                    } catch(const std::exception& e) {
-                                        error() << "exception" << e.what();
-                                        return;
-                                    }
-                                    if (!j.is_object()) {
-                                        error() << "message not an object";
-                                        websocket->write((JsonObject() << "error" << "message is not an object").dump());
-                                        return;
-                                    }
-                                    const auto cmdname = j["cmd"];
-                                    if (!cmdname.is_string()) {
-                                        error() << "cmd not a string";
-                                        websocket->write((JsonObject() << "error" << "cmd is not a string").dump());
-                                        return;
-                                    }
-                                    const auto& cmd = cmds.find(cmdname.get<std::string>());
-                                    if (cmd == cmds.end()) {
-                                        error() << "cmd" << cmdname.get<std::string>() << "not recognized";
-                                        websocket->write((JsonObject()
-                                                          << "cmd" << cmdname.get<std::string>()
-                                                          << "error" << "not recognized").dump());
-                                        return;
-                                    }
-                                    const auto args = j["args"];
-                                    if (args.is_array())
-                                        cmd->second(websocket, args.get<json::array_t>());
-                                    else
-                                        cmd->second(websocket, List<json>());
-                                }
-                            });
-                        websocket->error().connect([this](WebSocket* websocket) {
-                                mWebSockets.erase(websocket);
-                            });
-                        websocket->disconnected().connect([this](WebSocket* websocket) {
-                                mWebSockets.erase(websocket);
-                            });
-                        sendAllPeers(websocket);
-                        return;
-                    }
+                    handleWebsocket(req);
+                    return;
                 }
 
                 String file = req->path();
-                if (file == "/")
+                // serve files
+                if (file == "/") {
                     file = "stats.html";
-                static Path base = Path(Rct::executablePath().parentDir().ensureTrailingSlash() + "stats/").resolved().ensureTrailingSlash();
+                }
+                static Path base = Path(Rct::executablePath().parentDir().ensureTrailingSlash() + "stats/").resolved();
                 const Path path = Path(base + file).resolved();
                 if (!path.startsWith(base)) {
                     // no
@@ -355,3 +239,239 @@ void Scheduler::init()
     sInstance = shared_from_this();
     messages::init();
 }
+
+void Scheduler::handleWebsocket(const HttpServer::Request::SharedPtr &req)
+{
+    HttpServer::Response response;
+    if (WebSocket::response(*req, response)) {
+        req->write(response);
+        WebSocket::SharedPtr websocket = std::make_shared<WebSocket>(req->takeSocket());
+        mWebSockets[websocket.get()] = websocket;
+
+        Map<String, CmdHandler> cmds = {
+            { "peers", [this](WebSocket* ws, const List<json>& args) {
+                    for (const auto& p : mPeers) {
+                        ws->write((JsonObject()
+                                   << "peer" << p->name()
+                                   << "ip" << p->ip()
+                                   << "jobs" << p->jobs()).dump());
+                    }
+                } },
+            { "block", [this](WebSocket* ws, const List<json>& args) {
+                    if (args.isEmpty()) {
+                        // list all blocks
+                        json::array_t all;
+                        for (const String& b : mBlackList) {
+                            all.push_back(b);
+                        }
+                        ws->write((JsonObject() << "blacklisted" << all).dump());
+                        return;
+                    }
+
+                    auto block = [this, ws](const String& peer) -> bool {
+                        if (mWhiteList.contains(peer)) {
+                            // report error
+                            ws->write((JsonObject() << "error" << "whitelisted").dump());
+                            return false;
+                        }
+                        mBlackList.insert(peer);
+                        writeSettings();
+                        ws->write((JsonObject() << "blacklisted" << peer).dump());
+                        return true;
+                    };
+
+                    // find each peer, get the address
+                    for (const json& j : args) {
+                        if (j.is_string()) {
+                            const String name = j.get<json::string_t>();
+                            const Set<Peer::SharedPtr> peers = findPeers(name);
+                            if (peers.isEmpty()) {
+                                if (Rct::isIP(name))
+                                    block(name);
+                                else
+                                    ws->write((JsonObject() << "error" << ("peer not found: " + name)).dump());
+                                return;
+                            }
+                            for (const auto& p : peers) {
+                                if (block(p->ip())) {
+                                    mPeers.erase(p);
+                                    const json peerj = {
+                                        { "type", "peer" },
+                                        { "id", p->id() },
+                                        { "delete", true }
+                                    };
+                                    sendToAll(peerj.dump());
+                                }
+                            }
+                        }
+                    }
+                } },
+            { "unblock", [this](WebSocket* ws, const List<json>& args) {
+                    for (const json& j : args) {
+                        if (j.is_string()) {
+                            const String name = j.get<json::string_t>();
+                            if (mBlackList.remove(name)) {
+                                ws->write((JsonObject() << "unblocked" << name).dump());
+                                writeSettings();
+                            } else {
+                                ws->write((JsonObject() << "error" << (name + " not found in blacklist")).dump());
+                            }
+                        }
+                    }
+                } }
+        };
+
+        websocket->message().connect([this, cmds](WebSocket* websocket, const WebSocket::Message& msg) {
+                if (msg.opcode() == WebSocket::Message::TextFrame) {
+                    error() << "got message" << msg.opcode() << msg.message();
+                    json j;
+                    try {
+                        j = json::parse(msg.message());
+                    } catch(const std::exception& e) {
+                        error() << "exception" << e.what();
+                        return;
+                    }
+                    if (!j.is_object()) {
+                        error() << "message not an object";
+                        websocket->write((JsonObject() << "error" << "message is not an object").dump());
+                        return;
+                    }
+                    const auto cmdname = j["cmd"];
+                    if (!cmdname.is_string()) {
+                        error() << "cmd not a string";
+                        websocket->write((JsonObject() << "error" << "cmd is not a string").dump());
+                        return;
+                    }
+                    const auto& cmd = cmds.find(cmdname.get<std::string>());
+                    if (cmd == cmds.end()) {
+                        error() << "cmd" << cmdname.get<std::string>() << "not recognized";
+                        websocket->write((JsonObject()
+                                          << "cmd" << cmdname.get<std::string>()
+                                          << "error" << "not recognized").dump());
+                        return;
+                    }
+                    const auto args = j["args"];
+                    if (args.is_array())
+                        cmd->second(websocket, args.get<json::array_t>());
+                    else
+                        cmd->second(websocket, List<json>());
+                }
+            });
+        websocket->error().connect([this](WebSocket* websocket) {
+                mWebSockets.erase(websocket);
+            });
+        websocket->disconnected().connect([this](WebSocket* websocket) {
+                mWebSockets.erase(websocket);
+            });
+        sendAllPeers(websocket);
+    }
+}
+
+void Scheduler::handleQuery(const HttpServer::Request::SharedPtr &req)
+{
+    auto go = [req, this]() {
+        enum Type {
+            Error,
+            Success
+        };
+        auto send = [req](const String &data, Type type) {
+            error() << "closing socket" << data << type;
+            HttpServer::Response response(req->protocol(), type == Error ? 404 : 200);
+            response.headers() = HttpServer::Headers::StringMap {
+                { "Content-Length", String::number(data.size()) },
+                { "Content-Type", type == Error ? "text/plain" : "text/json" },
+                { "Connection", type == Error ? "close" : "keep-alive" }
+            };
+            response.setBody(data);
+            req->write(response, HttpServer::Response::Complete);
+            req->close();
+        };
+
+        error() << req->body().done();
+        const String body = req->body().read();
+        json j;
+        try {
+            j = json::parse(body);
+        } catch(const std::exception &e) {
+            send(String("Couldn't parse JSON: ") + e.what() + "\n", Error);
+            return;
+        }
+
+        const String cmd = j["command"].get<String>();
+        if (cmd.isEmpty()) {
+            send("command is not a string\n", Error);
+            return;
+        }
+
+        if (cmd == "list-compilers") {
+            const List<Compiler> compilers = loadCompilers();
+            json filters = j["filters"];
+            // if (filters.
+            // String host = j["host"]
+            // json compilers;
+            // try {
+            //     compilers = json::parse(mOpts.compilers.readAll());
+            // } catch(const std::exception &e) {
+            //     send(String::format<1024>("Couldn't parse compilers \"%s\": %s\n",
+            //                               mOpts.compilers.constData(), e.what()), Error);
+            //     return;
+            // }
+            // const String target = j["target"].get<String>();
+            // const String host = j["host"].get<String>();
+            // send(value.toJSON(), Success);
+        } else if (cmd == "get-compiler") {
+
+        } else {
+            send("Unknown command: " + cmd, Error);
+        }
+    };
+
+    if (req->body().done()) {
+        go();
+    } else {
+        req->body().readyRead().connect([go](HttpServer::Body *body) {
+                if (body->done())
+                    go();
+            });
+    }
+}
+
+List<Scheduler::Compiler> Scheduler::loadCompilers() const
+{
+    List<Compiler> ret;
+    json j;
+    try {
+        j = json::parse(mOpts.compilers.readAll());
+    } catch(const std::exception &e) {
+        error("Couldn't parse compilers \"%s\": %s",
+              mOpts.compilers.constData(), e.what());
+        return ret;
+    }
+
+    for (const json &c : j["compilers"].get<std::vector<json> >()) {
+        Compiler cc;
+        cc.target = c["target"].get<String>();
+        cc.host = c["host"].get<String>();
+        if (cc.host.isEmpty())
+            cc.host = cc.target;
+        cc.host = c["link"].get<String>();
+        String type = c["type"].get<String>();
+        if (type == "clang") {
+            cc.type = Compiler::Clang;
+        } else if (type == "gcc") {
+            cc.type = Compiler::GCC;
+        } else {
+            error() << "Can't parse compiler type" << type;
+            continue;
+        }
+        cc.major = c["major"].get<int>();
+        cc.minor = c["minor"].get<int>();
+        if (!cc.isValid()) {
+            error() << "Invalid compiler" << c.dump();
+            continue;
+        }
+        ret.push_back(cc);
+    }
+    return ret;
+}
+
