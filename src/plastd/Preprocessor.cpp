@@ -43,6 +43,7 @@ Preprocessor::Preprocessor()
                     size_t r;
                     FILE* f = fopen(data->second.filename.constData(), "r");
                     assert(f);
+                    job->mPreprocessed.clear();
                     while (!feof(f) && !ferror(f)) {
                         r = fread(buf, 1, sizeof(buf), f);
                         if (r) {
@@ -103,6 +104,7 @@ bool Preprocessor::preprocess(const Job::SharedPtr& job)
     const Path compiler = job->resolvedCompiler();
     cmdline.removeFirst();
 
+    job->mPreprocessed.resize(1);
     const ProcessPool::Id id = mPool.prepare(job->path(), compiler, cmdline);
     mJobs[id] = data;
     mPool.post(id);

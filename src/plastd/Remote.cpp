@@ -427,7 +427,9 @@ void Remote::preprocessMore()
                     case Job::Error:
                         if (oldStatus == Job::Preprocessed || oldStatus == Job::Preprocessing || oldStatus == Job::StartingPreprocessing) {
                             --mCurPreprocessed;
+                            assert(mCurPreprocessed >= 0);
                             job->clearPreprocessed();
+                            assert(job->mPreprocessed.isEmpty());
                             preprocessMore();
                         }
                         break;
