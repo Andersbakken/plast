@@ -494,19 +494,19 @@ void Scheduler::loadCompilers()
         return;
     }
 
-    for (const json &c : j.get<std::vector<json> >("compilers")) {
+    for (const json &c : safe_get<std::vector<json> >(j, "compilers")) {
         Compiler cc;
         cc.target = safe_get<String>(c, "target");
-        cc.host = c.get<String>("host");
+        cc.host = safe_get<String>(c, "host");
         if (cc.host.isEmpty()) {
             cc.host = cc.target;
         } else if (cc.target.isEmpty()) {
             cc.target = cc.host;
         }
-        cc.link = c["link"].get<String>();
-        cc.type = Compiler::stringToType(c["type"].get<String>());
-        cc.majorVersion = c["major"].get<int>();
-        cc.minorVersion = c["minor"].get<int>();
+        cc.link = safe_get<String>(c, "link");
+        cc.type = Compiler::stringToType(safe_get<String>(c, "type"));
+        cc.majorVersion = safe_get<int>(c, "major");
+        cc.minorVersion = safe_get<int>(c, "minor");
         if (!cc.isValid()) {
             error() << "Invalid compiler" << cc.object().dump();
             continue;
