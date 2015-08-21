@@ -106,25 +106,25 @@ void Remote::init()
             while (it != mBuildingByTime.end() && !done) {
                 bool del = false;
                 const uint64_t started = it->first;
-                auto sub = it->second.begin();
-                while (sub != it->second.end()) {
-                    assert(mBuildingById.contains((*sub)->jobid));
-                    const int timeout = mRescheduleTimeout * std::max<uint32_t>(1, (*sub)->serial);
+                auto building = it->second.begin();
+                while (building != it->second.end()) {
+                    assert(mBuildingById.contains((*building)->jobid));
+                    const int timeout = mRescheduleTimeout * std::max<uint32_t>(1, (*building)->serial);
                     warning() << "considering" << now << started << (now - started) << timeout;
                     if (now - started < timeout) {
                         done = true;
                         break;
                     }
-                    error() << "job has expired" << (*sub)->jobid;
+                    error() << "job has expired" << (*building)->jobid;
                     // reschedule
-                    Job::SharedPtr job = (*sub)->job.lock();
+                    Job::SharedPtr job = (*building)->job.lock();
                     if (job) {
-                        assert(job->id() == (*sub)->jobid);
+                        assert(job->id() == (*building)->jobid);
                         error() << "job still exists" << job->status() << job->id();
                         if (job->status() != Job::RemotePending) {
 #warning should we reschedule jobs we have partially received in case the connection times out?
                             // can only reschedule remotepending jobs
-                            ++sub;
+                            ++building;
                             continue;
                         }
                         error() << "rescheduling" << job->id() << "now" << now << "started" << started;
@@ -132,9 +132,9 @@ void Remote::init()
                         job->increaseSerial();
                         job->start();
                     }
-                    error() << "removed job 1" << (*sub)->jobid;
-                    mBuildingById.erase((*sub)->jobid);
-                    sub = it->second.erase(sub);
+                    error() << "removed job 1" << (*building)->jobid;
+                    mBuildingById.erase((*building)->jobid);
+                    building = it->second.erase(building);
                     if (it->second.isEmpty()) {
                         del = true;
                         break;
