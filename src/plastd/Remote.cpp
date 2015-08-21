@@ -490,7 +490,9 @@ Job::SharedPtr Remote::take()
         if (p->second.isEmpty())
             mPendingBuild.erase(p);
         if (job) {
+#warning should use the preprocessed data
             job->clearPreprocessed();
+            job->updateStatus(Job::Idle);
             assert(mCurPreprocessed > 0);
             --mCurPreprocessed;
             preprocessMore();
@@ -507,12 +509,12 @@ Job::SharedPtr Remote::take()
 #warning should we take jobs we have partially received in case the connection times out?
                 // we can take this job since we haven't received any data for it yet
                 job->increaseSerial();
-                job->updateStatus(Job::Idle);
                 const uint64_t id = cand->jobid;
                 assert(id == job->id());
                 removeJob(id);
                 assert(!job->mPreprocessed.isEmpty());
                 job->clearPreprocessed();
+                job->updateStatus(Job::Idle);
                 assert(mCurPreprocessed > 0);
                 --mCurPreprocessed;
                 preprocessMore();
