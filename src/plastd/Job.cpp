@@ -73,13 +73,22 @@ Job::SharedPtr Job::job(uint64_t id)
     return it->second;
 }
 
+static inline bool isObjectiveC(const std::shared_ptr<CompilerArgs> &args)
+{
+    return args->flags & (CompilerArgs::ObjectiveC
+                          | CompilerArgs::ObjectiveCPreprocessed
+                          | CompilerArgs::ObjectiveCPlusPlus
+                          | CompilerArgs::ObjectiveCPlusPlusPreprocessed);
+}
+
+
 void Job::start()
 {
     Local& local = Daemon::instance()->local();
     if (mCompilerArgs->mode != CompilerArgs::Compile) {
         assert(mType == LocalJob);
         local.run(shared_from_this());
-    } else if (local.isAvailable() || mType == RemoteJob || mCompilerArgs->sourceFileIndexes.size() != 1) {
+    } else if (local.isAvailable() || mType == RemoteJob || mCompilerArgs->sourceFileIndexes.size() != 1 || isObjectiveC(mCompilerArgs)) {
         local.post(shared_from_this());
     } else {
         assert(mType == LocalJob);
