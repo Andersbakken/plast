@@ -90,6 +90,7 @@ void Daemon::updateCompilers()
             offset += match.position() + match.length();
         }
     }
+#endif
 
     auto processCompiler = [](const String &desc) {
         if (desc.isEmpty())
@@ -152,7 +153,6 @@ void Daemon::updateCompilers()
             processCompiler(line);
         }
     }
-#endif
 }
 
 bool Daemon::init()
