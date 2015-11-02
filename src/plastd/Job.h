@@ -63,7 +63,8 @@ public:
     Path resolvedCompiler() const { return mResolvedCompiler; }
     String preprocessed() const { return mPreprocessed; }
     void clearPreprocessed() { assert(!mPreprocessed.isEmpty()); mPreprocessed.clear(); }
-    String objectCode() const { return mObjectCode; }
+    String &takeObjectCode() { return mObjectCode; }
+    const String &objectCode() const { return mObjectCode; }
     List<String> args() const { return mArgs; }
     std::shared_ptr<CompilerArgs> compilerArgs() const { return mCompilerArgs; }
     Type type() const { return mType; }

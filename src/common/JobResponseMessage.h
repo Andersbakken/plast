@@ -14,8 +14,8 @@ public:
     enum Mode { Stdout, Stderr, Compiled, Error };
 
     JobResponseMessage() : Message(MessageId), mMode(Stdout), mId(0), mSerial(0) {}
-    JobResponseMessage(Mode mode, int exitCode, uint64_t id, uint32_t serial, const String& data = String())
-        : Message(MessageId), mMode(mode), mExitCode(exitCode), mId(id), mSerial(serial), mData(data)
+    JobResponseMessage(Mode mode, int exitCode, uint64_t id, uint32_t serial, String &&data = String())
+        : Message(MessageId), mMode(mode), mExitCode(exitCode), mId(id), mSerial(serial), mData(std::move(data))
     {
     }
 

@@ -175,7 +175,8 @@ void Remote::handleJobMessage(const JobMessage::SharedPtr& msg, const std::share
             switch (status) {
             case Job::Compiled:
                 conn->send(JobResponseMessage(JobResponseMessage::Compiled, job->exitCode(),
-                                              job->remoteId(), job->serial(), job->objectCode()));
+                                              job->remoteId(), job->serial(),
+                                              std::forward<String>(job->takeObjectCode())));
                 break;
             case Job::Error:
                 conn->send(JobResponseMessage(JobResponseMessage::Error, job->exitCode(),
