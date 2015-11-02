@@ -9,7 +9,7 @@ set(SOURCES
     CompilerArgs.cpp
     CompilerVersion.cpp
     Daemon.cpp
-    Http.cpp
+    # Http.cpp
     Job.cpp
     Local.cpp
     Preprocessor.cpp
@@ -17,12 +17,12 @@ set(SOURCES
     Remote.cpp
     plastd.cpp)
 
-find_package(CURL)
-if(CURL_FOUND)
-  include_directories(${CURL_INCLUDE_DIR})
-else()
-  message(FATAL_ERROR "Could not find the CURL library and development files.")
-endif()
+# find_package(CURL)
+# if(CURL_FOUND)
+#   include_directories(${CURL_INCLUDE_DIR})
+# else()
+#   message(FATAL_ERROR "Could not find the CURL library and development files.")
+# endif()
 
 add_executable(plastd ${SOURCES})
 target_link_libraries(plastd rct common ${CURL_LIBRARIES})
