@@ -5,7 +5,7 @@
 #include <rct/ThreadPool.h>
 #include <stdio.h>
 #include <signal.h>
-#include <curl/curl.h>
+// #include <curl/curl.h>
 
 static void sigSegvHandler(int signal)
 {
@@ -88,13 +88,13 @@ int main(int argc, char** argv)
         return 2;
     }
 
-    {
-        const CURLcode code = curl_global_init(CURL_GLOBAL_ALL);
-        if (code != CURLE_OK) {
-            fprintf(stderr, "Failed to init curl %d (%s)\n", code, curl_easy_strerror(code));
-            return 3;
-        }
-    }
+    // {
+    //     const CURLcode code = curl_global_init(CURL_GLOBAL_ALL);
+    //     if (code != CURLE_OK) {
+    //         fprintf(stderr, "Failed to init curl %d (%s)\n", code, curl_easy_strerror(code));
+    //         return 3;
+    //     }
+    // }
 
     const Flags<LogMode> logMode = Config::isEnabled("syslog") ? LogSyslog : LogStderr;
     const char *logFile = 0;

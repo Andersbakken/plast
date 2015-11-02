@@ -5,7 +5,7 @@
 #include <rct/Log.h>
 #include <rct/QuitMessage.h>
 #include <rct/Rct.h>
-#include "Http.h"
+// #include "Http.h"
 #include <stdlib.h>
 #include <rct/Config.h>
 
@@ -19,6 +19,7 @@ Daemon::Daemon(const Options& opts)
 
 void Daemon::updateCompilers()
 {
+#if 0
     if (Config::isEnabled("download-compilers")) {
         Http::Request req;
         req.url = "http://lgux-pnavarro3.corp.netflix.com/toolchains/";
@@ -151,6 +152,7 @@ void Daemon::updateCompilers()
             processCompiler(line);
         }
     }
+#endif
 }
 
 bool Daemon::init()
