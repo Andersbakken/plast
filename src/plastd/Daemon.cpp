@@ -140,9 +140,6 @@ void Daemon::updateCompilers()
     };
 
     error() << Path(PLAST_DATA_PREFIX "/etc/plast/compilers.d/").files(Path::File);
-
-    processCompiler("/usr/bin/cc");
-    processCompiler("/usr/bin/c++");
     List<Path> files;
     files << PLAST_DATA_PREFIX "/etc/plast/compilers"
           << Path(PLAST_DATA_PREFIX "/etc/plast/compilers.d/").files(Path::File)
@@ -151,6 +148,32 @@ void Daemon::updateCompilers()
     for (const Path &path : files) {
         for (const String &line : path.readAll().split('\n', String::SkipEmpty)) {
             processCompiler(line);
+        }
+    }
+
+    const char *prefixes[] = { "cc", "c++", "gcc", "g++", "clang", "clang++" };
+    List<String> paths;
+    if (const char *PATH = getenv("PATH")) {
+        paths = String(PATH).split(':');
+    }
+    auto processCompilerName = [&paths, &processCompiler](const String &name) {
+        // error() << name << paths.size();
+        for (const String &path : paths) {
+            Path p = path;
+            if (!p.endsWith('/'))
+                p += '/';
+            p += name;
+            if (p.isExecutable()) {
+                processCompiler(p);
+            }
+        }
+    };
+    for (const char *prefix : prefixes) {
+        processCompilerName(prefix);
+        for (int i=0; i<99; ++i) {
+            if (!(i % 10))
+                processCompilerName(String::format<64>("%s-%d", prefix, i / 10));
+            processCompilerName(String::format<64>("%s-%d.%d", prefix, i / 10, i % 10));
         }
     }
 }
