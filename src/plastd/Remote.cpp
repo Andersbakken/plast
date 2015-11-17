@@ -250,7 +250,7 @@ void Remote::handleRequestJobsMessage(const RequestJobsMessage::SharedPtr& msg, 
         mPendingBuild.erase(p);
 }
 
-void Remote::handleHasJobsMessage(const HasJobsMessage::SharedPtr& msg, const std::shared_ptr<Connection>& conn)
+void Remote::handleHasJobsMessage(const HasJobsMessage::SharedPtr& msg, const std::shared_ptr<Connection>& /*conn*/)
 {
     error() << "handle has jobs message";
 
