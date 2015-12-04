@@ -223,11 +223,19 @@ inline uint64_t toInteger<uint64_t>(const String& str, bool* ok, int base, bool 
 void HttpServer::addClient(const SocketClient::SharedPtr& client)
 {
     const uint64_t id = ++mNextId;
-    mData[id] = { this, id, 0, 0, false, client, Data::ReadingStatus, Data::ModeNone, -1, 0 };
-    Data& data = mData[id];
+    Data &data = mData[id];
+    data.server = this;
+    data.id = id;
+    data.seq = data.current = 0;
+    data.pendingClose = false;
+    data.client = client;
+    data.state = Data::ReadingStatus;
+    data.bodyMode = Data::ModeNone;
+    data.bodyLength = -1;
+    data.currentPos = 0;
     data.currentBuffer = data.buffers.begin();
 
-    client->readyRead().connect([this, &data, id](const SocketClient::SharedPtr& c, Buffer&& buf) {
+    client->readyRead().connect([this, &data, id](const SocketClient::SharedPtr&, Buffer&& buf) {
             if (!buf.isEmpty()) {
                 data.buffers.push_back(std::move(buf));
                 if (data.currentBuffer == data.buffers.end()) {
@@ -374,7 +382,7 @@ void HttpServer::addClient(const SocketClient::SharedPtr& client)
                                     data.discardRead();
                                     return;
                                 }
-                                if (data.request->mBody.mBody.size() >= mOptions.maxBodySize) {
+                                if (data.request->mBody.mBody.size() >= static_cast<int>(mOptions.maxBodySize)) {
                                     data.client->close();
                                     data.client.reset();
                                     mData.erase(id);
@@ -397,7 +405,7 @@ void HttpServer::addClient(const SocketClient::SharedPtr& client)
                 }
             }
         });
-    client->disconnected().connect([this, id](const SocketClient::SharedPtr& client) {
+    client->disconnected().connect([this, id](const SocketClient::SharedPtr& ) {
             mData.erase(id);
         });
 }
